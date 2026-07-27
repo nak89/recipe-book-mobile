@@ -1,0 +1,306 @@
+import { useCallback, useState } from 'react'
+import { Ionicons } from '@expo/vector-icons'
+import { Image } from 'expo-image'
+import { LinearGradient } from 'expo-linear-gradient'
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useAuth } from '@/context/AuthContext'
+import { deleteRecipe, getRecipe, setFavourite } from '@/lib/api'
+import ConfirmDialog from '@/components/ui/ConfirmDialog'
+import PrimaryButton from '@/components/ui/PrimaryButton'
+import { emojiForCuisine } from '@/data/cuisines'
+import { emojiForIngredient } from '@/data/ingredients'
+import { colors, radius, spacing, type } from '@/theme'
+import type { Recipe } from '@/types/recipe'
+
+export default function RecipeDetailScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>()
+  const { token } = useAuth()
+  const router = useRouter()
+  const insets = useSafeAreaInsets()
+
+  const [recipe, setRecipe] = useState<Recipe | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [confirming, setConfirming] = useState(false)
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!token || !id) return
+      let cancelled = false
+      getRecipe(id, token)
+        .then((data) => {
+          if (!cancelled) setRecipe(data)
+        })
+        .catch((err) => {
+          if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load recipe')
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false)
+        })
+      return () => {
+        cancelled = true
+      }
+    }, [id, token])
+  )
+
+  async function handleToggleFavourite() {
+    if (!token || !recipe) return
+    const next = !recipe.isFavourite
+    setRecipe({ ...recipe, isFavourite: next })
+    try {
+      await setFavourite(recipe.id, next, token)
+    } catch {
+      setRecipe({ ...recipe, isFavourite: !next })
+    }
+  }
+
+  async function handleDelete() {
+    if (!token || !recipe) return
+    try {
+      await deleteRecipe(recipe.id, token)
+      router.back()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete recipe')
+    }
+  }
+
+  if (loading) {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator color={colors.primary} />
+      </View>
+    )
+  }
+  if (!recipe) {
+    return (
+      <View style={styles.centered}>
+        <Text style={styles.error}>{error ?? 'Recipe not found'}</Text>
+      </View>
+    )
+  }
+
+  return (
+    <View style={styles.container}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <View style={styles.hero}>
+          <Image
+            source={recipe.photoUrl ? { uri: recipe.photoUrl } : undefined}
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
+            transition={200}
+          />
+          <LinearGradient
+            colors={[colors.scrimStrong, colors.scrimNone]}
+            locations={[0, 0.5]}
+            style={StyleSheet.absoluteFill}
+            pointerEvents="none"
+          />
+          <View style={[styles.heroActions, { top: insets.top + spacing.sm }]}>
+            <Pressable
+              onPress={() => router.back()}
+              style={styles.circleButton}
+              accessibilityLabel="Go back"
+            >
+              <Ionicons name="chevron-back" size={22} color={colors.textOnPhoto} />
+            </Pressable>
+            <Pressable
+              onPress={handleToggleFavourite}
+              style={styles.circleButton}
+              accessibilityLabel={
+                recipe.isFavourite ? 'Remove from favourites' : 'Add to favourites'
+              }
+            >
+              <Ionicons
+                name={recipe.isFavourite ? 'heart' : 'heart-outline'}
+                size={20}
+                color={recipe.isFavourite ? colors.favourite : colors.textOnPhoto}
+              />
+            </Pressable>
+          </View>
+        </View>
+
+        <View style={styles.body}>
+          <Text style={styles.title}>{recipe.title}</Text>
+
+          <View style={styles.metaRow}>
+            <Meta icon="time-outline" label={`${recipe.totalMinutes} min`} />
+            <Meta icon="restaurant-outline" label={`Serves ${recipe.servings}`} />
+            <Meta icon="speedometer-outline" label={recipe.difficulty} />
+          </View>
+
+          {(recipe.mealtime || recipe.cuisine) && (
+            <View style={styles.tagRow}>
+              {recipe.mealtime && <Text style={styles.tag}>{recipe.mealtime}</Text>}
+              {recipe.cuisine && (
+                <Text style={styles.tag}>
+                  {emojiForCuisine(recipe.cuisine)} {recipe.cuisine}
+                </Text>
+              )}
+            </View>
+          )}
+
+          {recipe.description && <Text style={styles.description}>{recipe.description}</Text>}
+
+          {error && <Text style={styles.error}>{error}</Text>}
+
+          {recipe.tools.length > 0 && (
+            <Section title="Tools">
+              <Text style={styles.paragraph}>{recipe.tools.join(' · ')}</Text>
+            </Section>
+          )}
+
+          <Section title="Ingredients">
+            {recipe.ingredients.map((ingredient, index) => (
+              <View key={ingredient.id ?? index} style={styles.ingredient}>
+                <Text style={styles.ingredientEmoji}>{emojiForIngredient(ingredient.name)}</Text>
+                <Text style={styles.ingredientName}>{ingredient.name}</Text>
+                <Text style={styles.ingredientAmount}>
+                  {ingredient.quantity} {ingredient.unit}
+                </Text>
+              </View>
+            ))}
+          </Section>
+
+          <Section title="Steps">
+            {[...recipe.steps]
+              .sort((a, b) => a.stepNumber - b.stepNumber)
+              .map((step) => (
+                <View key={step.id ?? step.stepNumber} style={styles.step}>
+                  <View style={styles.stepNumber}>
+                    <Text style={styles.stepNumberText}>{step.stepNumber}</Text>
+                  </View>
+                  <Text style={styles.stepText}>{step.instruction}</Text>
+                </View>
+              ))}
+          </Section>
+
+          <View style={styles.actions}>
+            <PrimaryButton
+              label="Edit recipe"
+              onPress={() => router.push(`/recipe/${recipe.id}/edit`)}
+              style={styles.action}
+            />
+            <PrimaryButton
+              label="Delete"
+              variant="danger"
+              onPress={() => setConfirming(true)}
+              style={styles.action}
+            />
+          </View>
+        </View>
+      </ScrollView>
+
+      <ConfirmDialog
+        visible={confirming}
+        title="Delete recipe?"
+        message={`"${recipe.title}" will be permanently removed.`}
+        onCancel={() => setConfirming(false)}
+        onConfirm={() => {
+          setConfirming(false)
+          handleDelete()
+        }}
+      />
+    </View>
+  )
+}
+
+function Meta({ icon, label }: { icon: keyof typeof Ionicons.glyphMap; label: string }) {
+  return (
+    <View style={styles.meta}>
+      <Ionicons name={icon} size={14} color={colors.textMuted} />
+      <Text style={styles.metaText}>{label}</Text>
+    </View>
+  )
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>{title}</Text>
+      {children}
+    </View>
+  )
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.bg },
+  centered: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.xl,
+    backgroundColor: colors.bg,
+  },
+  content: { paddingBottom: spacing.xxl },
+  hero: { height: 300, backgroundColor: colors.surfaceSunken },
+  heroActions: {
+    position: 'absolute',
+    left: spacing.lg,
+    right: spacing.lg,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  circleButton: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Pulled up over the photo so the sheet reads as sitting on top of it.
+  body: {
+    marginTop: -spacing.xl,
+    backgroundColor: colors.bg,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    padding: spacing.xl,
+    gap: spacing.md,
+  },
+  title: { ...type.display, color: colors.text },
+  metaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.lg },
+  meta: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  metaText: { ...type.body, color: colors.textMuted },
+  tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  tag: {
+    ...type.caption,
+    color: colors.text,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 5,
+    overflow: 'hidden',
+  },
+  description: { ...type.body, color: colors.textMuted, lineHeight: 22 },
+  error: { ...type.body, color: colors.danger },
+  section: { gap: spacing.sm, marginTop: spacing.lg },
+  sectionTitle: { ...type.section, color: colors.text },
+  paragraph: { ...type.body, color: colors.textMuted },
+  ingredient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  ingredientEmoji: { fontSize: 18, width: 24, textAlign: 'center' },
+  ingredientName: { ...type.body, color: colors.text, flex: 1, minWidth: 0 },
+  ingredientAmount: { ...type.bodyStrong, color: colors.textMuted },
+  step: { flexDirection: 'row', gap: spacing.md, paddingVertical: spacing.sm },
+  stepNumber: {
+    width: 26,
+    height: 26,
+    borderRadius: radius.pill,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepNumberText: { ...type.caption, color: colors.onPrimary },
+  stepText: { ...type.body, color: colors.text, flex: 1, minWidth: 0, lineHeight: 22 },
+  actions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xl },
+  action: { flex: 1 },
+})
