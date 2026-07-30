@@ -38,7 +38,13 @@ export default function AppLayout() {
         options={{ title: 'New Recipe', presentation: 'modal' }}
       />
       <Stack.Screen name="recipe/[id]/index" options={{ headerShown: false }} />
-      <Stack.Screen name="recipe/[id]/edit" options={{ title: 'Edit Recipe' }} />
+      {/* headerBackTitle is explicit because iOS labels the back button with the previous
+          screen's title, and the detail screen draws its own header (headerShown: false,
+          no title) — leaving it to fall back to the raw route name, "recipe/[id]/index". */}
+      <Stack.Screen
+        name="recipe/[id]/edit"
+        options={{ title: 'Edit Recipe', headerBackTitle: 'Recipe' }}
+      />
     </Stack>
   )
 }
