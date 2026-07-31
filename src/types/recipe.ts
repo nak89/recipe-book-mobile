@@ -35,10 +35,13 @@ export interface Recipe {
   cuisine?: string
   mealtime?: Mealtime
   isFavourite: boolean
-  calories?: number
-  protein?: number
-  carbs?: number
-  fat?: number
+  // Per serving, and null when the user hasn't said. The API really does return
+  // JSON null here, so `number | undefined` alone would be a lie the detail
+  // screen then has to guess around.
+  calories?: number | null
+  protein?: number | null
+  carbs?: number | null
+  fat?: number | null
   ingredients: Ingredient[]
   tools: string[]
   steps: Step[]
@@ -55,6 +58,13 @@ export interface RecipeInput {
   servings: number
   cuisine?: string
   mealtime?: Mealtime
+  // Always sent, explicitly null when blank. Omitting a cleared field would
+  // leave the old value in the database — Prisma treats a missing key in an
+  // update as "no change", so only a null actually removes it.
+  calories: number | null
+  protein: number | null
+  carbs: number | null
+  fat: number | null
   tools: string[]
   ingredients: Ingredient[]
   steps: Step[]

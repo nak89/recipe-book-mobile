@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Ionicons } from '@expo/vector-icons'
 import { useHeaderHeight } from '@react-navigation/elements'
 import * as ImagePicker from 'expo-image-picker'
@@ -14,9 +14,22 @@ import {
   TextInput,
   View,
 } from 'react-native'
+import type { LayoutChangeEvent } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useAuth } from '@/context/AuthContext'
-import { uploadPhoto } from '@/lib/api'
+import { ApiError, getRecipes, uploadPhoto } from '@/lib/api'
+import {
+  fieldForServerIssue,
+  ingredientKey,
+  recipeSizeError,
+  stepForField,
+  stepKey,
+  summarise,
+  usedIngredients,
+  usedSteps,
+  validateStep,
+} from '@/lib/recipeValidation'
+import type { FieldErrors } from '@/lib/recipeValidation'
 import Chip from '@/components/ui/Chip'
 import Field from '@/components/ui/Field'
 import PrimaryButton from '@/components/ui/PrimaryButton'
@@ -36,7 +49,25 @@ import type {
   RecipeInput,
 } from '@/types/recipe'
 
-const STEPS = ['Basics', 'Ingredients', 'Steps'] as const
+const STEPS = ['Basics', 'Ingredients', 'Steps', 'Nutrition'] as const
+
+/**
+ * A blank nutrition box means "I don't know", which has to reach the API as an
+ * explicit null. Sending nothing at all would leave whatever was saved before
+ * untouched, so clearing a value would appear to work and then undo itself on
+ * the next load.
+ */
+function toNullableNumber(raw: string): number | null {
+  const value = raw.trim()
+  if (!value) return null
+  const parsed = Number(value.replace(',', '.'))
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+/** `!= null` on purpose: a stored 0 is a real value and must seed as "0". */
+function toFormNumber(value: number | null | undefined): string {
+  return value != null ? String(value) : ''
+}
 
 // Hoisted so the reference is stable — Select memoises on it.
 const CUISINE_OPTIONS = CUISINES.map((c) => ({ label: c.name, emoji: c.emoji }))
@@ -103,13 +134,85 @@ export default function RecipeForm({
   const [uploading, setUploading] = useState(false)
   const [ingredients, setIngredients] = useState<FormIngredient[]>(toFormIngredients(initial))
   const [steps, setSteps] = useState<FormStep[]>(toFormSteps(initial))
-  const [error, setError] = useState<string | null>(null)
+  const [calories, setCalories] = useState(toFormNumber(initial?.calories))
+  const [protein, setProtein] = useState(toFormNumber(initial?.protein))
+  const [carbs, setCarbs] = useState(toFormNumber(initial?.carbs))
+  const [fat, setFat] = useState(toFormNumber(initial?.fat))
+  // Per-field messages, shown under the input they belong to. Separate from
+  // `submitError`, which is for failures with no field to blame (offline, 500).
+  const [errors, setErrors] = useState<FieldErrors>({})
+  const [submitError, setSubmitError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [takenTitles, setTakenTitles] = useState<Set<string>>(new Set())
+
+  // The other recipes' titles, so a duplicate is caught on this screen instead
+  // of coming back as a 409 after Save. The server still enforces it — this is
+  // only about saying so earlier, which is why a failed fetch is ignored.
+  useEffect(() => {
+    if (!token) return
+    let cancelled = false
+    getRecipes(token)
+      .then((list) => {
+        if (cancelled) return
+        setTakenTitles(
+          new Set(
+            list.filter((r) => r.id !== initial?.id).map((r) => r.title.trim().toLowerCase())
+          )
+        )
+      })
+      .catch(() => {
+        // Non-fatal: the 409 from the server is the backstop.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [token, initial?.id])
+
+  // Where each validated field sits inside the scroll content, recorded on
+  // layout so an error can scroll itself into view rather than leaving the user
+  // to hunt for the red text.
+  const fieldOffsets = useRef<Record<string, number>>({})
+
+  // Variadic because side-by-side fields share one wrapper: measuring them
+  // separately would record a y relative to the row rather than to the scroll
+  // content, so both names point at the row they're actually in.
+  function registerField(...names: string[]) {
+    return (event: LayoutChangeEvent) => {
+      for (const name of names) fieldOffsets.current[name] = event.nativeEvent.layout.y
+    }
+  }
+
+  function scrollToField(name?: string) {
+    // Deferred: after a step change the target hasn't been laid out yet, so its
+    // offset isn't recorded until the next frame.
+    setTimeout(() => {
+      const y = name ? fieldOffsets.current[name] : undefined
+      scrollRef.current?.scrollTo({ y: Math.max((y ?? 0) - spacing.xl, 0), animated: true })
+    }, 60)
+  }
 
   // Keeps a newly added row above the keyboard instead of behind it.
   function scrollToBottom() {
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50)
+  }
+
+  /** Drops one field's error as soon as the user edits it. */
+  function clearError(...fields: string[]) {
+    setErrors((prev) => {
+      if (!fields.some((f) => prev[f])) return prev
+      const next = { ...prev }
+      for (const field of fields) delete next[field]
+      return next
+    })
+  }
+
+  /** Shows a set of errors, moving to the step that owns the first one. */
+  function showErrors(next: FieldErrors, targetStep: number) {
+    setErrors(next)
+    setSubmitError(null)
+    if (targetStep !== step) setStep(targetStep)
+    scrollToField(Object.keys(next)[0])
   }
 
   async function handlePickPhoto() {
@@ -117,7 +220,10 @@ export default function RecipeForm({
     if (Platform.OS !== 'web') {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync()
       if (!permission.granted) {
-        setError('Photo library permission is required to add a photo')
+        setErrors((prev) => ({
+          ...prev,
+          photoUrl: 'Allow photo library access to add a photo.',
+        }))
         return
       }
     }
@@ -130,11 +236,14 @@ export default function RecipeForm({
     if (result.canceled || !token) return
 
     setUploading(true)
-    setError(null)
+    clearError('photoUrl')
     try {
       setPhotoUrl(await uploadPhoto(result.assets[0].uri, token))
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to upload photo')
+      setErrors((prev) => ({
+        ...prev,
+        photoUrl: err instanceof Error ? err.message : 'That photo could not be uploaded.',
+      }))
     } finally {
       setUploading(false)
     }
@@ -142,10 +251,12 @@ export default function RecipeForm({
 
   function updateIngredient(id: string, field: keyof FormIngredient, value: string) {
     setIngredients((prev) => prev.map((i) => (i.id === id ? { ...i, [field]: value } : i)))
+    clearError(ingredientKey(id), 'ingredients')
   }
 
   function addIngredient() {
     setIngredients((prev) => [...prev, { id: genId(), name: '', quantity: '', unit: '' }])
+    clearError('ingredients')
     scrollToBottom()
   }
 
@@ -154,6 +265,7 @@ export default function RecipeForm({
   // stops you saving one.
   function removeIngredient(id: string) {
     setIngredients((prev) => prev.filter((i) => i.id !== id))
+    clearError(ingredientKey(id))
   }
 
   /**
@@ -168,7 +280,7 @@ export default function RecipeForm({
       if (blank) return prev.map((i) => (i.id === blank.id ? { ...i, ...picked } : i))
       return [...prev, { id: genId(), ...picked }]
     })
-    setError(null)
+    clearError('ingredients')
   }
 
   function removeCommonIngredient(name: string) {
@@ -176,60 +288,84 @@ export default function RecipeForm({
     setIngredients((prev) => prev.filter((i) => i.name.trim().toLowerCase() !== key))
   }
 
+  function updateStep(id: string, instruction: string) {
+    setSteps((prev) => prev.map((item) => (item.id === id ? { ...item, instruction } : item)))
+    clearError(stepKey(id), 'steps')
+  }
+
   function addStep() {
     setSteps((prev) => [...prev, { id: genId(), instruction: '' }])
+    clearError('steps')
     scrollToBottom()
   }
 
   function removeStep(id: string) {
     setSteps((prev) => prev.filter((s) => s.id !== id))
+    clearError(stepKey(id))
   }
 
-  /** Returns an error message for the given step, or null when it's valid. */
-  function validate(index: number): string | null {
-    if (index === 0) {
-      if (!photoUrl) return 'A photo is required'
-      if (!title.trim()) return 'Title is required'
-      if (!totalMinutes || Number.isNaN(Number(totalMinutes))) {
-        return 'Enter a valid total time in minutes'
-      }
-      if (!servings || Number.isNaN(Number(servings))) return 'Enter a valid number of servings'
+  function currentValues() {
+    return {
+      photoUrl,
+      title,
+      description,
+      totalMinutes,
+      servings,
+      cuisine,
+      tools,
+      ingredients,
+      steps,
+      calories,
+      protein,
+      carbs,
+      fat,
+      takenTitles,
     }
-    if (index === 1 && !ingredients.some((i) => i.name.trim())) {
-      return 'Add at least one ingredient'
-    }
-    if (index === 2 && !steps.some((s) => s.instruction.trim())) {
-      return 'Add at least one step'
-    }
-    return null
   }
 
   function goTo(index: number) {
-    setError(null)
+    setSubmitError(null)
     setStep(index)
     scrollRef.current?.scrollTo({ y: 0, animated: true })
   }
 
+  /**
+   * Advancing is what enforces the rules while creating. Validating here rather
+   * than only at Save is the point: an error about total minutes is useless on
+   * the Steps screen, where the field isn't even visible.
+   */
   function handleNext() {
-    const message = validate(step)
-    if (message) {
-      setError(message)
+    const stepErrors = validateStep(step, currentValues())
+    if (Object.keys(stepErrors).length > 0) {
+      showErrors(stepErrors, step)
       return
     }
+    // Only this step's messages are resolved. Another step may still be flagged
+    // from an earlier save attempt, and its indicator should stay red.
+    setErrors((prev) =>
+      Object.fromEntries(Object.entries(prev).filter(([field]) => stepForField(field) !== step))
+    )
     goTo(step + 1)
   }
 
   async function handleSubmit() {
-    // Validate every step, not just the current one — in edit mode you can save
-    // from anywhere, so the invalid step may not be the one on screen.
+    // Every step, not just the current one — in edit mode you can save from
+    // anywhere, so the invalid step may not be the one on screen. Collect them
+    // all so the other steps' indicators light up too.
+    const all: FieldErrors = {}
+    let firstBadStep = -1
     for (let i = 0; i < STEPS.length; i++) {
-      const message = validate(i)
-      if (message) {
-        setError(message)
-        setStep(i)
-        return
-      }
+      const stepErrors = validateStep(i, currentValues())
+      if (Object.keys(stepErrors).length > 0 && firstBadStep === -1) firstBadStep = i
+      Object.assign(all, stepErrors)
     }
+    if (firstBadStep !== -1) {
+      showErrors(all, firstBadStep)
+      return
+    }
+
+    const submittedIngredients = usedIngredients(ingredients).filter((i) => i.name.trim())
+    const submittedSteps = usedSteps(steps)
 
     const data: RecipeInput = {
       title: title.trim(),
@@ -238,36 +374,87 @@ export default function RecipeForm({
       difficulty,
       mealtime,
       cuisine: cuisine.trim() || undefined,
-      totalMinutes: Number(totalMinutes),
-      servings: Number(servings),
+      totalMinutes: Number(totalMinutes.trim()),
+      servings: Number(servings.trim()),
+      // All four every time, null included — see `toNullableNumber`.
+      calories: toNullableNumber(calories),
+      protein: toNullableNumber(protein),
+      carbs: toNullableNumber(carbs),
+      fat: toNullableNumber(fat),
       tools: tools
         .split(',')
         .map((t) => t.trim())
         .filter(Boolean),
-      ingredients: ingredients
-        .filter((i) => i.name.trim())
-        .map((i) => ({
-          name: i.name.trim(),
-          quantity: Number(i.quantity) || 0,
-          unit: i.unit.trim(),
-        })),
-      steps: steps
-        .filter((s) => s.instruction.trim())
-        .map((s, index) => ({ stepNumber: index + 1, instruction: s.instruction.trim() })),
+      ingredients: submittedIngredients.map((i) => ({
+        name: i.name.trim(),
+        quantity: Number(i.quantity.trim().replace(',', '.')) || 0,
+        unit: i.unit.trim(),
+      })),
+      steps: submittedSteps.map((s, index) => ({
+        stepNumber: index + 1,
+        instruction: s.instruction.trim(),
+      })),
+    }
+
+    // Size is a property of the whole recipe, so there's no field to outline —
+    // this one is the footer line's job.
+    const tooLarge = recipeSizeError(data)
+    if (tooLarge) {
+      setErrors({})
+      setSubmitError(tooLarge)
+      return
     }
 
     setSubmitting(true)
-    setError(null)
+    setErrors({})
+    setSubmitError(null)
     try {
       await onSubmit(data)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save recipe')
+      handleSaveError(
+        err,
+        submittedIngredients.map((i) => i.id),
+        submittedSteps.map((s) => s.id)
+      )
     } finally {
       setSubmitting(false)
     }
   }
 
+  /**
+   * Puts a rejected save back on the field that caused it. Anything the server
+   * refuses that the client thought was fine — a title someone else's device
+   * just took, a rule only the API knows — still lands next to an input rather
+   * than as a lone sentence above the button.
+   */
+  function handleSaveError(err: unknown, ingredientIds: string[], stepIds: string[]) {
+    if (err instanceof ApiError) {
+      if (err.status === 409) {
+        // The only 409 the API raises is a duplicate title.
+        setTakenTitles((prev) => new Set(prev).add(title.trim().toLowerCase()))
+        showErrors({ title: 'You already have a recipe with this title.' }, 0)
+        return
+      }
+
+      const mapped: FieldErrors = {}
+      for (const issue of err.details) {
+        const field = fieldForServerIssue(issue.field, ingredientIds, stepIds)
+        if (field && !mapped[field]) mapped[field] = issue.message
+      }
+      if (Object.keys(mapped).length > 0) {
+        showErrors(mapped, stepForField(Object.keys(mapped)[0]))
+        return
+      }
+    }
+    setSubmitError(err instanceof Error ? err.message : 'Could not save this recipe. Please try again.')
+  }
+
   const onLastStep = step === STEPS.length - 1
+  // Key presence, not truthiness: most entries are '' because the outline is
+  // the whole message.
+  const invalid = (field: string) => field in errors
+  const stepsWithErrors = new Set(Object.keys(errors).map(stepForField))
+  const footerMessage = submitError ?? summarise(errors)
 
   return (
     <KeyboardAvoidingView
@@ -286,10 +473,32 @@ export default function RecipeForm({
               onPress={() => goTo(index)}
               style={styles.indicatorItem}
             >
-              <View style={[styles.indicatorBar, index <= step && styles.indicatorBarActive]} />
-              <Text style={[styles.indicatorLabel, index === step && styles.indicatorLabelActive]}>
-                {label}
-              </Text>
+              <View
+                style={[
+                  styles.indicatorBar,
+                  index <= step && styles.indicatorBarActive,
+                  // A step you're not looking at can still be the broken one.
+                  stepsWithErrors.has(index) && styles.indicatorBarError,
+                ]}
+              />
+              <View style={styles.indicatorLabelRow}>
+                <Text
+                  // Four slots share the width now, so "Ingredients" no longer
+                  // fits on a small phone. One clean ellipsis beats a label
+                  // wrapping to a second line and shunting the row taller.
+                  numberOfLines={1}
+                  style={[
+                    styles.indicatorLabel,
+                    index === step && styles.indicatorLabelActive,
+                    stepsWithErrors.has(index) && styles.indicatorLabelError,
+                  ]}
+                >
+                  {label}
+                </Text>
+                {stepsWithErrors.has(index) && (
+                  <Ionicons name="alert-circle" size={13} color={colors.danger} />
+                )}
+              </View>
             </Pressable>
           )
         })}
@@ -305,45 +514,63 @@ export default function RecipeForm({
       >
         {step === 0 && (
           <>
-            <Pressable
-              style={styles.photoPicker}
-              onPress={handlePickPhoto}
-              disabled={uploading}
-              accessibilityRole="button"
-              accessibilityLabel={photoUrl ? 'Change photo' : 'Add a photo'}
-            >
-              {uploading ? (
-                <ActivityIndicator color={colors.primary} />
-              ) : photoUrl ? (
-                <>
-                  <Image source={{ uri: photoUrl }} style={StyleSheet.absoluteFill} contentFit="cover" />
-                  <View style={styles.photoChange}>
-                    <Ionicons name="camera" size={14} color={colors.onPrimary} />
-                    <Text style={styles.photoChangeText}>Change</Text>
-                  </View>
-                </>
-              ) : (
-                <>
-                  <Ionicons name="camera-outline" size={26} color={colors.textPlaceholder} />
-                  <Text style={styles.photoPickerText}>Add a photo</Text>
-                  <Text style={styles.photoPickerHint}>Required</Text>
-                </>
-              )}
-            </Pressable>
+            <View onLayout={registerField('photoUrl')}>
+              <Pressable
+                style={[styles.photoPicker, invalid('photoUrl') && styles.photoPickerInvalid]}
+                onPress={handlePickPhoto}
+                disabled={uploading}
+                accessibilityRole="button"
+                accessibilityLabel={photoUrl ? 'Change photo' : 'Add a photo'}
+              >
+                {uploading ? (
+                  <ActivityIndicator color={colors.primary} />
+                ) : photoUrl ? (
+                  <>
+                    <Image source={{ uri: photoUrl }} style={StyleSheet.absoluteFill} contentFit="cover" />
+                    <View style={styles.photoChange}>
+                      <Ionicons name="camera" size={14} color={colors.onPrimary} />
+                      <Text style={styles.photoChangeText}>Change</Text>
+                    </View>
+                  </>
+                ) : (
+                  <>
+                    <Ionicons
+                      name="camera-outline"
+                      size={26}
+                      color={invalid('photoUrl') ? colors.danger : colors.textPlaceholder}
+                    />
+                    <Text style={styles.photoPickerText}>Add a photo</Text>
+                    <Text style={styles.photoPickerHint}>Required</Text>
+                  </>
+                )}
+              </Pressable>
+            </View>
 
-            <Field
-              label="Title"
-              value={title}
-              onChangeText={setTitle}
-              placeholder="e.g. Spaghetti Carbonara"
-            />
-            <Field
-              label="Description"
-              value={description}
-              onChangeText={setDescription}
-              placeholder="e.g. Classic Italian pasta with egg and pancetta"
-              multiline
-            />
+            <View onLayout={registerField('title')}>
+              <Field
+                label="Title"
+                value={title}
+                onChangeText={(v) => {
+                  setTitle(v)
+                  clearError('title')
+                }}
+                placeholder="e.g. Spaghetti Carbonara"
+                invalid={invalid('title')}
+              />
+            </View>
+            <View onLayout={registerField('description')}>
+              <Field
+                label="Description"
+                value={description}
+                onChangeText={(v) => {
+                  setDescription(v)
+                  clearError('description')
+                }}
+                placeholder="e.g. Classic Italian pasta with egg and pancetta"
+                multiline
+                invalid={invalid('description')}
+              />
+            </View>
 
             <View style={styles.group}>
               <Text style={styles.label}>Mealtime</Text>
@@ -382,29 +609,42 @@ export default function RecipeForm({
               </View>
             </View>
 
-            <View style={styles.row}>
+            {/* Registered as one block: the two fields sit side by side, so a
+                message about either scrolls to the same place. */}
+            <View onLayout={registerField('totalMinutes', 'servings')} style={styles.row}>
               <Field
                 label="Total minutes"
                 value={totalMinutes}
-                onChangeText={setTotalMinutes}
+                onChangeText={(v) => {
+                  setTotalMinutes(v)
+                  clearError('totalMinutes')
+                }}
                 keyboardType="number-pad"
                 placeholder="e.g. 30"
                 containerStyle={styles.rowItem}
+                invalid={invalid('totalMinutes')}
               />
               <Field
                 label="Servings"
                 value={servings}
-                onChangeText={setServings}
+                onChangeText={(v) => {
+                  setServings(v)
+                  clearError('servings')
+                }}
                 keyboardType="number-pad"
                 placeholder="e.g. 4"
                 containerStyle={styles.rowItem}
+                invalid={invalid('servings')}
               />
             </View>
 
             <Select
               label="Cuisine"
               value={cuisine || undefined}
-              onChange={(value) => setCuisine(value ?? '')}
+              onChange={(value) => {
+                setCuisine(value ?? '')
+                clearError('cuisine')
+              }}
               options={CUISINE_OPTIONS}
               placeholder="Select a cuisine"
               title="Cuisine"
@@ -413,13 +653,19 @@ export default function RecipeForm({
               // The column is free text, so the list is a shortcut, not a limit.
               allowCustom
             />
-            <Field
-              label="Tools"
-              value={tools}
-              onChangeText={setTools}
-              placeholder="e.g. large pot, frying pan"
-              hint="Separate with commas"
-            />
+            <View onLayout={registerField('tools')}>
+              <Field
+                label="Tools"
+                value={tools}
+                onChangeText={(v) => {
+                  setTools(v)
+                  clearError('tools')
+                }}
+                placeholder="e.g. large pot, frying pan"
+                hint="Separate with commas"
+                invalid={invalid('tools')}
+              />
+            </View>
           </>
         )}
 
@@ -444,7 +690,14 @@ export default function RecipeForm({
                 three separate Fields — fixed widths and a single container are
                 what keep the unit on the same line as the name on a phone. */}
             {ingredients.map((ingredient) => (
-              <View key={ingredient.id} style={styles.ingredientRow}>
+              <View
+                key={ingredient.id}
+                onLayout={registerField(ingredientKey(ingredient.id))}
+                style={[
+                  styles.ingredientRow,
+                  invalid(ingredientKey(ingredient.id)) && styles.rowInvalid,
+                ]}
+              >
                 <Text style={styles.ingredientEmoji}>{emojiForIngredient(ingredient.name)}</Text>
                 <TextInput
                   style={styles.ingredientName}
@@ -481,8 +734,13 @@ export default function RecipeForm({
                 </Pressable>
               </View>
             ))}
+            {/* With no rows there's no box to outline, so the hint that's
+                already here turns red rather than a second line appearing. */}
             {ingredients.length === 0 && (
-              <Text style={styles.emptyHint}>
+              <Text
+                style={[styles.emptyHint, invalid('ingredients') && styles.emptyHintInvalid]}
+                onLayout={registerField('ingredients')}
+              >
                 No ingredients yet — pick some above, or add your own below.
               </Text>
             )}
@@ -496,21 +754,19 @@ export default function RecipeForm({
         {step === 2 && (
           <>
             <Text style={styles.stepHeading}>How is it made?</Text>
+
             {steps.map((s, index) => (
-              <View key={s.id} style={styles.stepRow}>
+              <View key={s.id} onLayout={registerField(stepKey(s.id))} style={styles.stepRow}>
                 <View style={styles.stepNumber}>
                   <Text style={styles.stepNumberText}>{index + 1}</Text>
                 </View>
                 <Field
                   value={s.instruction}
-                  onChangeText={(v) =>
-                    setSteps((prev) =>
-                      prev.map((item) => (item.id === s.id ? { ...item, instruction: v } : item))
-                    )
-                  }
+                  onChangeText={(v) => updateStep(s.id, v)}
                   placeholder="e.g. Boil the pasta until al dente"
                   multiline
                   containerStyle={styles.stepInput}
+                  invalid={invalid(stepKey(s.id))}
                 />
                 <Pressable
                   onPress={() => removeStep(s.id)}
@@ -523,7 +779,12 @@ export default function RecipeForm({
               </View>
             ))}
             {steps.length === 0 && (
-              <Text style={styles.emptyHint}>No steps yet — add the first one below.</Text>
+              <Text
+                style={[styles.emptyHint, invalid('steps') && styles.emptyHintInvalid]}
+                onLayout={registerField('steps')}
+              >
+                No steps yet — add the first one below.
+              </Text>
             )}
             <Pressable onPress={addStep} style={styles.addRow}>
               <Ionicons name="add-circle-outline" size={18} color={colors.text} />
@@ -531,11 +792,84 @@ export default function RecipeForm({
             </Pressable>
           </>
         )}
+
+        {/* Every field here is optional, so this step never blocks Save. The
+            numbers are per serving — say so, because nothing else can: the
+            columns are bare floats and a reader has no way to tell whether 520
+            kcal is one plate or the whole tray. */}
+        {step === 3 && (
+          <>
+            <Text style={styles.stepHeading}>What&apos;s in a serving?</Text>
+            <Text style={styles.stepIntro}>
+              All optional, and all per serving. Leave anything you don&apos;t know blank.
+            </Text>
+
+            <View onLayout={registerField('calories', 'protein')} style={styles.row}>
+              <Field
+                label="Calories (kcal)"
+                value={calories}
+                onChangeText={(v) => {
+                  setCalories(v)
+                  clearError('calories')
+                }}
+                keyboardType="decimal-pad"
+                placeholder="e.g. 520"
+                containerStyle={styles.rowItem}
+                invalid={invalid('calories')}
+              />
+              <Field
+                label="Protein (g)"
+                value={protein}
+                onChangeText={(v) => {
+                  setProtein(v)
+                  clearError('protein')
+                }}
+                keyboardType="decimal-pad"
+                placeholder="e.g. 31"
+                containerStyle={styles.rowItem}
+                invalid={invalid('protein')}
+              />
+            </View>
+
+            <View onLayout={registerField('carbs', 'fat')} style={styles.row}>
+              <Field
+                label="Carbs (g)"
+                value={carbs}
+                onChangeText={(v) => {
+                  setCarbs(v)
+                  clearError('carbs')
+                }}
+                keyboardType="decimal-pad"
+                placeholder="e.g. 48"
+                containerStyle={styles.rowItem}
+                invalid={invalid('carbs')}
+              />
+              <Field
+                label="Fat (g)"
+                value={fat}
+                onChangeText={(v) => {
+                  setFat(v)
+                  clearError('fat')
+                }}
+                keyboardType="decimal-pad"
+                placeholder="e.g. 22"
+                containerStyle={styles.rowItem}
+                invalid={invalid('fat')}
+              />
+            </View>
+          </>
+        )}
       </ScrollView>
 
-      {/* Errors sit next to the action button — that's where you're looking on save. */}
+      {/* A pointer, not the message itself: the wording that says what to change
+          lives under the field. This only says how many, and that they're above. */}
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, spacing.lg) }]}>
-        {error && <Text style={styles.error}>{error}</Text>}
+        {footerMessage && (
+          <View style={styles.footerError}>
+            <Ionicons name="alert-circle" size={15} color={colors.danger} />
+            <Text style={styles.error}>{footerMessage}</Text>
+          </View>
+        )}
         <View style={styles.footerButtons}>
           {step > 0 && !isEditing && (
             <PrimaryButton
@@ -576,11 +910,17 @@ const styles = StyleSheet.create({
   indicatorItem: { flex: 1, gap: spacing.sm },
   indicatorBar: { height: 3, borderRadius: radius.pill, backgroundColor: colors.border },
   indicatorBarActive: { backgroundColor: colors.primary },
+  indicatorBarError: { backgroundColor: colors.danger },
+  indicatorLabelRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   indicatorLabel: { ...type.caption, color: colors.textPlaceholder },
   indicatorLabelActive: { color: colors.text },
+  indicatorLabelError: { color: colors.danger },
   scroll: { flex: 1 },
   content: { padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing.xxl },
   stepHeading: { ...type.title, color: colors.text, marginBottom: spacing.xs },
+  // Pulled up against the heading: the content gap is `lg`, which reads as two
+  // unrelated lines rather than a heading and its subtitle.
+  stepIntro: { ...type.body, color: colors.textMuted, marginTop: -spacing.md },
   photoPicker: {
     height: 180,
     borderRadius: radius.lg,
@@ -593,6 +933,7 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     overflow: 'hidden',
   },
+  photoPickerInvalid: { borderColor: colors.danger, backgroundColor: colors.dangerSoft },
   photoPickerText: { ...type.bodyStrong, color: colors.textMuted },
   photoPickerHint: { ...type.caption, color: colors.textPlaceholder },
   photoChange: {
@@ -695,7 +1036,9 @@ const styles = StyleSheet.create({
   remove: { width: 30, height: 50, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   // Steps use a multiline input, so nudge the ✕ to line up with its first row.
   removeStep: { marginTop: spacing.xs },
+  rowInvalid: { borderColor: colors.danger, backgroundColor: colors.dangerSoft },
   emptyHint: { ...type.body, color: colors.textMuted, paddingVertical: spacing.sm },
+  emptyHintInvalid: { color: colors.danger },
   addRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.sm },
   addRowText: { ...type.bodyStrong, color: colors.text },
   footer: {
@@ -706,7 +1049,8 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border,
     backgroundColor: colors.bg,
   },
-  error: { ...type.body, color: colors.danger },
+  footerError: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  error: { ...type.body, color: colors.danger, flex: 1 },
   footerButtons: { flexDirection: 'row', gap: spacing.sm },
   footerButton: { flex: 1 },
 })

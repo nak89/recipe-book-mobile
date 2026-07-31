@@ -3,6 +3,29 @@ import type { Recipe, RecipeInput } from '@/types/recipe'
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL
 
+export interface FieldIssue {
+  /** Dotted path from the server's zod error, e.g. `title`, `ingredients.0.name`. */
+  field: string
+  message: string
+}
+
+/**
+ * Carries the status and the server's per-field issues, not just a message.
+ * A form needs both: 409 means "duplicate title" and belongs on the title
+ * field, and a 400's `details` say exactly which input the server rejected.
+ */
+export class ApiError extends Error {
+  status: number
+  details: FieldIssue[]
+
+  constructor(message: string, status: number, details: FieldIssue[] = []) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+    this.details = details
+  }
+}
+
 async function request<T>(path: string, token: string, options: RequestInit = {}): Promise<T> {
   if (!API_URL) {
     throw new Error('Missing EXPO_PUBLIC_API_URL — set it in .env')
@@ -17,7 +40,7 @@ async function request<T>(path: string, token: string, options: RequestInit = {}
   })
   if (!res.ok) {
     const body = await res.json().catch(() => null)
-    throw new Error(body?.error ?? 'Request failed')
+    throw new ApiError(body?.error ?? 'Request failed', res.status, body?.details ?? [])
   }
   if (res.status === 204) return undefined as T
   return res.json()
@@ -83,7 +106,7 @@ export async function uploadPhoto(uri: string, token: string): Promise<string> {
   })
   if (!res.ok) {
     const body = await res.json().catch(() => null)
-    throw new Error(body?.error ?? 'Failed to upload photo')
+    throw new ApiError(body?.error ?? 'Failed to upload photo', res.status, body?.details ?? [])
   }
   const data = await res.json()
   return data.url

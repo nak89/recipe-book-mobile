@@ -2,9 +2,9 @@ import { useCallback, useMemo, useState } from 'react'
 import { Ionicons } from '@expo/vector-icons'
 import { useFocusEffect, useRouter } from 'expo-router'
 import {
-  ActivityIndicator,
   FlatList,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,7 +14,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useAuth } from '@/context/AuthContext'
 import { deleteRecipe, getRecipes, setFavourite } from '@/lib/api'
 import { useDebounce } from '@/hooks/useDebounce'
+import { openMenuFeedback, refreshFeedback } from '@/lib/haptics'
 import RecipeCard from '@/components/RecipeCard'
+import RecipeCardSkeleton from '@/components/RecipeCardSkeleton'
 import Chip from '@/components/ui/Chip'
 import SearchBar from '@/components/ui/SearchBar'
 import ActionSheet from '@/components/ui/ActionSheet'
@@ -25,6 +27,10 @@ import type { Mealtime, Recipe } from '@/types/recipe'
 
 type Filter = 'All' | Mealtime
 
+// Six tiles: three rows, which fills a phone screen below the header without
+// running so far past the fold that the page scrolls to nothing.
+const SKELETON_KEYS = ['s0', 's1', 's2', 's3', 's4', 's5']
+
 export default function DashboardScreen() {
   const { token, displayName } = useAuth()
   const router = useRouter()
@@ -32,6 +38,10 @@ export default function DashboardScreen() {
 
   const [recipes, setRecipes] = useState<Recipe[]>([])
   const [loading, setLoading] = useState(true)
+  // Separate from `loading`: this one drives the spinner at the top of the list
+  // while the cards you already have stay on screen. Reusing `loading` would
+  // swap the whole grid back to skeletons on every pull.
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<Filter>('All')
@@ -39,6 +49,13 @@ export default function DashboardScreen() {
   const [confirmFor, setConfirmFor] = useState<Recipe | null>(null)
 
   const debouncedQuery = useDebounce(query)
+
+  // One helper for both cards, so the tap that opens the menu and the buzz that
+  // confirms it can never drift apart.
+  function openSheet(recipe: Recipe) {
+    openMenuFeedback()
+    setSheetFor(recipe)
+  }
 
   // Refetch on focus so returning from the add/edit modal shows fresh data.
   useFocusEffect(
@@ -87,6 +104,25 @@ export default function DashboardScreen() {
     [visible]
   )
 
+  /**
+   * Pull-to-refresh. The haptic fires here rather than on drag, because this
+   * runs the moment the gesture commits — buzzing while you're still pulling
+   * would fire on pulls you abandon.
+   */
+  async function handleRefresh() {
+    if (!token) return
+    refreshFeedback()
+    setRefreshing(true)
+    try {
+      setRecipes(await getRecipes(token))
+      setError(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to refresh recipes')
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
   async function handleToggleFavourite(recipe: Recipe) {
     if (!token) return
     const next = !recipe.isFavourite
@@ -118,10 +154,90 @@ export default function DashboardScreen() {
     router.push(`/recipe/${pick.id}`)
   }
 
+  // Shared by the skeleton and the real list so the chrome doesn't move when
+  // data lands — the whole point of placeholders over a centred spinner.
+  const header = (
+    <View style={styles.header}>
+      <View style={styles.greetingRow}>
+        <View style={styles.greetingText}>
+          <Text style={styles.hello}>Hi {displayName} 👋</Text>
+          <Text style={styles.prompt}>What do you want to cook today?</Text>
+        </View>
+        <Pressable
+          onPress={handleShuffle}
+          disabled={loading}
+          accessibilityRole="button"
+          accessibilityLabel="Surprise me with a random recipe"
+          style={({ pressed }) => [styles.shuffle, pressed && styles.shufflePressed]}
+        >
+          <Ionicons name="shuffle" size={20} color={colors.accent} />
+        </Pressable>
+      </View>
+
+      <SearchBar value={query} onChangeText={setQuery} placeholder="Search recipe for cooking" />
+
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+        {(['All', ...MEALTIMES] as Filter[]).map((option) => (
+          <Chip
+            key={option}
+            label={option}
+            active={filter === option}
+            onPress={() => setFilter(option)}
+          />
+        ))}
+      </ScrollView>
+
+      {error && <Text style={styles.error}>{error}</Text>}
+
+      {/* Hidden while searching — a carousel of favourites is noise when
+          you're hunting for one specific recipe. */}
+      {favourites.length > 0 && !searching && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Favourites</Text>
+          <FlatList
+            horizontal
+            data={favourites}
+            keyExtractor={(item) => item.id}
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.carousel}
+            renderItem={({ item }) => (
+              <RecipeCard
+                recipe={item}
+                variant="featured"
+                onPress={() => router.push(`/recipe/${item.id}`)}
+                onLongPress={() => openSheet(item)}
+                onToggleFavourite={() => handleToggleFavourite(item)}
+              />
+            )}
+          />
+        </View>
+      )}
+
+      {/* Shown during loading too, so the heading doesn't pop in above the
+          skeletons and shove them down. */}
+      {(loading || visible.length > 0) && (
+        <Text style={[styles.sectionTitle, styles.gridTitle]}>
+          {searching ? 'Results' : 'All Recipes'}
+        </Text>
+      )}
+    </View>
+  )
+
   if (loading) {
     return (
-      <View style={[styles.container, styles.centered]}>
-        <ActivityIndicator color={colors.primary} />
+      <View style={[styles.container, { paddingTop: Math.max(insets.top, spacing.lg) }]}>
+        <FlatList
+          data={SKELETON_KEYS}
+          keyExtractor={(key) => key}
+          numColumns={2}
+          columnWrapperStyle={styles.column}
+          contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
+          // There's nothing to reach by scrolling and nothing to refresh yet.
+          scrollEnabled={false}
+          ListHeaderComponent={header}
+          renderItem={() => <RecipeCardSkeleton />}
+        />
       </View>
     )
   }
@@ -139,83 +255,22 @@ export default function DashboardScreen() {
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
-        ListHeaderComponent={
-          <View style={styles.header}>
-            <View style={styles.greetingRow}>
-              <View style={styles.greetingText}>
-                <Text style={styles.hello}>Hi {displayName} 👋</Text>
-                <Text style={styles.prompt}>What do you want to cook today?</Text>
-              </View>
-              <Pressable
-                onPress={handleShuffle}
-                accessibilityRole="button"
-                accessibilityLabel="Surprise me with a random recipe"
-                style={({ pressed }) => [styles.shuffle, pressed && styles.shufflePressed]}
-              >
-                <Ionicons name="shuffle" size={20} color={colors.accent} />
-              </Pressable>
-            </View>
-
-            <SearchBar
-              value={query}
-              onChangeText={setQuery}
-              placeholder="Search recipe for cooking"
-            />
-
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.chips}
-            >
-              {(['All', ...MEALTIMES] as Filter[]).map((option) => (
-                <Chip
-                  key={option}
-                  label={option}
-                  active={filter === option}
-                  onPress={() => setFilter(option)}
-                />
-              ))}
-            </ScrollView>
-
-            {error && <Text style={styles.error}>{error}</Text>}
-
-            {/* Hidden while searching — a carousel of favourites is noise when
-                you're hunting for one specific recipe. */}
-            {favourites.length > 0 && !searching && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Favourites</Text>
-                <FlatList
-                  horizontal
-                  data={favourites}
-                  keyExtractor={(item) => item.id}
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.carousel}
-                  renderItem={({ item }) => (
-                    <RecipeCard
-                      recipe={item}
-                      variant="featured"
-                      onPress={() => router.push(`/recipe/${item.id}`)}
-                      onLongPress={() => setSheetFor(item)}
-                      onToggleFavourite={() => handleToggleFavourite(item)}
-                    />
-                  )}
-                />
-              </View>
-            )}
-
-            {visible.length > 0 && (
-              <Text style={[styles.sectionTitle, styles.gridTitle]}>
-                {searching ? 'Results' : 'All Recipes'}
-              </Text>
-            )}
-          </View>
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            // Defaults are iOS grey and Android blue; the app's chrome is neither.
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+          />
         }
+        ListHeaderComponent={header}
         renderItem={({ item }) =>
           item ? (
             <RecipeCard
               recipe={item}
               onPress={() => router.push(`/recipe/${item.id}`)}
-              onLongPress={() => setSheetFor(item)}
+              onLongPress={() => openSheet(item)}
               onToggleFavourite={() => handleToggleFavourite(item)}
             />
           ) : (
@@ -280,7 +335,6 @@ export default function DashboardScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
-  centered: { alignItems: 'center', justifyContent: 'center' },
   list: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl, gap: spacing.md },
   column: { gap: spacing.md },
   filler: { flex: 1 },

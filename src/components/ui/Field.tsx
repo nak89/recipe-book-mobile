@@ -10,18 +10,27 @@ import { colors, radius, spacing, type } from '@/theme'
  * `style` lands on the TextInput; **layout belongs on `containerStyle`**. Put
  * `flex: 1` in `style` and the input flexes inside a wrapper that's still
  * sized to its own content, so the field visibly grows and shrinks as you type.
+ *
+ * `invalid` outlines the field in red and stops there — no message of its own.
+ * A form full of red sentences is harder to act on than a form with two red
+ * boxes, so the wording lives in one line above the submit button instead.
  */
 const Field = forwardRef<
   TextInput,
-  TextInputProps & { label?: string; hint?: string; containerStyle?: StyleProp<ViewStyle> }
+  TextInputProps & {
+    label?: string
+    hint?: string
+    invalid?: boolean
+    containerStyle?: StyleProp<ViewStyle>
+  }
 >(
-  function Field({ label, hint, style, containerStyle, multiline, ...props }, ref) {
+  function Field({ label, hint, invalid, style, containerStyle, multiline, ...props }, ref) {
     return (
       <View style={[styles.wrapper, containerStyle]}>
         {label && <Text style={styles.label}>{label}</Text>}
         <TextInput
           ref={ref}
-          style={[styles.input, multiline && styles.multiline, style]}
+          style={[styles.input, multiline && styles.multiline, invalid && styles.inputInvalid, style]}
           placeholderTextColor={colors.textPlaceholder}
           multiline={multiline}
           {...props}
@@ -49,5 +58,6 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   multiline: { height: undefined, minHeight: 92, paddingTop: spacing.md, textAlignVertical: 'top' },
+  inputInvalid: { borderColor: colors.danger, backgroundColor: colors.dangerSoft },
   hint: { ...type.caption, color: colors.textMuted },
 })

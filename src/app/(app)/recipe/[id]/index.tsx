@@ -3,10 +3,11 @@ import { Ionicons } from '@expo/vector-icons'
 import { Image } from 'expo-image'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useAuth } from '@/context/AuthContext'
 import { deleteRecipe, getRecipe, setFavourite } from '@/lib/api'
+import RecipeDetailSkeleton from '@/components/RecipeDetailSkeleton'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import PrimaryButton from '@/components/ui/PrimaryButton'
 import { emojiForCuisine } from '@/data/cuisines'
@@ -66,13 +67,18 @@ export default function RecipeDetailScreen() {
     }
   }
 
-  if (loading) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator color={colors.primary} />
-      </View>
-    )
-  }
+  // `!= null` rather than truthiness — a genuine 0 g of fat is a fact worth
+  // showing, and dropping it would be a silent lie about the recipe.
+  const nutrition = recipe
+    ? ([
+        { label: 'Calories', value: recipe.calories, unit: 'kcal' },
+        { label: 'Protein', value: recipe.protein, unit: 'g' },
+        { label: 'Carbs', value: recipe.carbs, unit: 'g' },
+        { label: 'Fat', value: recipe.fat, unit: 'g' },
+      ].filter((stat) => stat.value != null) as { label: string; value: number; unit: string }[])
+    : []
+
+  if (loading) return <RecipeDetailSkeleton />
   if (!recipe) {
     return (
       <View style={styles.centered}>
@@ -151,6 +157,26 @@ export default function RecipeDetailScreen() {
             </Section>
           )}
 
+          {/* Only the stats that were filled in, and no section at all when
+              none were — nutrition is optional and most recipes won't have it,
+              so an empty heading would be on more screens than a full one. */}
+          {nutrition.length > 0 && (
+            <Section title="Nutrition">
+              <Text style={styles.sectionCaption}>Per serving</Text>
+              <View style={styles.nutritionRow}>
+                {nutrition.map((stat) => (
+                  <View key={stat.label} style={styles.nutritionTile}>
+                    <Text style={styles.nutritionValue}>
+                      {formatAmount(stat.value)}
+                      <Text style={styles.nutritionUnit}> {stat.unit}</Text>
+                    </Text>
+                    <Text style={styles.nutritionLabel}>{stat.label}</Text>
+                  </View>
+                ))}
+              </View>
+            </Section>
+          )}
+
           <Section title="Ingredients">
             {recipe.ingredients.map((ingredient, index) => (
               <View key={ingredient.id ?? index} style={styles.ingredient}>
@@ -204,6 +230,15 @@ export default function RecipeDetailScreen() {
       />
     </View>
   )
+}
+
+/**
+ * One decimal at most. The columns are doubles, so a value entered as 12.3 can
+ * come back as 12.299999999999999 — a number nobody typed and nobody wants to
+ * read on a recipe card.
+ */
+function formatAmount(value: number): string {
+  return String(Math.round(value * 10) / 10)
 }
 
 function Meta({ icon, label }: { icon: keyof typeof Ionicons.glyphMap; label: string }) {
@@ -277,7 +312,26 @@ const styles = StyleSheet.create({
   error: { ...type.body, color: colors.danger },
   section: { gap: spacing.sm, marginTop: spacing.lg },
   sectionTitle: { ...type.section, color: colors.text },
+  sectionCaption: { ...type.caption, color: colors.textMuted },
   paragraph: { ...type.body, color: colors.textMuted },
+  nutritionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  // Content-sized with a floor, deliberately not `flex: 1`. Stretching to fill
+  // turns a recipe that only knows its calories into one full-width slab —
+  // the same failure the dashboard grid's null filler item exists to prevent.
+  nutritionTile: {
+    minWidth: 72,
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.sm,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  nutritionValue: { ...type.bodyStrong, color: colors.text },
+  nutritionUnit: { ...type.caption, color: colors.textMuted },
+  nutritionLabel: { ...type.caption, color: colors.textMuted },
   ingredient: {
     flexDirection: 'row',
     alignItems: 'center',
