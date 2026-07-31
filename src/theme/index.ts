@@ -1,58 +1,13 @@
 import { Platform, StyleSheet } from 'react-native'
 
-/**
- * The app is locked to light (`userInterfaceStyle: "light"` in app.json), but
- * every colour is still named semantically rather than by hue. Adding dark mode
- * later means swapping this one object behind a `useColorScheme()` hook — no
- * screen needs to change.
- *
- * The palette is deliberately almost colourless: warm near-black chrome on warm
- * white, with amber reserved for the shuffle action and red for the favourite
- * heart. Recipe photography supplies all the other colour, which is what stops
- * the app reading as generic.
- */
-export const colors = {
-  // Surfaces
-  bg: '#FFFFFF',
-  bgSubtle: '#FAFAF9',
-  surface: '#FFFFFF',
-  surfaceAlt: '#F5F5F4',
-  surfaceSunken: '#EFEDEB',
-
-  // Lines
-  border: '#E7E5E4',
-  borderStrong: '#D6D3D1',
-
-  // Type
-  text: '#1C1917',
-  textMuted: '#78716C',
-  // Placeholders must read as absent, never as a prefilled value.
-  textPlaceholder: '#A8A29E',
-  textInverse: '#FFFFFF',
-  textOnPhoto: '#FFFFFF',
-
-  // Actions
-  primary: '#1C1917',
-  primaryPressed: '#000000',
-  onPrimary: '#FFFFFF',
-
-  // Reserved for the shuffle action — the only amber in the app.
-  accent: '#F59E0B',
-  accentSoft: '#FEF3C7',
-
-  // Favourites only. A filled heart has to read as red or it doesn't read as a
-  // heart, so this is the one place a second accent earns its keep.
-  favourite: '#EF4444',
-  favouriteSoft: '#FEE2E2',
-
-  danger: '#DC2626',
-  dangerSoft: '#FEF2F2',
-
-  // Scrim under text overlaid on photos.
-  scrim: 'rgba(0,0,0,0.55)',
-  scrimStrong: 'rgba(0,0,0,0.75)',
-  scrimNone: 'rgba(0,0,0,0)',
-} as const
+// `@/theme` stays the single import path for everything design-system, so no
+// screen ever needs to know that the palettes and the hooks live in separate
+// modules. They're split only to keep the dependency running one way:
+// palettes -> ThemeContext -> index, never back.
+export { darkColors, lightColors } from './palettes'
+export type { ThemeColors } from './palettes'
+export { ThemeProvider, useTheme, useThemedStyles } from './ThemeContext'
+export type { ThemePreference } from './ThemeContext'
 
 export const spacing = {
   xs: 4,
@@ -84,6 +39,12 @@ export const type = {
 /**
  * iOS and Android express elevation differently; keeping both in one token
  * avoids every component re-deriving the platform branch.
+ *
+ * Not theme-aware, and it doesn't need to be: a near-black shadow at 6% opacity
+ * is invisible on a near-black background, and all four places this is used are
+ * already legible in dark by other means — a photograph, a near-white circle,
+ * and two sheets floating over a scrim. Elevation at night comes from surface
+ * lightness instead.
  */
 export const shadow = {
   card: Platform.select({

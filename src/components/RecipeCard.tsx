@@ -3,7 +3,8 @@ import { Image } from 'expo-image'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import type { StyleProp, ViewStyle } from 'react-native'
-import { colors, radius, shadow, spacing, type } from '@/theme'
+import { radius, shadow, spacing, type, useTheme, useThemedStyles } from '@/theme'
+import type { ThemeColors } from '@/theme'
 import type { Recipe } from '@/types/recipe'
 
 /**
@@ -29,6 +30,8 @@ export default function RecipeCard({
   onToggleFavourite?: () => void
   style?: StyleProp<ViewStyle>
 }) {
+  const { colors: c } = useTheme()
+  const styles = useThemedStyles(makeStyles)
   const featured = variant === 'featured'
 
   return (
@@ -54,7 +57,7 @@ export default function RecipeCard({
 
       {/* Scrim over the lower half only — the photo stays clean up top. */}
       <LinearGradient
-        colors={[colors.scrimNone, colors.scrim, colors.scrimStrong]}
+        colors={[c.scrimNone, c.scrim, c.scrimStrong]}
         locations={[0, 0.55, 1]}
         style={StyleSheet.absoluteFill}
         pointerEvents="none"
@@ -75,7 +78,7 @@ export default function RecipeCard({
           <Ionicons
             name={recipe.isFavourite ? 'heart' : 'heart-outline'}
             size={17}
-            color={recipe.isFavourite ? colors.favourite : colors.textOnPhoto}
+            color={recipe.isFavourite ? c.favourite : c.textOnPhoto}
           />
         </Pressable>
       )}
@@ -86,12 +89,12 @@ export default function RecipeCard({
         </Text>
         <View style={styles.badges}>
           <View style={styles.badge}>
-            <Ionicons name="time-outline" size={11} color={colors.textOnPhoto} />
+            <Ionicons name="time-outline" size={11} color={c.textOnPhoto} />
             <Text style={styles.badgeText}>{recipe.totalMinutes} min</Text>
           </View>
           {featured && (
             <View style={styles.badge}>
-              <Ionicons name="restaurant-outline" size={11} color={colors.textOnPhoto} />
+              <Ionicons name="restaurant-outline" size={11} color={c.textOnPhoto} />
               <Text style={styles.badgeText}>Serves {recipe.servings}</Text>
             </View>
           )}
@@ -101,11 +104,11 @@ export default function RecipeCard({
   )
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
   card: {
     borderRadius: radius.lg,
     overflow: 'hidden',
-    backgroundColor: colors.surfaceSunken,
+    backgroundColor: c.surfaceSunken,
     justifyContent: 'flex-end',
     ...shadow.card,
   },
@@ -124,7 +127,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   content: { padding: spacing.md, gap: spacing.sm },
-  title: { ...type.bodyStrong, fontSize: 14, color: colors.textOnPhoto },
+  title: { ...type.bodyStrong, fontSize: 14, color: c.textOnPhoto },
   titleFeatured: { fontSize: 16 },
   badges: { flexDirection: 'row', gap: spacing.xs, flexWrap: 'wrap' },
   badge: {
@@ -136,5 +139,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: 3,
   },
-  badgeText: { ...type.caption, fontSize: 11, color: colors.textOnPhoto },
+  badgeText: { ...type.caption, fontSize: 11, color: c.textOnPhoto },
 })

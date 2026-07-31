@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react'
 import { Animated, Easing, Platform, StyleSheet } from 'react-native'
 import type { StyleProp, ViewStyle } from 'react-native'
-import { colors, radius } from '@/theme'
+import { radius, useThemedStyles } from '@/theme'
+import type { ThemeColors } from '@/theme'
 
 /**
  * The pulse every placeholder shares.
@@ -42,9 +43,10 @@ export default function Skeleton({
   pulse: Animated.Value
   style?: StyleProp<ViewStyle>
 }) {
+  const styles = useThemedStyles(makeStyles)
   return <Animated.View style={[styles.block, style, { opacity: pulse }]} />
 }
 
-const styles = StyleSheet.create({
-  block: { backgroundColor: colors.surfaceSunken, borderRadius: radius.sm },
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
+  block: { backgroundColor: c.surfaceSunken, borderRadius: radius.sm },
 })

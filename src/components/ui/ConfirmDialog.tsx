@@ -1,5 +1,6 @@
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native'
-import { colors, radius, shadow, spacing, type } from '@/theme'
+import { radius, shadow, spacing, type, useThemedStyles } from '@/theme'
+import type { ThemeColors } from '@/theme'
 
 /**
  * Replaces `Alert.alert`, which doesn't exist on react-native-web. Rendering it
@@ -23,6 +24,7 @@ export default function ConfirmDialog({
   onConfirm: () => void
   onCancel: () => void
 }) {
+  const styles = useThemedStyles(makeStyles)
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
       <Pressable style={styles.backdrop} onPress={onCancel}>
@@ -55,7 +57,7 @@ export default function ConfirmDialog({
   )
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
   backdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.4)',
@@ -66,14 +68,14 @@ const styles = StyleSheet.create({
   dialog: {
     width: '100%',
     maxWidth: 340,
-    backgroundColor: colors.surface,
+    backgroundColor: c.surface,
     borderRadius: radius.lg,
     padding: spacing.xl,
     gap: spacing.sm,
     ...shadow.raised,
   },
-  title: { ...type.section, color: colors.text },
-  message: { ...type.body, color: colors.textMuted, lineHeight: 21 },
+  title: { ...type.section, color: c.text },
+  message: { ...type.body, color: c.textMuted, lineHeight: 21 },
   actions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },
   button: {
     flex: 1,
@@ -83,10 +85,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   pressed: { opacity: 0.85 },
-  cancel: { backgroundColor: colors.surfaceAlt },
-  cancelLabel: { ...type.bodyStrong, color: colors.text },
-  confirm: { backgroundColor: colors.primary },
-  confirmLabel: { ...type.bodyStrong, color: colors.onPrimary },
-  confirmDestructive: { backgroundColor: colors.danger },
-  confirmLabelDestructive: { ...type.bodyStrong, color: colors.onPrimary },
+  cancel: { backgroundColor: c.surfaceAlt },
+  cancelLabel: { ...type.bodyStrong, color: c.text },
+  confirm: { backgroundColor: c.primary },
+  confirmLabel: { ...type.bodyStrong, color: c.onPrimary },
+  confirmDestructive: { backgroundColor: c.danger },
+  confirmLabelDestructive: { ...type.bodyStrong, color: c.onPrimary },
 })

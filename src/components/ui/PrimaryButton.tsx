@@ -1,6 +1,7 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text } from 'react-native'
 import type { StyleProp, ViewStyle } from 'react-native'
-import { colors, radius, spacing, type } from '@/theme'
+import { radius, spacing, type, useTheme, useThemedStyles } from '@/theme'
+import type { ThemeColors } from '@/theme'
 
 export default function PrimaryButton({
   label,
@@ -17,6 +18,8 @@ export default function PrimaryButton({
   variant?: 'solid' | 'outline' | 'danger'
   style?: StyleProp<ViewStyle>
 }) {
+  const { colors: c } = useTheme()
+  const styles = useThemedStyles(makeStyles)
   const inactive = disabled || loading
 
   return (
@@ -35,7 +38,7 @@ export default function PrimaryButton({
       ]}
     >
       {loading ? (
-        <ActivityIndicator color={variant === 'solid' ? colors.onPrimary : colors.text} />
+        <ActivityIndicator color={variant === 'solid' ? c.onPrimary : c.text} />
       ) : (
         <Text
           style={[
@@ -51,7 +54,7 @@ export default function PrimaryButton({
   )
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
   base: {
     height: 52,
     borderRadius: radius.md,
@@ -59,12 +62,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: spacing.lg,
   },
-  solid: { backgroundColor: colors.primary },
-  outline: { borderWidth: 1, borderColor: colors.borderStrong, backgroundColor: colors.surface },
-  danger: { backgroundColor: colors.dangerSoft },
+  solid: { backgroundColor: c.primary },
+  outline: { borderWidth: 1, borderColor: c.borderStrong, backgroundColor: c.surface },
+  danger: { backgroundColor: c.dangerSoft },
   pressed: { opacity: 0.85 },
   inactive: { opacity: 0.5 },
-  label: { ...type.bodyStrong, fontSize: 16, color: colors.text },
-  labelSolid: { color: colors.onPrimary },
-  labelDanger: { color: colors.danger },
+  label: { ...type.bodyStrong, fontSize: 16, color: c.text },
+  labelSolid: { color: c.onPrimary },
+  labelDanger: { color: c.danger },
 })

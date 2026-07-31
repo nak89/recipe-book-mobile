@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons'
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { colors, radius, shadow, spacing, type } from '@/theme'
+import { radius, shadow, spacing, type, useTheme, useThemedStyles } from '@/theme'
+import type { ThemeColors } from '@/theme'
 
 export interface SheetAction {
   label: string
@@ -26,6 +27,8 @@ export default function ActionSheet({
   actions: SheetAction[]
   onClose: () => void
 }) {
+  const { colors: c } = useTheme()
+  const styles = useThemedStyles(makeStyles)
   const insets = useSafeAreaInsets()
 
   return (
@@ -54,7 +57,7 @@ export default function ActionSheet({
               <Ionicons
                 name={action.icon}
                 size={20}
-                color={action.destructive ? colors.danger : colors.text}
+                color={action.destructive ? c.danger : c.text}
               />
               <Text style={[styles.actionLabel, action.destructive && styles.destructive]}>
                 {action.label}
@@ -73,10 +76,10 @@ export default function ActionSheet({
   )
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
   sheet: {
-    backgroundColor: colors.surface,
+    backgroundColor: c.surface,
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
     paddingHorizontal: spacing.md,
@@ -88,13 +91,13 @@ const styles = StyleSheet.create({
     width: 36,
     height: 4,
     borderRadius: radius.pill,
-    backgroundColor: colors.borderStrong,
+    backgroundColor: c.borderStrong,
     alignSelf: 'center',
     marginBottom: spacing.sm,
   },
   title: {
     ...type.caption,
-    color: colors.textMuted,
+    color: c.textMuted,
     paddingHorizontal: spacing.md,
     paddingBottom: spacing.sm,
   },
@@ -106,15 +109,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     borderRadius: radius.md,
   },
-  actionPressed: { backgroundColor: colors.surfaceAlt },
-  actionLabel: { ...type.body, fontSize: 16, color: colors.text },
-  destructive: { color: colors.danger },
+  actionPressed: { backgroundColor: c.surfaceAlt },
+  actionLabel: { ...type.body, fontSize: 16, color: c.text },
+  destructive: { color: c.danger },
   cancel: {
     marginTop: spacing.xs,
     paddingVertical: spacing.lg,
     alignItems: 'center',
     borderRadius: radius.md,
-    backgroundColor: colors.surfaceAlt,
+    backgroundColor: c.surfaceAlt,
   },
-  cancelLabel: { ...type.bodyStrong, fontSize: 16, color: colors.text },
+  cancelLabel: { ...type.bodyStrong, fontSize: 16, color: c.text },
 })

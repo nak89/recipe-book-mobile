@@ -1,6 +1,7 @@
 import { StyleSheet, View } from 'react-native'
 import Skeleton, { usePulse } from '@/components/ui/Skeleton'
-import { colors, radius, spacing } from '@/theme'
+import { radius, spacing, useThemedStyles } from '@/theme'
+import type { ThemeColors } from '@/theme'
 
 /**
  * A grid tile with nothing in it yet.
@@ -15,6 +16,7 @@ import { colors, radius, spacing } from '@/theme'
  * it read as "a card, loading" rather than "a grey box".
  */
 export default function RecipeCardSkeleton() {
+  const styles = useThemedStyles(makeStyles)
   const pulse = usePulse()
 
   return (
@@ -28,18 +30,18 @@ export default function RecipeCardSkeleton() {
   )
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
   // Mirrors RecipeCard's `card` + `grid` styles.
   card: {
     flex: 1,
     aspectRatio: 0.86,
     borderRadius: radius.lg,
-    backgroundColor: colors.surfaceAlt,
+    backgroundColor: c.surfaceAlt,
     overflow: 'hidden',
     justifyContent: 'flex-end',
   },
   content: { padding: spacing.md, gap: spacing.sm },
-  titleBar: { height: 11, width: '85%', backgroundColor: colors.borderStrong },
-  titleBarShort: { height: 11, width: '55%', backgroundColor: colors.borderStrong },
-  badge: { height: 16, width: 62, borderRadius: radius.pill, backgroundColor: colors.border },
+  titleBar: { height: 11, width: '85%', backgroundColor: c.borderStrong },
+  titleBarShort: { height: 11, width: '55%', backgroundColor: c.borderStrong },
+  badge: { height: 16, width: 62, borderRadius: radius.pill, backgroundColor: c.border },
 })

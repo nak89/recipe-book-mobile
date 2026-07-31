@@ -38,7 +38,8 @@ import IngredientPicker from '@/components/IngredientPicker'
 import { emojiForIngredient } from '@/data/ingredients'
 import type { CommonIngredient } from '@/data/ingredients'
 import { CUISINES, emojiForCuisine } from '@/data/cuisines'
-import { colors, radius, spacing, type } from '@/theme'
+import { radius, spacing, type, useTheme, useThemedStyles } from '@/theme'
+import type { ThemeColors } from '@/theme'
 import { DIFFICULTIES, MEALTIMES } from '@/types/recipe'
 import type {
   Difficulty,
@@ -115,6 +116,8 @@ export default function RecipeForm({
   onSubmit: (data: RecipeInput) => Promise<void>
   submitLabel: string
 }) {
+  const { colors: c, isDark } = useTheme()
+  const styles = useThemedStyles(makeStyles)
   const { token } = useAuth()
   const insets = useSafeAreaInsets()
   const headerHeight = useHeaderHeight()
@@ -496,7 +499,7 @@ export default function RecipeForm({
                   {label}
                 </Text>
                 {stepsWithErrors.has(index) && (
-                  <Ionicons name="alert-circle" size={13} color={colors.danger} />
+                  <Ionicons name="alert-circle" size={13} color={c.danger} />
                 )}
               </View>
             </Pressable>
@@ -523,12 +526,12 @@ export default function RecipeForm({
                 accessibilityLabel={photoUrl ? 'Change photo' : 'Add a photo'}
               >
                 {uploading ? (
-                  <ActivityIndicator color={colors.primary} />
+                  <ActivityIndicator color={c.primary} />
                 ) : photoUrl ? (
                   <>
                     <Image source={{ uri: photoUrl }} style={StyleSheet.absoluteFill} contentFit="cover" />
                     <View style={styles.photoChange}>
-                      <Ionicons name="camera" size={14} color={colors.onPrimary} />
+                      <Ionicons name="camera" size={14} color={c.onPrimary} />
                       <Text style={styles.photoChangeText}>Change</Text>
                     </View>
                   </>
@@ -537,7 +540,7 @@ export default function RecipeForm({
                     <Ionicons
                       name="camera-outline"
                       size={26}
-                      color={invalid('photoUrl') ? colors.danger : colors.textPlaceholder}
+                      color={invalid('photoUrl') ? c.danger : c.textPlaceholder}
                     />
                     <Text style={styles.photoPickerText}>Add a photo</Text>
                     <Text style={styles.photoPickerHint}>Required</Text>
@@ -683,7 +686,7 @@ export default function RecipeForm({
                 <Text style={styles.browseTitle}>Pick from common ingredients</Text>
                 <Text style={styles.browseHint}>Garlic, soy sauce, rice…</Text>
               </View>
-              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+              <Ionicons name="chevron-forward" size={18} color={c.textMuted} />
             </Pressable>
 
             {/* One bordered row holding three borderless inputs, rather than
@@ -704,7 +707,8 @@ export default function RecipeForm({
                   value={ingredient.name}
                   onChangeText={(v) => updateIngredient(ingredient.id, 'name', v)}
                   placeholder="Ingredient"
-                  placeholderTextColor={colors.textPlaceholder}
+                  placeholderTextColor={c.textPlaceholder}
+                  keyboardAppearance={isDark ? 'dark' : 'light'}
                 />
                 <View style={styles.ingredientDivider} />
                 <TextInput
@@ -712,7 +716,8 @@ export default function RecipeForm({
                   value={ingredient.quantity}
                   onChangeText={(v) => updateIngredient(ingredient.id, 'quantity', v)}
                   placeholder="0"
-                  placeholderTextColor={colors.textPlaceholder}
+                  placeholderTextColor={c.textPlaceholder}
+                  keyboardAppearance={isDark ? 'dark' : 'light'}
                   keyboardType="numeric"
                 />
                 <TextInput
@@ -720,7 +725,8 @@ export default function RecipeForm({
                   value={ingredient.unit}
                   onChangeText={(v) => updateIngredient(ingredient.id, 'unit', v)}
                   placeholder="unit"
-                  placeholderTextColor={colors.textPlaceholder}
+                  placeholderTextColor={c.textPlaceholder}
+                  keyboardAppearance={isDark ? 'dark' : 'light'}
                   autoCapitalize="none"
                   autoCorrect={false}
                 />
@@ -730,7 +736,7 @@ export default function RecipeForm({
                   style={styles.ingredientRemove}
                   accessibilityLabel={`Remove ${ingredient.name || 'ingredient'}`}
                 >
-                  <Ionicons name="close" size={16} color={colors.textMuted} />
+                  <Ionicons name="close" size={16} color={c.textMuted} />
                 </Pressable>
               </View>
             ))}
@@ -745,7 +751,7 @@ export default function RecipeForm({
               </Text>
             )}
             <Pressable onPress={addIngredient} style={styles.addRow}>
-              <Ionicons name="add-circle-outline" size={18} color={colors.text} />
+              <Ionicons name="add-circle-outline" size={18} color={c.text} />
               <Text style={styles.addRowText}>Add your own</Text>
             </Pressable>
           </>
@@ -774,7 +780,7 @@ export default function RecipeForm({
                   style={[styles.remove, styles.removeStep]}
                   accessibilityLabel="Remove step"
                 >
-                  <Ionicons name="close" size={18} color={colors.danger} />
+                  <Ionicons name="close" size={18} color={c.danger} />
                 </Pressable>
               </View>
             ))}
@@ -787,7 +793,7 @@ export default function RecipeForm({
               </Text>
             )}
             <Pressable onPress={addStep} style={styles.addRow}>
-              <Ionicons name="add-circle-outline" size={18} color={colors.text} />
+              <Ionicons name="add-circle-outline" size={18} color={c.text} />
               <Text style={styles.addRowText}>Add step</Text>
             </Pressable>
           </>
@@ -866,7 +872,7 @@ export default function RecipeForm({
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, spacing.lg) }]}>
         {footerMessage && (
           <View style={styles.footerError}>
-            <Ionicons name="alert-circle" size={15} color={colors.danger} />
+            <Ionicons name="alert-circle" size={15} color={c.danger} />
             <Text style={styles.error}>{footerMessage}</Text>
           </View>
         )}
@@ -904,38 +910,38 @@ export default function RecipeForm({
   )
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: c.bg },
   indicator: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingTop: spacing.md },
   indicatorItem: { flex: 1, gap: spacing.sm },
-  indicatorBar: { height: 3, borderRadius: radius.pill, backgroundColor: colors.border },
-  indicatorBarActive: { backgroundColor: colors.primary },
-  indicatorBarError: { backgroundColor: colors.danger },
+  indicatorBar: { height: 3, borderRadius: radius.pill, backgroundColor: c.border },
+  indicatorBarActive: { backgroundColor: c.primary },
+  indicatorBarError: { backgroundColor: c.danger },
   indicatorLabelRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  indicatorLabel: { ...type.caption, color: colors.textPlaceholder },
-  indicatorLabelActive: { color: colors.text },
-  indicatorLabelError: { color: colors.danger },
+  indicatorLabel: { ...type.caption, color: c.textPlaceholder },
+  indicatorLabelActive: { color: c.text },
+  indicatorLabelError: { color: c.danger },
   scroll: { flex: 1 },
   content: { padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing.xxl },
-  stepHeading: { ...type.title, color: colors.text, marginBottom: spacing.xs },
+  stepHeading: { ...type.title, color: c.text, marginBottom: spacing.xs },
   // Pulled up against the heading: the content gap is `lg`, which reads as two
   // unrelated lines rather than a heading and its subtitle.
-  stepIntro: { ...type.body, color: colors.textMuted, marginTop: -spacing.md },
+  stepIntro: { ...type.body, color: c.textMuted, marginTop: -spacing.md },
   photoPicker: {
     height: 180,
     borderRadius: radius.lg,
-    backgroundColor: colors.surfaceAlt,
+    backgroundColor: c.surfaceAlt,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: c.border,
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.xs,
     overflow: 'hidden',
   },
-  photoPickerInvalid: { borderColor: colors.danger, backgroundColor: colors.dangerSoft },
-  photoPickerText: { ...type.bodyStrong, color: colors.textMuted },
-  photoPickerHint: { ...type.caption, color: colors.textPlaceholder },
+  photoPickerInvalid: { borderColor: c.danger, backgroundColor: c.dangerSoft },
+  photoPickerText: { ...type.bodyStrong, color: c.textMuted },
+  photoPickerHint: { ...type.caption, color: c.textPlaceholder },
   photoChange: {
     position: 'absolute',
     right: spacing.md,
@@ -948,9 +954,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: 6,
   },
-  photoChangeText: { ...type.caption, color: colors.onPrimary },
+  photoChangeText: { ...type.caption, color: c.onPrimary },
   group: { gap: spacing.sm },
-  label: { ...type.label, color: colors.text },
+  label: { ...type.label, color: c.text },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   segmented: { flexDirection: 'row', gap: spacing.sm },
   segment: {
@@ -958,13 +964,13 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surfaceAlt,
+    borderColor: c.border,
+    backgroundColor: c.surfaceAlt,
     alignItems: 'center',
   },
-  segmentActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  segmentText: { ...type.caption, color: colors.textMuted },
-  segmentTextActive: { color: colors.onPrimary },
+  segmentActive: { backgroundColor: c.primary, borderColor: c.primary },
+  segmentText: { ...type.caption, color: c.textMuted },
+  segmentTextActive: { color: c.onPrimary },
   row: { flexDirection: 'row', gap: spacing.md },
   rowItem: { flex: 1 },
   browse: {
@@ -974,14 +980,14 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.bgSubtle,
+    borderColor: c.border,
+    backgroundColor: c.bgSubtle,
   },
-  browsePressed: { backgroundColor: colors.surfaceAlt },
+  browsePressed: { backgroundColor: c.surfaceAlt },
   browseEmoji: { fontSize: 22 },
   browseText: { flex: 1, minWidth: 0, gap: 2 },
-  browseTitle: { ...type.bodyStrong, color: colors.text },
-  browseHint: { ...type.caption, color: colors.textMuted },
+  browseTitle: { ...type.bodyStrong, color: c.text },
+  browseHint: { ...type.caption, color: c.textMuted },
   // Everything but the name is a fixed width, and the name flexes into what's
   // left — so the row can never wrap, however narrow the phone.
   ingredientRow: {
@@ -991,8 +997,8 @@ const styles = StyleSheet.create({
     height: 52,
     paddingHorizontal: spacing.md,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surfaceAlt,
+    borderColor: c.border,
+    backgroundColor: c.surfaceAlt,
     borderRadius: radius.md,
   },
   ingredientEmoji: { fontSize: 18, width: 22, textAlign: 'center' },
@@ -1001,23 +1007,23 @@ const styles = StyleSheet.create({
     minWidth: 0,
     ...type.body,
     fontSize: 16,
-    color: colors.text,
+    color: c.text,
     paddingVertical: 0,
   },
-  ingredientDivider: { width: 1, height: 20, backgroundColor: colors.borderStrong },
+  ingredientDivider: { width: 1, height: 20, backgroundColor: c.borderStrong },
   ingredientQuantity: {
     width: 40,
     textAlign: 'right',
     ...type.body,
     fontSize: 16,
-    color: colors.text,
+    color: c.text,
     paddingVertical: 0,
   },
   ingredientUnit: {
     width: 46,
     ...type.body,
     fontSize: 15,
-    color: colors.textMuted,
+    color: c.textMuted,
     paddingVertical: 0,
   },
   ingredientRemove: { width: 20, alignItems: 'center', justifyContent: 'center' },
@@ -1026,31 +1032,31 @@ const styles = StyleSheet.create({
     width: 26,
     height: 26,
     borderRadius: radius.pill,
-    backgroundColor: colors.primary,
+    backgroundColor: c.primary,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: spacing.md,
   },
-  stepNumberText: { ...type.caption, color: colors.onPrimary },
+  stepNumberText: { ...type.caption, color: c.onPrimary },
   stepInput: { flex: 1, minWidth: 0 },
   remove: { width: 30, height: 50, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   // Steps use a multiline input, so nudge the ✕ to line up with its first row.
   removeStep: { marginTop: spacing.xs },
-  rowInvalid: { borderColor: colors.danger, backgroundColor: colors.dangerSoft },
-  emptyHint: { ...type.body, color: colors.textMuted, paddingVertical: spacing.sm },
-  emptyHintInvalid: { color: colors.danger },
+  rowInvalid: { borderColor: c.danger, backgroundColor: c.dangerSoft },
+  emptyHint: { ...type.body, color: c.textMuted, paddingVertical: spacing.sm },
+  emptyHintInvalid: { color: c.danger },
   addRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.sm },
-  addRowText: { ...type.bodyStrong, color: colors.text },
+  addRowText: { ...type.bodyStrong, color: c.text },
   footer: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
     gap: spacing.sm,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
-    backgroundColor: colors.bg,
+    borderTopColor: c.border,
+    backgroundColor: c.bg,
   },
   footerError: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  error: { ...type.body, color: colors.danger, flex: 1 },
+  error: { ...type.body, color: c.danger, flex: 1 },
   footerButtons: { flexDirection: 'row', gap: spacing.sm },
   footerButton: { flex: 1 },
 })

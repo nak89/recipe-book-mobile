@@ -21,7 +21,8 @@ import Chip from '@/components/ui/Chip'
 import SearchBar from '@/components/ui/SearchBar'
 import ActionSheet from '@/components/ui/ActionSheet'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
-import { colors, radius, spacing, type } from '@/theme'
+import { radius, spacing, type, useTheme, useThemedStyles } from '@/theme'
+import type { ThemeColors } from '@/theme'
 import { MEALTIMES } from '@/types/recipe'
 import type { Mealtime, Recipe } from '@/types/recipe'
 
@@ -32,6 +33,8 @@ type Filter = 'All' | Mealtime
 const SKELETON_KEYS = ['s0', 's1', 's2', 's3', 's4', 's5']
 
 export default function DashboardScreen() {
+  const { colors: c } = useTheme()
+  const styles = useThemedStyles(makeStyles)
   const { token, displayName } = useAuth()
   const router = useRouter()
   const insets = useSafeAreaInsets()
@@ -170,7 +173,7 @@ export default function DashboardScreen() {
           accessibilityLabel="Surprise me with a random recipe"
           style={({ pressed }) => [styles.shuffle, pressed && styles.shufflePressed]}
         >
-          <Ionicons name="shuffle" size={20} color={colors.accent} />
+          <Ionicons name="shuffle" size={20} color={c.accent} />
         </Pressable>
       </View>
 
@@ -260,8 +263,8 @@ export default function DashboardScreen() {
             refreshing={refreshing}
             onRefresh={handleRefresh}
             // Defaults are iOS grey and Android blue; the app's chrome is neither.
-            tintColor={colors.primary}
-            colors={[colors.primary]}
+            tintColor={c.primary}
+            colors={[c.primary]}
           />
         }
         ListHeaderComponent={header}
@@ -279,7 +282,7 @@ export default function DashboardScreen() {
         }
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Ionicons name="restaurant-outline" size={40} color={colors.textPlaceholder} />
+            <Ionicons name="restaurant-outline" size={40} color={c.textPlaceholder} />
             <Text style={styles.emptyTitle}>
               {recipes.length === 0 ? 'No recipes yet' : 'Nothing matches'}
             </Text>
@@ -333,8 +336,8 @@ export default function DashboardScreen() {
   )
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: c.bg },
   list: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl, gap: spacing.md },
   column: { gap: spacing.md },
   filler: { flex: 1 },
@@ -345,24 +348,24 @@ const styles = StyleSheet.create({
   // minWidth: 0 so a long display name wraps instead of shoving the shuffle
   // button off the right edge.
   greetingText: { flex: 1, minWidth: 0, gap: 2 },
-  hello: { ...type.display, color: colors.text, lineHeight: 34 },
-  prompt: { ...type.body, color: colors.textMuted },
+  hello: { ...type.display, color: c.text, lineHeight: 34 },
+  prompt: { ...type.body, color: c.textMuted },
   shuffle: {
     width: 44,
     height: 44,
     borderRadius: radius.pill,
-    backgroundColor: colors.accentSoft,
+    backgroundColor: c.accentSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
   shufflePressed: { opacity: 0.7 },
   chips: { gap: spacing.xs, paddingRight: spacing.lg },
   section: { gap: spacing.md },
-  sectionTitle: { ...type.section, color: colors.text },
+  sectionTitle: { ...type.section, color: c.text },
   gridTitle: { marginBottom: -spacing.xs },
   carousel: { gap: spacing.md, paddingRight: spacing.lg },
-  error: { ...type.body, color: colors.danger },
+  error: { ...type.body, color: c.danger },
   empty: { alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.xxl },
-  emptyTitle: { ...type.section, color: colors.text },
-  emptyBody: { ...type.body, color: colors.textMuted, textAlign: 'center' },
+  emptyTitle: { ...type.section, color: c.text },
+  emptyBody: { ...type.body, color: c.textMuted, textAlign: 'center' },
 })

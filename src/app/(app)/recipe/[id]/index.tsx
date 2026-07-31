@@ -12,10 +12,13 @@ import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import PrimaryButton from '@/components/ui/PrimaryButton'
 import { emojiForCuisine } from '@/data/cuisines'
 import { emojiForIngredient } from '@/data/ingredients'
-import { colors, radius, spacing, type } from '@/theme'
+import { radius, spacing, type, useTheme, useThemedStyles } from '@/theme'
+import type { ThemeColors } from '@/theme'
 import type { Recipe } from '@/types/recipe'
 
 export default function RecipeDetailScreen() {
+  const { colors: c } = useTheme()
+  const styles = useThemedStyles(makeStyles)
   const { id } = useLocalSearchParams<{ id: string }>()
   const { token } = useAuth()
   const router = useRouter()
@@ -98,7 +101,7 @@ export default function RecipeDetailScreen() {
             transition={200}
           />
           <LinearGradient
-            colors={[colors.scrimStrong, colors.scrimNone]}
+            colors={[c.scrimStrong, c.scrimNone]}
             locations={[0, 0.5]}
             style={StyleSheet.absoluteFill}
             pointerEvents="none"
@@ -109,7 +112,7 @@ export default function RecipeDetailScreen() {
               style={styles.circleButton}
               accessibilityLabel="Go back"
             >
-              <Ionicons name="chevron-back" size={22} color={colors.textOnPhoto} />
+              <Ionicons name="chevron-back" size={22} color={c.textOnPhoto} />
             </Pressable>
             <Pressable
               onPress={handleToggleFavourite}
@@ -121,7 +124,7 @@ export default function RecipeDetailScreen() {
               <Ionicons
                 name={recipe.isFavourite ? 'heart' : 'heart-outline'}
                 size={20}
-                color={recipe.isFavourite ? colors.favourite : colors.textOnPhoto}
+                color={recipe.isFavourite ? c.favourite : c.textOnPhoto}
               />
             </Pressable>
           </View>
@@ -242,15 +245,18 @@ function formatAmount(value: number): string {
 }
 
 function Meta({ icon, label }: { icon: keyof typeof Ionicons.glyphMap; label: string }) {
+  const { colors: c } = useTheme()
+  const styles = useThemedStyles(makeStyles)
   return (
     <View style={styles.meta}>
-      <Ionicons name={icon} size={14} color={colors.textMuted} />
+      <Ionicons name={icon} size={14} color={c.textMuted} />
       <Text style={styles.metaText}>{label}</Text>
     </View>
   )
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  const styles = useThemedStyles(makeStyles)
   return (
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>{title}</Text>
@@ -259,17 +265,17 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   )
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: c.bg },
   centered: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     padding: spacing.xl,
-    backgroundColor: colors.bg,
+    backgroundColor: c.bg,
   },
   content: { paddingBottom: spacing.xxl },
-  hero: { height: 300, backgroundColor: colors.surfaceSunken },
+  hero: { height: 300, backgroundColor: c.surfaceSunken },
   heroActions: {
     position: 'absolute',
     left: spacing.lg,
@@ -288,32 +294,32 @@ const styles = StyleSheet.create({
   // Pulled up over the photo so the sheet reads as sitting on top of it.
   body: {
     marginTop: -spacing.xl,
-    backgroundColor: colors.bg,
+    backgroundColor: c.bg,
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
     padding: spacing.xl,
     gap: spacing.md,
   },
-  title: { ...type.display, color: colors.text },
+  title: { ...type.display, color: c.text },
   metaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.lg },
   meta: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  metaText: { ...type.body, color: colors.textMuted },
+  metaText: { ...type.body, color: c.textMuted },
   tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   tag: {
     ...type.caption,
-    color: colors.text,
-    backgroundColor: colors.surfaceAlt,
+    color: c.text,
+    backgroundColor: c.surfaceAlt,
     borderRadius: radius.pill,
     paddingHorizontal: spacing.md,
     paddingVertical: 5,
     overflow: 'hidden',
   },
-  description: { ...type.body, color: colors.textMuted, lineHeight: 22 },
-  error: { ...type.body, color: colors.danger },
+  description: { ...type.body, color: c.textMuted, lineHeight: 22 },
+  error: { ...type.body, color: c.danger },
   section: { gap: spacing.sm, marginTop: spacing.lg },
-  sectionTitle: { ...type.section, color: colors.text },
-  sectionCaption: { ...type.caption, color: colors.textMuted },
-  paragraph: { ...type.body, color: colors.textMuted },
+  sectionTitle: { ...type.section, color: c.text },
+  sectionCaption: { ...type.caption, color: c.textMuted },
+  paragraph: { ...type.body, color: c.textMuted },
   nutritionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   // Content-sized with a floor, deliberately not `flex: 1`. Stretching to fill
   // turns a recipe that only knows its calories into one full-width slab —
@@ -324,14 +330,14 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.sm,
-    backgroundColor: colors.surfaceAlt,
+    backgroundColor: c.surfaceAlt,
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: c.border,
   },
-  nutritionValue: { ...type.bodyStrong, color: colors.text },
-  nutritionUnit: { ...type.caption, color: colors.textMuted },
-  nutritionLabel: { ...type.caption, color: colors.textMuted },
+  nutritionValue: { ...type.bodyStrong, color: c.text },
+  nutritionUnit: { ...type.caption, color: c.textMuted },
+  nutritionLabel: { ...type.caption, color: c.textMuted },
   ingredient: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -339,22 +345,22 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     paddingVertical: spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: c.border,
   },
   ingredientEmoji: { fontSize: 18, width: 24, textAlign: 'center' },
-  ingredientName: { ...type.body, color: colors.text, flex: 1, minWidth: 0 },
-  ingredientAmount: { ...type.bodyStrong, color: colors.textMuted },
+  ingredientName: { ...type.body, color: c.text, flex: 1, minWidth: 0 },
+  ingredientAmount: { ...type.bodyStrong, color: c.textMuted },
   step: { flexDirection: 'row', gap: spacing.md, paddingVertical: spacing.sm },
   stepNumber: {
     width: 26,
     height: 26,
     borderRadius: radius.pill,
-    backgroundColor: colors.primary,
+    backgroundColor: c.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  stepNumberText: { ...type.caption, color: colors.onPrimary },
-  stepText: { ...type.body, color: colors.text, flex: 1, minWidth: 0, lineHeight: 22 },
+  stepNumberText: { ...type.caption, color: c.onPrimary },
+  stepText: { ...type.body, color: c.text, flex: 1, minWidth: 0, lineHeight: 22 },
   actions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xl },
   action: { flex: 1 },
 })

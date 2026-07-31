@@ -3,7 +3,8 @@ import type { BottomTabBarProps } from '@react-navigation/bottom-tabs'
 import { useRouter } from 'expo-router'
 import { Pressable, StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { colors, hairline, radius, shadow, spacing } from '@/theme'
+import { hairline, radius, shadow, spacing, useTheme, useThemedStyles } from '@/theme'
+import type { ThemeColors } from '@/theme'
 
 const ICONS: Record<string, { active: keyof typeof Ionicons.glyphMap; inactive: keyof typeof Ionicons.glyphMap }> = {
   index: { active: 'home', inactive: 'home-outline' },
@@ -17,6 +18,8 @@ const ICONS: Record<string, { active: keyof typeof Ionicons.glyphMap; inactive: 
  * makes a two-item bar look unfinished.
  */
 export default function TabBar({ state, navigation }: BottomTabBarProps) {
+  const { colors: c } = useTheme()
+  const styles = useThemedStyles(makeStyles)
   const insets = useSafeAreaInsets()
   const router = useRouter()
 
@@ -46,7 +49,7 @@ export default function TabBar({ state, navigation }: BottomTabBarProps) {
             <Ionicons
               name={focused ? icons.active : icons.inactive}
               size={24}
-              color={focused ? colors.primary : colors.textPlaceholder}
+              color={focused ? c.primary : c.textPlaceholder}
             />
             <View style={[styles.indicator, focused && styles.indicatorActive]} />
           </Pressable>
@@ -65,7 +68,7 @@ export default function TabBar({ state, navigation }: BottomTabBarProps) {
                 accessibilityLabel="Add recipe"
                 style={({ pressed }) => [styles.add, pressed && styles.addPressed]}
               >
-                <Ionicons name="add" size={28} color={colors.onPrimary} />
+                <Ionicons name="add" size={28} color={c.onPrimary} />
               </Pressable>
             </View>,
           ]
@@ -76,33 +79,33 @@ export default function TabBar({ state, navigation }: BottomTabBarProps) {
   )
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
   // Three equal-width slots: tab, add button, tab.
   bar: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingTop: spacing.md,
-    backgroundColor: colors.bg,
+    backgroundColor: c.bg,
     borderTopWidth: hairline,
-    borderTopColor: colors.border,
+    borderTopColor: c.border,
   },
   addSlot: { flex: 1, alignItems: 'center' },
   tab: { alignItems: 'center', gap: 5, flex: 1 },
   // A 3pt underline under the active tab, matching the reference's home icon.
   indicator: { width: 16, height: 3, borderRadius: radius.pill, backgroundColor: 'transparent' },
-  indicatorActive: { backgroundColor: colors.primary },
+  indicatorActive: { backgroundColor: c.primary },
   add: {
     width: 54,
     height: 54,
     borderRadius: radius.pill,
-    backgroundColor: colors.primary,
+    backgroundColor: c.primary,
     alignItems: 'center',
     justifyContent: 'center',
     // Lifts the button above the bar so it reads as the primary action.
     marginTop: -26,
     borderWidth: 4,
-    borderColor: colors.bg,
+    borderColor: c.bg,
     ...shadow.raised,
   },
-  addPressed: { backgroundColor: colors.primaryPressed, transform: [{ scale: 0.96 }] },
+  addPressed: { backgroundColor: c.primaryPressed, transform: [{ scale: 0.96 }] },
 })

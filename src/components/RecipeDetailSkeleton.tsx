@@ -1,7 +1,8 @@
 import { StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Skeleton, { usePulse } from '@/components/ui/Skeleton'
-import { colors, radius, spacing } from '@/theme'
+import { radius, spacing, useThemedStyles } from '@/theme'
+import type { ThemeColors } from '@/theme'
 
 /**
  * The detail screen before its recipe arrives.
@@ -13,6 +14,7 @@ import { colors, radius, spacing } from '@/theme'
  * button belongs is worse than no button at all.
  */
 export default function RecipeDetailSkeleton() {
+  const styles = useThemedStyles(makeStyles)
   const pulse = usePulse()
   const insets = useSafeAreaInsets()
 
@@ -48,13 +50,13 @@ export default function RecipeDetailSkeleton() {
   )
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: c.bg },
   // Matches the real screen's hero height and body offset exactly.
   hero: { height: 300, borderRadius: 0 },
   body: {
     marginTop: -spacing.xl,
-    backgroundColor: colors.bg,
+    backgroundColor: c.bg,
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
     padding: spacing.xl,

@@ -3,7 +3,8 @@ import { Ionicons } from '@expo/vector-icons'
 import { FlatList, Modal, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import SearchBar from '@/components/ui/SearchBar'
-import { colors, radius, spacing, type } from '@/theme'
+import { radius, spacing, type, useTheme, useThemedStyles } from '@/theme'
+import type { ThemeColors } from '@/theme'
 
 export interface SelectOption {
   label: string
@@ -43,6 +44,8 @@ export default function Select({
   emojiFor?: (value: string) => string | undefined
   onChange: (value?: string) => void
 }) {
+  const { colors: c } = useTheme()
+  const styles = useThemedStyles(makeStyles)
   const insets = useSafeAreaInsets()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -94,7 +97,7 @@ export default function Select({
         <Text style={[styles.triggerText, !value && styles.triggerPlaceholder]} numberOfLines={1}>
           {value || placeholder}
         </Text>
-        <Ionicons name="chevron-down" size={18} color={colors.textMuted} />
+        <Ionicons name="chevron-down" size={18} color={c.textMuted} />
       </Pressable>
 
       <Modal visible={open} animationType="slide" onRequestClose={close}>
@@ -109,7 +112,7 @@ export default function Select({
                 accessibilityRole="button"
                 accessibilityLabel="Close"
               >
-                <Ionicons name="close" size={20} color={colors.text} />
+                <Ionicons name="close" size={20} color={c.text} />
               </Pressable>
             </View>
             <SearchBar
@@ -167,7 +170,7 @@ export default function Select({
                   <Text style={styles.name} numberOfLines={1}>
                     {item.label}
                   </Text>
-                  {selected && <Ionicons name="checkmark" size={20} color={colors.text} />}
+                  {selected && <Ionicons name="checkmark" size={20} color={c.text} />}
                 </Pressable>
               )
             }}
@@ -183,34 +186,34 @@ export default function Select({
   )
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
   wrapper: { gap: spacing.sm },
-  label: { ...type.label, color: colors.text },
+  label: { ...type.label, color: c.text },
   // Deliberately identical to Field's input box so the two line up in a form.
   trigger: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surfaceAlt,
+    borderColor: c.border,
+    backgroundColor: c.surfaceAlt,
     borderRadius: radius.md,
     paddingHorizontal: spacing.lg,
     height: 50,
   },
-  triggerPressed: { backgroundColor: colors.surfaceSunken },
+  triggerPressed: { backgroundColor: c.surfaceSunken },
   triggerEmoji: { fontSize: 18 },
-  triggerText: { ...type.body, fontSize: 16, color: colors.text, flex: 1, minWidth: 0 },
-  triggerPlaceholder: { color: colors.textPlaceholder },
-  sheet: { flex: 1, backgroundColor: colors.bg },
+  triggerText: { ...type.body, fontSize: 16, color: c.text, flex: 1, minWidth: 0 },
+  triggerPlaceholder: { color: c.textPlaceholder },
+  sheet: { flex: 1, backgroundColor: c.bg },
   header: { padding: spacing.lg, gap: spacing.lg },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  title: { ...type.title, color: colors.text, flex: 1, minWidth: 0 },
+  title: { ...type.title, color: c.text, flex: 1, minWidth: 0 },
   close: {
     width: 34,
     height: 34,
     borderRadius: radius.pill,
-    backgroundColor: colors.surfaceAlt,
+    backgroundColor: c.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -223,10 +226,10 @@ const styles = StyleSheet.create({
     height: 52,
     borderRadius: radius.md,
   },
-  rowSelected: { backgroundColor: colors.surfaceAlt },
+  rowSelected: { backgroundColor: c.surfaceAlt },
   rowPressed: { opacity: 0.6 },
   emoji: { fontSize: 20 },
-  name: { ...type.body, fontSize: 16, color: colors.text, flex: 1, minWidth: 0 },
-  clear: { color: colors.textMuted },
-  empty: { ...type.body, color: colors.textMuted, textAlign: 'center', paddingVertical: spacing.xxl },
+  name: { ...type.body, fontSize: 16, color: c.text, flex: 1, minWidth: 0 },
+  clear: { color: c.textMuted },
+  empty: { ...type.body, color: c.textMuted, textAlign: 'center', paddingVertical: spacing.xxl },
 })

@@ -1,7 +1,8 @@
 import { forwardRef } from 'react'
 import { StyleSheet, Text, TextInput, View } from 'react-native'
 import type { StyleProp, TextInputProps, ViewStyle } from 'react-native'
-import { colors, radius, spacing, type } from '@/theme'
+import { radius, spacing, type, useTheme, useThemedStyles } from '@/theme'
+import type { ThemeColors } from '@/theme'
 
 /**
  * Label + input pair. Centralising `placeholderTextColor` here is what stops
@@ -25,13 +26,16 @@ const Field = forwardRef<
   }
 >(
   function Field({ label, hint, invalid, style, containerStyle, multiline, ...props }, ref) {
+    const { colors: c, isDark } = useTheme()
+    const styles = useThemedStyles(makeStyles)
     return (
       <View style={[styles.wrapper, containerStyle]}>
         {label && <Text style={styles.label}>{label}</Text>}
         <TextInput
           ref={ref}
           style={[styles.input, multiline && styles.multiline, invalid && styles.inputInvalid, style]}
-          placeholderTextColor={colors.textPlaceholder}
+          placeholderTextColor={c.textPlaceholder}
+          keyboardAppearance={isDark ? 'dark' : 'light'}
           multiline={multiline}
           {...props}
         />
@@ -43,21 +47,21 @@ const Field = forwardRef<
 
 export default Field
 
-const styles = StyleSheet.create({
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
   wrapper: { gap: spacing.sm },
-  label: { ...type.label, color: colors.text },
+  label: { ...type.label, color: c.text },
   input: {
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surfaceAlt,
+    borderColor: c.border,
+    backgroundColor: c.surfaceAlt,
     borderRadius: radius.md,
     paddingHorizontal: spacing.lg,
     height: 50,
     ...type.body,
     fontSize: 16,
-    color: colors.text,
+    color: c.text,
   },
   multiline: { height: undefined, minHeight: 92, paddingTop: spacing.md, textAlignVertical: 'top' },
-  inputInvalid: { borderColor: colors.danger, backgroundColor: colors.dangerSoft },
-  hint: { ...type.caption, color: colors.textMuted },
+  inputInvalid: { borderColor: c.danger, backgroundColor: c.dangerSoft },
+  hint: { ...type.caption, color: c.textMuted },
 })

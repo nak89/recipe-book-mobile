@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, Text } from 'react-native'
-import { colors, radius, spacing, type } from '@/theme'
+import { radius, spacing, type, useThemedStyles } from '@/theme'
+import type { ThemeColors } from '@/theme'
 
 export default function Chip({
   label,
@@ -10,6 +11,7 @@ export default function Chip({
   active: boolean
   onPress: () => void
 }) {
+  const styles = useThemedStyles(makeStyles)
   return (
     <Pressable
       onPress={onPress}
@@ -26,15 +28,15 @@ export default function Chip({
   )
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
   chip: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
     borderRadius: radius.pill,
     backgroundColor: 'transparent',
   },
-  chipActive: { backgroundColor: colors.primary },
-  chipPressed: { backgroundColor: colors.surfaceAlt },
-  text: { ...type.bodyStrong, color: colors.textMuted },
-  textActive: { color: colors.onPrimary },
+  chipActive: { backgroundColor: c.primary },
+  chipPressed: { backgroundColor: c.surfaceAlt },
+  text: { ...type.bodyStrong, color: c.textMuted },
+  textActive: { color: c.onPrimary },
 })

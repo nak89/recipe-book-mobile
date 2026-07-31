@@ -7,6 +7,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -16,7 +17,8 @@ import { useAuth } from '@/context/AuthContext'
 import { getRecipes } from '@/lib/api'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import PrimaryButton from '@/components/ui/PrimaryButton'
-import { colors, radius, spacing, type } from '@/theme'
+import { radius, spacing, type, useTheme, useThemedStyles } from '@/theme'
+import type { ThemeColors } from '@/theme'
 import type { Recipe } from '@/types/recipe'
 
 function initials(name: string) {
@@ -25,6 +27,8 @@ function initials(name: string) {
 }
 
 export default function ProfileScreen() {
+  const { colors: c, isDark, setPreference } = useTheme()
+  const styles = useThemedStyles(makeStyles)
   const { token, displayName, email, memberSince, logout, updateDisplayName } = useAuth()
   const insets = useSafeAreaInsets()
 
@@ -95,7 +99,8 @@ export default function ProfileScreen() {
                 value={draftName}
                 onChangeText={setDraftName}
                 placeholder="Your name"
-                placeholderTextColor={colors.textPlaceholder}
+                placeholderTextColor={c.textPlaceholder}
+                keyboardAppearance={isDark ? 'dark' : 'light'}
                 autoFocus
                 returnKeyType="done"
                 onSubmitEditing={handleSaveName}
@@ -131,7 +136,7 @@ export default function ProfileScreen() {
               accessibilityLabel="Edit display name"
             >
               <Text style={styles.name}>{displayName}</Text>
-              <Ionicons name="pencil" size={15} color={colors.textMuted} />
+              <Ionicons name="pencil" size={15} color={c.textMuted} />
             </Pressable>
           )}
 
@@ -150,13 +155,28 @@ export default function ProfileScreen() {
 
         {memberSince && (
           <View style={styles.card}>
-            <Ionicons name="calendar-outline" size={18} color={colors.textMuted} />
+            <Ionicons name="calendar-outline" size={18} color={c.textMuted} />
             <Text style={styles.cardLabel}>Member since</Text>
             <Text style={styles.cardValue}>
               {memberSince.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
             </Text>
           </View>
         )}
+
+        <View style={[styles.card, styles.themeCard]}>
+          <Ionicons name={isDark ? 'moon' : 'moon-outline'} size={18} color={c.textMuted} />
+          <Text style={styles.cardLabel}>Dark mode</Text>
+          <Switch
+            value={isDark}
+            onValueChange={(on) => setPreference(on ? 'dark' : 'light')}
+            accessibilityLabel="Dark mode"
+            // Until this is touched the theme follows the phone; flipping it
+            // pins an explicit choice that outlives the system setting.
+            trackColor={{ false: c.borderStrong, true: c.primary }}
+            thumbColor={c.onPrimary}
+            ios_backgroundColor={c.borderStrong}
+          />
+        </View>
 
         <PrimaryButton
           label="Log out"
@@ -182,6 +202,7 @@ export default function ProfileScreen() {
 }
 
 function Stat({ label, value }: { label: string; value: string }) {
+  const styles = useThemedStyles(makeStyles)
   return (
     <View style={styles.stat}>
       <Text style={styles.statValue}>{value}</Text>
@@ -190,34 +211,34 @@ function Stat({ label, value }: { label: string; value: string }) {
   )
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: c.bg },
   content: { padding: spacing.lg, paddingBottom: spacing.xxl, gap: spacing.xl },
   identity: { alignItems: 'center', gap: spacing.sm },
   avatar: {
     width: 88,
     height: 88,
     borderRadius: radius.pill,
-    backgroundColor: colors.primary,
+    backgroundColor: c.primary,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.sm,
   },
-  avatarText: { ...type.display, fontSize: 32, color: colors.onPrimary },
+  avatarText: { ...type.display, fontSize: 32, color: c.onPrimary },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  name: { ...type.title, color: colors.text },
-  email: { ...type.body, color: colors.textMuted },
-  error: { ...type.body, color: colors.danger },
+  name: { ...type.title, color: c.text },
+  email: { ...type.body, color: c.textMuted },
+  error: { ...type.body, color: c.danger },
   nameEditor: { width: '100%', gap: spacing.sm },
   nameInput: {
     borderWidth: 1,
-    borderColor: colors.borderStrong,
+    borderColor: c.borderStrong,
     borderRadius: radius.md,
     paddingHorizontal: spacing.lg,
     height: 52,
     ...type.body,
     fontSize: 16,
-    color: colors.text,
+    color: c.text,
     textAlign: 'center',
   },
   nameActions: { flexDirection: 'row', gap: spacing.sm },
@@ -225,23 +246,26 @@ const styles = StyleSheet.create({
   stats: { flexDirection: 'row', gap: spacing.sm },
   stat: {
     flex: 1,
-    backgroundColor: colors.surfaceAlt,
+    backgroundColor: c.surfaceAlt,
     borderRadius: radius.md,
     paddingVertical: spacing.lg,
     alignItems: 'center',
     gap: 2,
   },
-  statValue: { ...type.title, color: colors.text },
-  statLabel: { ...type.caption, color: colors.textMuted },
+  statValue: { ...type.title, color: c.text },
+  statLabel: { ...type.caption, color: c.textMuted },
   card: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    backgroundColor: colors.surfaceAlt,
+    backgroundColor: c.surfaceAlt,
     borderRadius: radius.md,
     padding: spacing.lg,
   },
-  cardLabel: { ...type.body, color: colors.text, flex: 1 },
-  cardValue: { ...type.bodyStrong, color: colors.textMuted },
+  cardLabel: { ...type.body, color: c.text, flex: 1 },
+  cardValue: { ...type.bodyStrong, color: c.textMuted },
+  // A Switch is taller than a line of text, so this row needs less padding to
+  // finish the same height as the card above it.
+  themeCard: { paddingVertical: spacing.md },
   logout: { marginTop: spacing.sm },
 })

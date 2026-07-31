@@ -6,7 +6,8 @@ import SearchBar from '@/components/ui/SearchBar'
 import PrimaryButton from '@/components/ui/PrimaryButton'
 import { COMMON_INGREDIENTS, INGREDIENT_CATEGORIES } from '@/data/ingredients'
 import type { CommonIngredient, IngredientCategory } from '@/data/ingredients'
-import { colors, radius, spacing, type } from '@/theme'
+import { radius, spacing, type, useTheme, useThemedStyles } from '@/theme'
+import type { ThemeColors } from '@/theme'
 
 type Row =
   | { kind: 'header'; key: string; category: IngredientCategory }
@@ -33,6 +34,8 @@ export default function IngredientPicker({
   onRemove: (name: string) => void
   onClose: () => void
 }) {
+  const { colors: c } = useTheme()
+  const styles = useThemedStyles(makeStyles)
   const insets = useSafeAreaInsets()
   const [query, setQuery] = useState('')
 
@@ -70,7 +73,7 @@ export default function IngredientPicker({
               accessibilityRole="button"
               accessibilityLabel="Close"
             >
-              <Ionicons name="close" size={20} color={colors.text} />
+              <Ionicons name="close" size={20} color={c.text} />
             </Pressable>
           </View>
           <SearchBar value={query} onChangeText={setQuery} placeholder="Search ingredients" />
@@ -111,7 +114,7 @@ export default function IngredientPicker({
                 <Ionicons
                   name={isSelected ? 'checkmark-circle' : 'add-circle-outline'}
                   size={22}
-                  color={isSelected ? colors.text : colors.borderStrong}
+                  color={isSelected ? c.text : c.borderStrong}
                 />
               </Pressable>
             )
@@ -134,23 +137,23 @@ export default function IngredientPicker({
   )
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: c.bg },
   header: { padding: spacing.lg, gap: spacing.lg },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  title: { ...type.title, color: colors.text, flex: 1, minWidth: 0 },
+  title: { ...type.title, color: c.text, flex: 1, minWidth: 0 },
   close: {
     width: 34,
     height: 34,
     borderRadius: radius.pill,
-    backgroundColor: colors.surfaceAlt,
+    backgroundColor: c.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
   list: { paddingHorizontal: spacing.lg, paddingBottom: spacing.lg },
   category: {
     ...type.label,
-    color: colors.textMuted,
+    color: c.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 0.6,
     marginTop: spacing.lg,
@@ -164,19 +167,19 @@ const styles = StyleSheet.create({
     height: 52,
     borderRadius: radius.md,
   },
-  rowSelected: { backgroundColor: colors.surfaceAlt },
+  rowSelected: { backgroundColor: c.surfaceAlt },
   rowPressed: { opacity: 0.6 },
   emoji: { fontSize: 20 },
-  name: { ...type.body, fontSize: 16, color: colors.text, flex: 1, minWidth: 0 },
-  unit: { ...type.caption, color: colors.textPlaceholder },
+  name: { ...type.body, fontSize: 16, color: c.text, flex: 1, minWidth: 0 },
+  unit: { ...type.caption, color: c.textPlaceholder },
   empty: { alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.xxl },
-  emptyTitle: { ...type.bodyStrong, color: colors.text, textAlign: 'center' },
-  emptyBody: { ...type.body, color: colors.textMuted, textAlign: 'center' },
+  emptyTitle: { ...type.bodyStrong, color: c.text, textAlign: 'center' },
+  emptyBody: { ...type.body, color: c.textMuted, textAlign: 'center' },
   footer: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
-    backgroundColor: colors.bg,
+    borderTopColor: c.border,
+    backgroundColor: c.bg,
   },
 })

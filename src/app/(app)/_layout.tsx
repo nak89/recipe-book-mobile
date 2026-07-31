@@ -1,17 +1,18 @@
 import { Redirect, Stack } from 'expo-router'
 import { ActivityIndicator, View } from 'react-native'
 import { useAuth } from '@/context/AuthContext'
-import { colors } from '@/theme'
+import { useTheme } from '@/theme'
 
 export default function AppLayout() {
+  const { colors: c } = useTheme()
   const { session, loading } = useAuth()
 
   // Without this guard you get a redirect flash to /login on cold start,
   // before the persisted session has been read back out of AsyncStorage.
   if (loading) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg }}>
-        <ActivityIndicator color={colors.primary} />
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: c.bg }}>
+        <ActivityIndicator color={c.primary} />
       </View>
     )
   }
@@ -24,10 +25,10 @@ export default function AppLayout() {
     <Stack
       screenOptions={{
         headerShadowVisible: false,
-        headerStyle: { backgroundColor: colors.bg },
-        headerTintColor: colors.text,
+        headerStyle: { backgroundColor: c.bg },
+        headerTintColor: c.text,
         headerTitleStyle: { fontWeight: '700' },
-        contentStyle: { backgroundColor: colors.bg },
+        contentStyle: { backgroundColor: c.bg },
       }}
     >
       {/* The tab group draws its own chrome. */}

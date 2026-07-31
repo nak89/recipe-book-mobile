@@ -12,7 +12,8 @@ import {
   View,
 } from 'react-native'
 import PrimaryButton from '@/components/ui/PrimaryButton'
-import { colors, radius, spacing, type } from '@/theme'
+import { radius, spacing, type, useTheme, useThemedStyles } from '@/theme'
+import type { ThemeColors } from '@/theme'
 
 /**
  * Shared by login and signup — the two screens differ only in copy and which
@@ -39,6 +40,8 @@ export default function AuthForm({
   footerLinkText: string
   footerHref: '/login' | '/signup'
 }) {
+  const { colors: c, isDark } = useTheme()
+  const styles = useThemedStyles(makeStyles)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -73,7 +76,7 @@ export default function AuthForm({
       >
         <View style={styles.brand}>
           <View style={styles.mark}>
-            <Ionicons name="restaurant" size={26} color={colors.onPrimary} />
+            <Ionicons name="restaurant" size={26} color={c.onPrimary} />
           </View>
           <Text style={styles.heading}>{heading}</Text>
           <Text style={styles.subheading}>{subheading}</Text>
@@ -85,7 +88,8 @@ export default function AuthForm({
             <TextInput
               style={styles.input}
               placeholder="you@example.com"
-              placeholderTextColor={colors.textPlaceholder}
+              placeholderTextColor={c.textPlaceholder}
+              keyboardAppearance={isDark ? 'dark' : 'light'}
               autoCapitalize="none"
               autoComplete="email"
               autoCorrect={false}
@@ -102,7 +106,8 @@ export default function AuthForm({
               <TextInput
                 style={styles.passwordInput}
                 placeholder="Enter your password"
-                placeholderTextColor={colors.textPlaceholder}
+                placeholderTextColor={c.textPlaceholder}
+                keyboardAppearance={isDark ? 'dark' : 'light'}
                 secureTextEntry={!showPassword}
                 autoCapitalize="none"
                 value={password}
@@ -118,7 +123,7 @@ export default function AuthForm({
                 <Ionicons
                   name={showPassword ? 'eye-off-outline' : 'eye-outline'}
                   size={20}
-                  color={colors.textMuted}
+                  color={c.textMuted}
                 />
               </Pressable>
             </View>
@@ -140,50 +145,50 @@ export default function AuthForm({
   )
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: c.bg },
   content: { flexGrow: 1, justifyContent: 'center', padding: spacing.xl, gap: spacing.xxl },
   brand: { alignItems: 'center', gap: spacing.sm },
   mark: {
     width: 60,
     height: 60,
     borderRadius: radius.lg,
-    backgroundColor: colors.primary,
+    backgroundColor: c.primary,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.md,
   },
-  heading: { ...type.display, color: colors.text, textAlign: 'center' },
-  subheading: { ...type.body, color: colors.textMuted, textAlign: 'center' },
+  heading: { ...type.display, color: c.text, textAlign: 'center' },
+  subheading: { ...type.body, color: c.textMuted, textAlign: 'center' },
   fields: { gap: spacing.lg },
   field: { gap: spacing.sm },
-  label: { ...type.label, color: colors.text },
+  label: { ...type.label, color: c.text },
   input: {
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surfaceAlt,
+    borderColor: c.border,
+    backgroundColor: c.surfaceAlt,
     borderRadius: radius.md,
     paddingHorizontal: spacing.lg,
     height: 52,
     ...type.body,
     fontSize: 16,
-    color: colors.text,
+    color: c.text,
   },
   passwordWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surfaceAlt,
+    borderColor: c.border,
+    backgroundColor: c.surfaceAlt,
     borderRadius: radius.md,
     paddingHorizontal: spacing.lg,
     height: 52,
   },
   // minWidth: 0 so a long password can't push the eye toggle off the edge.
-  passwordInput: { flex: 1, minWidth: 0, ...type.body, fontSize: 16, color: colors.text },
-  error: { ...type.body, color: colors.danger },
+  passwordInput: { flex: 1, minWidth: 0, ...type.body, fontSize: 16, color: c.text },
+  error: { ...type.body, color: c.danger },
   footer: { flexDirection: 'row', justifyContent: 'center', gap: spacing.xs },
-  footerText: { ...type.body, color: colors.textMuted },
-  footerLink: { ...type.bodyStrong, color: colors.text },
+  footerText: { ...type.body, color: c.textMuted },
+  footerLink: { ...type.bodyStrong, color: c.text },
 })

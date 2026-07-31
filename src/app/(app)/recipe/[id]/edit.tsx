@@ -4,10 +4,13 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
 import { useAuth } from '@/context/AuthContext'
 import { getRecipe, updateRecipe } from '@/lib/api'
 import RecipeForm from '@/components/RecipeForm'
-import { colors, spacing, type } from '@/theme'
+import { spacing, type, useTheme, useThemedStyles } from '@/theme'
+import type { ThemeColors } from '@/theme'
 import type { Recipe, RecipeInput } from '@/types/recipe'
 
 export default function EditRecipeScreen() {
+  const { colors: c } = useTheme()
+  const styles = useThemedStyles(makeStyles)
   const { id } = useLocalSearchParams<{ id: string }>()
   const { token } = useAuth()
   const router = useRouter()
@@ -44,7 +47,7 @@ export default function EditRecipeScreen() {
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator color={colors.primary} />
+        <ActivityIndicator color={c.primary} />
       </View>
     )
   }
@@ -59,13 +62,13 @@ export default function EditRecipeScreen() {
   return <RecipeForm initial={recipe} onSubmit={handleSubmit} submitLabel="Save changes" />
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
   centered: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     padding: spacing.xl,
-    backgroundColor: colors.bg,
+    backgroundColor: c.bg,
   },
-  error: { ...type.body, color: colors.danger, textAlign: 'center' },
+  error: { ...type.body, color: c.danger, textAlign: 'center' },
 })
