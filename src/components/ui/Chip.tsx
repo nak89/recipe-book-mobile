@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Text } from 'react-native'
-import { radius, spacing, type, useThemedStyles } from '@/theme'
-import type { ThemeColors } from '@/theme'
+import { radius, spacing, useThemedStyles } from '@/theme'
+import type { ThemeColors, TypeScale } from '@/theme'
 
 export default function Chip({
   label,
@@ -28,7 +28,7 @@ export default function Chip({
   )
 }
 
-const makeStyles = (c: ThemeColors) => StyleSheet.create({
+const makeStyles = (c: ThemeColors, type: TypeScale) => StyleSheet.create({
   chip: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,

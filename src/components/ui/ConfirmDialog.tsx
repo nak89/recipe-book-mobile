@@ -1,6 +1,7 @@
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native'
-import { radius, shadow, spacing, type, useThemedStyles } from '@/theme'
-import type { ThemeColors } from '@/theme'
+import { radius, shadow, spacing, useThemedStyles } from '@/theme'
+import type { ThemeColors, TypeScale } from '@/theme'
+import { useT } from '@/i18n'
 
 /**
  * Replaces `Alert.alert`, which doesn't exist on react-native-web. Rendering it
@@ -11,7 +12,7 @@ export default function ConfirmDialog({
   visible,
   title,
   message,
-  confirmLabel = 'Delete',
+  confirmLabel,
   destructive = true,
   onConfirm,
   onCancel,
@@ -25,6 +26,7 @@ export default function ConfirmDialog({
   onCancel: () => void
 }) {
   const styles = useThemedStyles(makeStyles)
+  const t = useT()
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
       <Pressable style={styles.backdrop} onPress={onCancel}>
@@ -36,7 +38,7 @@ export default function ConfirmDialog({
               onPress={onCancel}
               style={({ pressed }) => [styles.button, styles.cancel, pressed && styles.pressed]}
             >
-              <Text style={styles.cancelLabel}>Cancel</Text>
+              <Text style={styles.cancelLabel}>{t('common.cancel')}</Text>
             </Pressable>
             <Pressable
               onPress={onConfirm}
@@ -47,7 +49,9 @@ export default function ConfirmDialog({
               ]}
             >
               <Text style={destructive ? styles.confirmLabelDestructive : styles.confirmLabel}>
-                {confirmLabel}
+                {/* Defaulted here rather than in the signature: a default has to be
+                    translated, and a parameter default can't call a hook. */}
+                {confirmLabel ?? t('common.delete')}
               </Text>
             </Pressable>
           </View>
@@ -57,7 +61,7 @@ export default function ConfirmDialog({
   )
 }
 
-const makeStyles = (c: ThemeColors) => StyleSheet.create({
+const makeStyles = (c: ThemeColors, type: TypeScale) => StyleSheet.create({
   backdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.4)',
@@ -75,7 +79,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     ...shadow.raised,
   },
   title: { ...type.section, color: c.text },
-  message: { ...type.body, color: c.textMuted, lineHeight: 21 },
+  message: { ...type.bodyRead, color: c.textMuted },
   actions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },
   button: {
     flex: 1,

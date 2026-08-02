@@ -2,6 +2,7 @@ import { StyleSheet, View } from 'react-native'
 import Skeleton, { usePulse } from '@/components/ui/Skeleton'
 import { radius, spacing, useThemedStyles } from '@/theme'
 import type { ThemeColors } from '@/theme'
+import { useT } from '@/i18n'
 
 /**
  * A grid tile with nothing in it yet.
@@ -17,10 +18,11 @@ import type { ThemeColors } from '@/theme'
  */
 export default function RecipeCardSkeleton() {
   const styles = useThemedStyles(makeStyles)
+  const t = useT()
   const pulse = usePulse()
 
   return (
-    <View style={styles.card} accessibilityLabel="Loading recipe">
+    <View style={styles.card} accessibilityLabel={t('common.loading')}>
       <View style={styles.content}>
         <Skeleton pulse={pulse} style={styles.titleBar} />
         <Skeleton pulse={pulse} style={styles.titleBarShort} />

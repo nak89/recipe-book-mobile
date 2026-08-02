@@ -16,5 +16,5 @@ export default function NewRecipeScreen() {
     router.back()
   }
 
-  return <RecipeForm onSubmit={handleSubmit} submitLabel="Add recipe" />
+  return <RecipeForm onSubmit={handleSubmit} submitLabel="form.addRecipe" />
 }

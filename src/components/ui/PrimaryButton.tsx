@@ -1,7 +1,7 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text } from 'react-native'
 import type { StyleProp, ViewStyle } from 'react-native'
-import { radius, spacing, type, useTheme, useThemedStyles } from '@/theme'
-import type { ThemeColors } from '@/theme'
+import { radius, spacing, useTheme, useThemedStyles } from '@/theme'
+import type { ThemeColors, TypeScale } from '@/theme'
 
 export default function PrimaryButton({
   label,
@@ -54,7 +54,7 @@ export default function PrimaryButton({
   )
 }
 
-const makeStyles = (c: ThemeColors) => StyleSheet.create({
+const makeStyles = (c: ThemeColors, type: TypeScale) => StyleSheet.create({
   base: {
     height: 52,
     borderRadius: radius.md,
@@ -67,7 +67,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   danger: { backgroundColor: c.dangerSoft },
   pressed: { opacity: 0.85 },
   inactive: { opacity: 0.5 },
-  label: { ...type.bodyStrong, fontSize: 16, color: c.text },
+  label: { ...type.bodyLargeStrong, color: c.text },
   labelSolid: { color: c.onPrimary },
   labelDanger: { color: c.danger },
 })

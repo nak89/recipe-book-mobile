@@ -14,15 +14,23 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useAuth } from '@/context/AuthContext'
 import { deleteRecipe, getRecipes, setFavourite } from '@/lib/api'
 import { useDebounce } from '@/hooks/useDebounce'
-import { openMenuFeedback, refreshFeedback } from '@/lib/haptics'
+import { favouriteFeedback, openMenuFeedback, refreshFeedback } from '@/lib/haptics'
+import { foldForCompare } from '@/lib/text'
+import { useT } from '@/i18n'
+import type { StringKey } from '@/i18n'
+import { apiErrorKey } from '@/i18n/errors'
+import { useMealtimeLabel } from '@/i18n/labels'
+import Animated from 'react-native-reanimated'
 import RecipeCard from '@/components/RecipeCard'
 import RecipeCardSkeleton from '@/components/RecipeCardSkeleton'
+import { useDockClearance } from '@/components/TabBar'
+import { useDockScrollHandler } from '@/components/dock/DockScroll'
 import Chip from '@/components/ui/Chip'
 import SearchBar from '@/components/ui/SearchBar'
 import ActionSheet from '@/components/ui/ActionSheet'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
-import { radius, spacing, type, useTheme, useThemedStyles } from '@/theme'
-import type { ThemeColors } from '@/theme'
+import { radius, spacing, useTheme, useThemedStyles } from '@/theme'
+import type { ThemeColors, TypeScale } from '@/theme'
 import { MEALTIMES } from '@/types/recipe'
 import type { Mealtime, Recipe } from '@/types/recipe'
 
@@ -35,9 +43,14 @@ const SKELETON_KEYS = ['s0', 's1', 's2', 's3', 's4', 's5']
 export default function DashboardScreen() {
   const { colors: c } = useTheme()
   const styles = useThemedStyles(makeStyles)
+  const t = useT()
+  const mealtimeLabel = useMealtimeLabel()
   const { token, displayName } = useAuth()
   const router = useRouter()
   const insets = useSafeAreaInsets()
+  // The dock floats over the grid, so the last row has to be scrolled clear of it.
+  const dockClearance = useDockClearance()
+  const dockScrollHandler = useDockScrollHandler()
 
   const [recipes, setRecipes] = useState<Recipe[]>([])
   const [loading, setLoading] = useState(true)
@@ -45,7 +58,11 @@ export default function DashboardScreen() {
   // while the cards you already have stay on screen. Reusing `loading` would
   // swap the whole grid back to skeletons on every pull.
   const [refreshing, setRefreshing] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  // The *key*, not the translated sentence. Storing translated text would
+  // freeze an on-screen error in whatever language it was raised in, and it
+  // would make `t` a dependency of the fetch effect — so switching language
+  // would refetch the whole grid.
+  const [error, setError] = useState<StringKey | null>(null)
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<Filter>('All')
   const [sheetFor, setSheetFor] = useState<Recipe | null>(null)
@@ -68,10 +85,16 @@ export default function DashboardScreen() {
       setError(null)
       getRecipes(token)
         .then((data) => {
-          if (!cancelled) setRecipes(data)
+          if (cancelled) return
+          // Backing out of a recipe you didn't change brings back byte-identical
+          // data, and a fresh array is still a new identity — every card
+          // re-renders, and the view mutations that come with it land on the
+          // frames the back animation is still using. Returning `prev` bails out
+          // of the render entirely, so the common path costs one comparison.
+          setRecipes((prev) => (JSON.stringify(prev) === JSON.stringify(data) ? prev : data))
         })
         .catch((err) => {
-          if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load recipes')
+          if (!cancelled) setError(apiErrorKey(err))
         })
         .finally(() => {
           if (!cancelled) setLoading(false)
@@ -83,15 +106,19 @@ export default function DashboardScreen() {
   )
 
   const visible = useMemo(() => {
-    const q = debouncedQuery.trim().toLowerCase()
+    // Folded rather than lowercased: Khmer keyboards emit invisible zero-width
+    // spaces at word boundaries, which survive trim/lowercase/NFC and make two
+    // visually identical strings unequal. Both sides have to be folded — doing
+    // only the query finds nothing when it's the stored title carrying the ZWSP.
+    const q = foldForCompare(debouncedQuery)
     return recipes.filter((recipe) => {
       if (filter !== 'All' && recipe.mealtime !== filter) return false
       if (!q) return true
       return (
-        recipe.title.toLowerCase().includes(q) ||
-        recipe.description?.toLowerCase().includes(q) ||
-        recipe.cuisine?.toLowerCase().includes(q) ||
-        recipe.ingredients.some((i) => i.name.toLowerCase().includes(q))
+        foldForCompare(recipe.title).includes(q) ||
+        foldForCompare(recipe.description ?? '').includes(q) ||
+        foldForCompare(recipe.cuisine ?? '').includes(q) ||
+        recipe.ingredients.some((i) => foldForCompare(i.name).includes(q))
       )
     })
   }, [recipes, debouncedQuery, filter])
@@ -120,7 +147,7 @@ export default function DashboardScreen() {
       setRecipes(await getRecipes(token))
       setError(null)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to refresh recipes')
+      setError(apiErrorKey(err))
     } finally {
       setRefreshing(false)
     }
@@ -129,13 +156,14 @@ export default function DashboardScreen() {
   async function handleToggleFavourite(recipe: Recipe) {
     if (!token) return
     const next = !recipe.isFavourite
+    favouriteFeedback()
     // Optimistic — the bookmark should flip under your finger, not after a round trip.
     setRecipes((prev) => prev.map((r) => (r.id === recipe.id ? { ...r, isFavourite: next } : r)))
     try {
       await setFavourite(recipe.id, next, token)
     } catch {
       setRecipes((prev) => prev.map((r) => (r.id === recipe.id ? { ...r, isFavourite: !next } : r)))
-      setError('Could not update favourite')
+      setError('error.favourite')
     }
   }
 
@@ -147,7 +175,7 @@ export default function DashboardScreen() {
       await deleteRecipe(recipe.id, token)
     } catch (err) {
       setRecipes(snapshot)
-      setError(err instanceof Error ? err.message : 'Failed to delete recipe')
+      setError(apiErrorKey(err))
     }
   }
 
@@ -163,40 +191,40 @@ export default function DashboardScreen() {
     <View style={styles.header}>
       <View style={styles.greetingRow}>
         <View style={styles.greetingText}>
-          <Text style={styles.hello}>Hi {displayName} 👋</Text>
-          <Text style={styles.prompt}>What do you want to cook today?</Text>
+          <Text style={styles.hello}>{`${t('dashboard.hello')} ${displayName} 👋`}</Text>
+          <Text style={styles.prompt}>{t('dashboard.prompt')}</Text>
         </View>
         <Pressable
           onPress={handleShuffle}
           disabled={loading}
           accessibilityRole="button"
-          accessibilityLabel="Surprise me with a random recipe"
+          accessibilityLabel={t('dashboard.shuffle')}
           style={({ pressed }) => [styles.shuffle, pressed && styles.shufflePressed]}
         >
           <Ionicons name="shuffle" size={20} color={c.accent} />
         </Pressable>
       </View>
 
-      <SearchBar value={query} onChangeText={setQuery} placeholder="Search recipe for cooking" />
+      <SearchBar value={query} onChangeText={setQuery} placeholder={t('dashboard.search')} />
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
         {(['All', ...MEALTIMES] as Filter[]).map((option) => (
           <Chip
             key={option}
-            label={option}
+            label={mealtimeLabel(option)}
             active={filter === option}
             onPress={() => setFilter(option)}
           />
         ))}
       </ScrollView>
 
-      {error && <Text style={styles.error}>{error}</Text>}
+      {error && <Text style={styles.error}>{t(error)}</Text>}
 
       {/* Hidden while searching — a carousel of favourites is noise when
           you're hunting for one specific recipe. */}
       {favourites.length > 0 && !searching && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Favourites</Text>
+          <Text style={styles.sectionTitle}>{t('dashboard.favourites')}</Text>
           <FlatList
             horizontal
             data={favourites}
@@ -220,7 +248,7 @@ export default function DashboardScreen() {
           skeletons and shove them down. */}
       {(loading || visible.length > 0) && (
         <Text style={[styles.sectionTitle, styles.gridTitle]}>
-          {searching ? 'Results' : 'All Recipes'}
+          {searching ? t('dashboard.results') : t('dashboard.allRecipes')}
         </Text>
       )}
     </View>
@@ -234,7 +262,7 @@ export default function DashboardScreen() {
           keyExtractor={(key) => key}
           numColumns={2}
           columnWrapperStyle={styles.column}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={[styles.list, { paddingBottom: dockClearance }]}
           showsVerticalScrollIndicator={false}
           // There's nothing to reach by scrolling and nothing to refresh yet.
           scrollEnabled={false}
@@ -249,15 +277,20 @@ export default function DashboardScreen() {
     // insets.top clears the notch/Dynamic Island and the status bar icons; the
     // Math.max floor is for web and older Androids that report 0.
     <View style={[styles.container, { paddingTop: Math.max(insets.top, spacing.lg) }]}>
-      <FlatList
+      <Animated.FlatList
         data={gridData}
         keyExtractor={(item, index) => item?.id ?? `filler-${index}`}
         numColumns={2}
         columnWrapperStyle={styles.column}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[styles.list, { paddingBottom: dockClearance }]}
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
+        // Drives the dock out of the way on the way down and back on the way
+        // up. Entirely on the UI thread — this fires every frame of every
+        // scroll, which is the last place a React render belongs.
+        onScroll={dockScrollHandler}
+        scrollEventThrottle={16}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -284,12 +317,12 @@ export default function DashboardScreen() {
           <View style={styles.empty}>
             <Ionicons name="restaurant-outline" size={40} color={c.textPlaceholder} />
             <Text style={styles.emptyTitle}>
-              {recipes.length === 0 ? 'No recipes yet' : 'Nothing matches'}
+              {recipes.length === 0 ? t('dashboard.emptyTitle') : t('dashboard.noMatchTitle')}
             </Text>
             <Text style={styles.emptyBody}>
               {recipes.length === 0
-                ? 'Tap the + button below to add your first one.'
-                : 'Try a different search or filter.'}
+                ? t('dashboard.emptyBody')
+                : t('dashboard.noMatchBody')}
             </Text>
           </View>
         }
@@ -303,17 +336,17 @@ export default function DashboardScreen() {
         onClose={() => setSheetFor(null)}
         actions={[
           {
-            label: 'Edit recipe',
+            label: t('detail.editRecipe'),
             icon: 'create-outline',
             onPress: () => sheetFor && router.push(`/recipe/${sheetFor.id}/edit`),
           },
           {
-            label: sheetFor?.isFavourite ? 'Remove from favourites' : 'Add to favourites',
+            label: t(sheetFor?.isFavourite ? 'detail.removeFavourite' : 'detail.addFavourite'),
             icon: sheetFor?.isFavourite ? 'heart' : 'heart-outline',
             onPress: () => sheetFor && handleToggleFavourite(sheetFor),
           },
           {
-            label: 'Delete recipe',
+            label: t('detail.deleteRecipe'),
             icon: 'trash-outline',
             destructive: true,
             onPress: () => setConfirmFor(sheetFor),
@@ -323,8 +356,10 @@ export default function DashboardScreen() {
 
       <ConfirmDialog
         visible={confirmFor !== null}
-        title="Delete recipe?"
-        message={confirmFor ? `"${confirmFor.title}" will be permanently removed.` : undefined}
+        title={t('dashboard.deleteTitle')}
+        // The recipe's own title is content and stays exactly as typed; only the
+        // sentence around it is translated.
+        message={confirmFor ? `“${confirmFor.title}” — ${t('dashboard.deleteMessage')}` : undefined}
         onCancel={() => setConfirmFor(null)}
         onConfirm={() => {
           const target = confirmFor
@@ -336,7 +371,7 @@ export default function DashboardScreen() {
   )
 }
 
-const makeStyles = (c: ThemeColors) => StyleSheet.create({
+const makeStyles = (c: ThemeColors, type: TypeScale) => StyleSheet.create({
   container: { flex: 1, backgroundColor: c.bg },
   list: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl, gap: spacing.md },
   column: { gap: spacing.md },
@@ -348,7 +383,13 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   // minWidth: 0 so a long display name wraps instead of shoving the shuffle
   // button off the right edge.
   greetingText: { flex: 1, minWidth: 0, gap: 2 },
-  hello: { ...type.display, color: c.text, lineHeight: 34 },
+  // No hand-set `lineHeight`, and this is the bug that started the whole
+  // typography pass. It was 34 — a hair over Latin's natural ~33.6 at 28pt, so
+  // it read as harmless — but both platforms shrink the line box from the *top*
+  // when lineHeight falls under the font's ascent, and a Khmer cluster's ascent
+  // includes the vowel signs stacked above the base consonant. 34 shaved them
+  // off the greeting. Unset is the fix; a bigger number is not (see `typeKm`).
+  hello: { ...type.display, color: c.text },
   prompt: { ...type.body, color: c.textMuted },
   shuffle: {
     width: 44,

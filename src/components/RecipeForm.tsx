@@ -1,10 +1,14 @@
-import { useEffect, useRef, useState } from 'react'
+import { createRef, forwardRef, useEffect, useMemo, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 import { Ionicons } from '@expo/vector-icons'
 import { useHeaderHeight } from '@react-navigation/elements'
+import { useNavigation } from 'expo-router'
 import * as ImagePicker from 'expo-image-picker'
 import { Image } from 'expo-image'
 import {
   ActivityIndicator,
+  Dimensions,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -14,7 +18,13 @@ import {
   TextInput,
   View,
 } from 'react-native'
-import type { LayoutChangeEvent } from 'react-native'
+import type {
+  LayoutChangeEvent,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+  StyleProp,
+  ViewStyle,
+} from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useAuth } from '@/context/AuthContext'
 import { ApiError, getRecipes, uploadPhoto } from '@/lib/api'
@@ -30,6 +40,11 @@ import {
   validateStep,
 } from '@/lib/recipeValidation'
 import type { FieldErrors } from '@/lib/recipeValidation'
+import { foldForCompare } from '@/lib/text'
+import { useT } from '@/i18n'
+import type { StringKey } from '@/i18n'
+import { apiErrorKey } from '@/i18n/errors'
+import { useDifficultyLabel, useMealtimeLabel } from '@/i18n/labels'
 import Chip from '@/components/ui/Chip'
 import Field from '@/components/ui/Field'
 import PrimaryButton from '@/components/ui/PrimaryButton'
@@ -37,9 +52,10 @@ import Select from '@/components/ui/Select'
 import IngredientPicker from '@/components/IngredientPicker'
 import { emojiForIngredient } from '@/data/ingredients'
 import type { CommonIngredient } from '@/data/ingredients'
-import { CUISINES, emojiForCuisine } from '@/data/cuisines'
-import { radius, spacing, type, useTheme, useThemedStyles } from '@/theme'
-import type { ThemeColors } from '@/theme'
+import { emojiForCuisine } from '@/data/cuisines'
+import { useCuisines } from '@/data/usePantry'
+import { radius, spacing, useTheme, useThemedStyles } from '@/theme'
+import type { ThemeColors, TypeScale } from '@/theme'
 import { DIFFICULTIES, MEALTIMES } from '@/types/recipe'
 import type {
   Difficulty,
@@ -50,7 +66,40 @@ import type {
   RecipeInput,
 } from '@/types/recipe'
 
-const STEPS = ['Basics', 'Ingredients', 'Steps', 'Nutrition'] as const
+// Keys rather than labels: the indicator bar renders them through `t`, but
+// STEP_KEYS.length is still what drives the page count and the submit loop, so
+// adding a step remains this array plus a <Page>.
+const STEP_KEYS = [
+  'form.step.basics',
+  'form.step.ingredients',
+  'form.step.steps',
+  'form.step.nutrition',
+] as const
+
+/**
+ * One page of the wizard: a full-width vertical scroller inside the pager.
+ *
+ * `width` is passed rather than flexed because a horizontal ScrollView sizes its
+ * children to their content — a flexed page collapses to nothing and all four
+ * end up stacked in the first screenful.
+ */
+const Page = forwardRef<
+  ScrollView,
+  { width: number; contentStyle: StyleProp<ViewStyle>; children: ReactNode }
+>(function Page({ width, contentStyle, children }, ref) {
+  return (
+    <ScrollView
+      ref={ref}
+      style={{ width }}
+      contentContainerStyle={contentStyle}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="interactive"
+      showsVerticalScrollIndicator={false}
+    >
+      {children}
+    </ScrollView>
+  )
+})
 
 /**
  * A blank nutrition box means "I don't know", which has to reach the API as an
@@ -70,8 +119,11 @@ function toFormNumber(value: number | null | undefined): string {
   return value != null ? String(value) : ''
 }
 
-// Hoisted so the reference is stable — Select memoises on it.
-const CUISINE_OPTIONS = CUISINES.map((c) => ({ label: c.name, emoji: c.emoji }))
+// The cuisine options used to be hoisted to module scope for reference
+// stability, since Select memoises on them. They can't be any more — the list
+// follows the language — so stability now comes from `useCuisines()` returning a
+// memoised array and the `useMemo` below keying off it. Same guarantee, one
+// level down.
 
 function genId() {
   return Math.random().toString(36).slice(2)
@@ -99,13 +151,15 @@ function toFormSteps(recipe?: Recipe): FormStep[] {
 }
 
 /**
- * Three steps, one component. All the form state lives here rather than across
- * three routes, so a back gesture can't lose a half-filled recipe and there's a
+ * Four steps, one component. All the form state lives here rather than across
+ * four routes, so a back gesture can't lose a half-filled recipe and there's a
  * single submit at the end.
  *
- * Creating is linear — you advance as each step validates. Editing makes the
- * step indicator tappable and keeps Save available everywhere, because fixing a
- * typo shouldn't cost two taps of "Next".
+ * **Order is free in both modes.** The four steps are pages of a horizontal
+ * pager, reachable by swipe or by tapping the indicator, so you can start with
+ * the Steps and fill the Basics afterwards. `Next` still validates the step
+ * you're on and still refuses to advance — it's a checkpoint, not a gate, and
+ * nothing invalid can be saved because `handleSubmit` re-validates all four.
  */
 export default function RecipeForm({
   initial,
@@ -114,15 +168,40 @@ export default function RecipeForm({
 }: {
   initial?: Recipe
   onSubmit: (data: RecipeInput) => Promise<void>
-  submitLabel: string
+  // A key, not a sentence. As a `string` this quietly accepted raw English
+  // from both call sites and shipped an untranslated button.
+  submitLabel: StringKey
 }) {
   const { colors: c, isDark } = useTheme()
   const styles = useThemedStyles(makeStyles)
+  const t = useT()
+  const mealtimeLabel = useMealtimeLabel()
+  const difficultyLabel = useDifficultyLabel()
   const { token } = useAuth()
   const insets = useSafeAreaInsets()
   const headerHeight = useHeaderHeight()
-  const scrollRef = useRef<ScrollView>(null)
+  const navigation = useNavigation()
   const isEditing = initial !== undefined
+
+  // The horizontal pager, plus one vertical scroller per page. A field's offset
+  // is relative to its own page, so scrolling to an error means picking the
+  // right ref rather than sharing one.
+  const pagerRef = useRef<ScrollView>(null)
+  const pageRefs = useRef(STEP_KEYS.map(() => createRef<ScrollView>())).current
+
+  // `onLayout` is the authority — this form is a modal on iOS and a resizable
+  // window on web, so the window's width is only ever an opening guess.
+  //
+  // But it has to be *some* guess on native. Starting at 0 leaves the first
+  // frame empty and mounts the entire form one frame later, which drops that
+  // mount straight onto the modal's slide-up animation and visibly hitches it.
+  // A native modal is full-bleed horizontally, so the window width is right or
+  // near enough for a single frame, and the realign effect below corrects it.
+  // On web it can be wildly wrong (the window is not the container), and there
+  // is no presentation animation to protect, so web still waits to measure.
+  const [pageWidth, setPageWidth] = useState(
+    Platform.OS === 'web' ? 0 : Dimensions.get('window').width
+  )
 
   const [step, setStep] = useState(0)
   const [title, setTitle] = useState(initial?.title ?? '')
@@ -149,6 +228,12 @@ export default function RecipeForm({
   const [pickerOpen, setPickerOpen] = useState(false)
   const [takenTitles, setTakenTitles] = useState<Set<string>>(new Set())
 
+  const cuisines = useCuisines()
+  const cuisineOptions = useMemo(
+    () => cuisines.map((c) => ({ label: c.name, emoji: c.emoji })),
+    [cuisines]
+  )
+
   // The other recipes' titles, so a duplicate is caught on this screen instead
   // of coming back as a 409 after Save. The server still enforces it — this is
   // only about saying so earlier, which is why a failed fetch is ignored.
@@ -159,9 +244,7 @@ export default function RecipeForm({
       .then((list) => {
         if (cancelled) return
         setTakenTitles(
-          new Set(
-            list.filter((r) => r.id !== initial?.id).map((r) => r.title.trim().toLowerCase())
-          )
+          new Set(list.filter((r) => r.id !== initial?.id).map((r) => foldForCompare(r.title)))
         )
       })
       .catch(() => {
@@ -171,6 +254,41 @@ export default function RecipeForm({
       cancelled = true
     }
   }, [token, initial?.id])
+
+  /**
+   * iOS's swipe-from-the-left-edge would pop the whole screen when the user is
+   * reaching for the previous step, so it's live only on the first page, where
+   * the pager has nothing to its left and going back really is the right answer.
+   *
+   * **Editing only.** `recipe/new` is `presentation: 'modal'`, where the same
+   * option controls the *vertical* swipe-to-dismiss — disabling it there would
+   * shut the only gesture out of the form.
+   */
+  useEffect(() => {
+    if (!isEditing) return
+    navigation.setOptions({ gestureEnabled: step === 0 })
+  }, [navigation, isEditing, step])
+
+  // Read inside the width effect below without making it depend on the step —
+  // see the note there.
+  const stepRef = useRef(step)
+  useEffect(() => {
+    stepRef.current = step
+  }, [step])
+
+  /**
+   * A rotation or a browser resize changes the page width while the pager's
+   * offset stays in the old pixels, leaving it parked between two pages.
+   * Re-align, unanimated: this is a correction, not navigation.
+   *
+   * Deliberately not keyed on `step`. Ordinary step changes are already driven
+   * by `goTo`'s animated scroll and by the gesture itself, and re-running this
+   * on each one would cut those short.
+   */
+  useEffect(() => {
+    if (pageWidth === 0) return
+    pagerRef.current?.scrollTo({ x: stepRef.current * pageWidth, animated: false })
+  }, [pageWidth])
 
   // Where each validated field sits inside the scroll content, recorded on
   // layout so an error can scroll itself into view rather than leaving the user
@@ -187,17 +305,18 @@ export default function RecipeForm({
   }
 
   function scrollToField(name?: string) {
-    // Deferred: after a step change the target hasn't been laid out yet, so its
-    // offset isn't recorded until the next frame.
+    // Deferred: the pager animates sideways, so the destination page hasn't
+    // settled on this frame and its offsets may not be recorded yet.
     setTimeout(() => {
       const y = name ? fieldOffsets.current[name] : undefined
-      scrollRef.current?.scrollTo({ y: Math.max((y ?? 0) - spacing.xl, 0), animated: true })
+      const page = pageRefs[name ? stepForField(name) : step]
+      page?.current?.scrollTo({ y: Math.max((y ?? 0) - spacing.xl, 0), animated: true })
     }, 60)
   }
 
   // Keeps a newly added row above the keyboard instead of behind it.
   function scrollToBottom() {
-    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50)
+    setTimeout(() => pageRefs[step]?.current?.scrollToEnd({ animated: true }), 50)
   }
 
   /** Drops one field's error as soon as the user edits it. */
@@ -210,11 +329,17 @@ export default function RecipeForm({
     })
   }
 
-  /** Shows a set of errors, moving to the step that owns the first one. */
+  /**
+   * Shows a set of errors, moving to the step that owns the first one.
+   *
+   * Goes through `goTo` rather than `setStep`: setting the state alone would
+   * move the indicator and leave the pager showing a different page than the one
+   * the error is on.
+   */
   function showErrors(next: FieldErrors, targetStep: number) {
     setErrors(next)
     setSubmitError(null)
-    if (targetStep !== step) setStep(targetStep)
+    if (targetStep !== step) goTo(targetStep)
     scrollToField(Object.keys(next)[0])
   }
 
@@ -225,7 +350,7 @@ export default function RecipeForm({
       if (!permission.granted) {
         setErrors((prev) => ({
           ...prev,
-          photoUrl: 'Allow photo library access to add a photo.',
+          photoUrl: t('form.photoPermission'),
         }))
         return
       }
@@ -245,7 +370,7 @@ export default function RecipeForm({
     } catch (err) {
       setErrors((prev) => ({
         ...prev,
-        photoUrl: err instanceof Error ? err.message : 'That photo could not be uploaded.',
+        photoUrl: err instanceof Error ? err.message : t('form.photoFailed'),
       }))
     } finally {
       setUploading(false)
@@ -326,10 +451,43 @@ export default function RecipeForm({
     }
   }
 
+  /**
+   * Moves the pager. Each page keeps its own vertical position on purpose — with
+   * order free you're returning to work in progress, not restarting a step. An
+   * error jump repositions the page itself via `scrollToField`.
+   */
   function goTo(index: number) {
     setSubmitError(null)
     setStep(index)
-    scrollRef.current?.scrollTo({ y: 0, animated: true })
+    Keyboard.dismiss()
+    pagerRef.current?.scrollTo({ x: index * pageWidth, animated: true })
+  }
+
+  /**
+   * Touching a `TextInput` focuses it even when the touch turns out to be the
+   * start of a swipe, so the keyboard begins rising for a page turn that was
+   * never going to type anything. Dismissing here — at the first pixel of drag,
+   * rather than when the page lands — cuts that off while the animation is a
+   * few frames old, instead of letting it play out and reverse.
+   *
+   * `keyboardDismissMode="on-drag"` below does the same thing natively and
+   * therefore sooner; this is the backstop for platforms that ignore the prop.
+   */
+  function onPagerDragStart() {
+    Keyboard.dismiss()
+  }
+
+  /**
+   * The gesture landed on a page. Deliberately does *not* drive the pager back
+   * — calling scrollTo here would fight the scroll that just finished. The
+   * keyboard is already gone by now; see `onPagerDragStart`.
+   */
+  function onPagerSettled(event: NativeSyntheticEvent<NativeScrollEvent>) {
+    if (pageWidth === 0) return
+    const next = Math.round(event.nativeEvent.contentOffset.x / pageWidth)
+    if (next === step) return
+    setStep(next)
+    setSubmitError(null)
   }
 
   /**
@@ -338,7 +496,7 @@ export default function RecipeForm({
    * the Steps screen, where the field isn't even visible.
    */
   function handleNext() {
-    const stepErrors = validateStep(step, currentValues())
+    const stepErrors = validateStep(step, currentValues(), t)
     if (Object.keys(stepErrors).length > 0) {
       showErrors(stepErrors, step)
       return
@@ -357,8 +515,8 @@ export default function RecipeForm({
     // all so the other steps' indicators light up too.
     const all: FieldErrors = {}
     let firstBadStep = -1
-    for (let i = 0; i < STEPS.length; i++) {
-      const stepErrors = validateStep(i, currentValues())
+    for (let i = 0; i < STEP_KEYS.length; i++) {
+      const stepErrors = validateStep(i, currentValues(), t)
       if (Object.keys(stepErrors).length > 0 && firstBadStep === -1) firstBadStep = i
       Object.assign(all, stepErrors)
     }
@@ -401,7 +559,7 @@ export default function RecipeForm({
 
     // Size is a property of the whole recipe, so there's no field to outline —
     // this one is the footer line's job.
-    const tooLarge = recipeSizeError(data)
+    const tooLarge = recipeSizeError(data, t)
     if (tooLarge) {
       setErrors({})
       setSubmitError(tooLarge)
@@ -435,29 +593,49 @@ export default function RecipeForm({
       if (err.status === 409) {
         // The only 409 the API raises is a duplicate title.
         setTakenTitles((prev) => new Set(prev).add(title.trim().toLowerCase()))
-        showErrors({ title: 'You already have a recipe with this title.' }, 0)
+        showErrors({ title: t('error.api.titleTaken') }, 0)
         return
       }
 
       const mapped: FieldErrors = {}
       for (const issue of err.details) {
         const field = fieldForServerIssue(issue.field, ingredientIds, stepIds)
-        if (field && !mapped[field]) mapped[field] = issue.message
+        // The server's per-field text is English and not ours to translate, so
+        // the field gets the outline and nothing else — which is the rule this
+        // form already follows for everything an outline can explain. The
+        // translated footer line carries the rest.
+        if (field && !mapped[field]) mapped[field] = ''
       }
       if (Object.keys(mapped).length > 0) {
         showErrors(mapped, stepForField(Object.keys(mapped)[0]))
         return
       }
     }
-    setSubmitError(err instanceof Error ? err.message : 'Could not save this recipe. Please try again.')
+    setSubmitError(err instanceof ApiError ? t(apiErrorKey(err)) : t('form.saveFailed'))
   }
 
-  const onLastStep = step === STEPS.length - 1
+  const onLastStep = step === STEP_KEYS.length - 1
   // Key presence, not truthiness: most entries are '' because the outline is
   // the whole message.
   const invalid = (field: string) => field in errors
   const stepsWithErrors = new Set(Object.keys(errors).map(stepForField))
-  const footerMessage = submitError ?? summarise(errors)
+  const footerMessage = submitError ?? summarise(errors, t)
+
+  // The bar has three states, brightest first: the page you're on, a step that
+  // passes validation, a step that doesn't. Position has to be the loudest of
+  // them — "how far you've walked" stopped describing anything once order went
+  // free, but "where am I" never does. `validateStep` is pure and small, so
+  // checking all four every render costs nothing.
+  //
+  // Nutrition is entirely optional, so it reads as complete on a blank form.
+  // That's the rule working, not a bug: the bar says this step won't stop you
+  // saving, and nutrition never can.
+  const stepValues = currentValues()
+  const completeSteps = new Set(
+    STEP_KEYS.map((_, index) => index).filter(
+      (index) => Object.keys(validateStep(index, stepValues, t)).length === 0
+    )
+  )
 
   return (
     <KeyboardAvoidingView
@@ -466,21 +644,22 @@ export default function RecipeForm({
       keyboardVerticalOffset={headerHeight}
     >
       <View style={styles.indicator}>
-        {STEPS.map((label, index) => {
-          const reachable = isEditing || index <= step
+        {STEP_KEYS.map((stepKeyName, index) => {
           return (
             <Pressable
-              key={label}
-              // Linear while creating: jumping ahead would skip validation.
-              disabled={!reachable}
+              key={stepKeyName}
+              // Every step is reachable from every other one, in both modes.
               onPress={() => goTo(index)}
               style={styles.indicatorItem}
             >
               <View
                 style={[
                   styles.indicatorBar,
-                  index <= step && styles.indicatorBarActive,
-                  // A step you're not looking at can still be the broken one.
+                  completeSteps.has(index) && styles.indicatorBarComplete,
+                  // Where you are outranks whether it validates.
+                  index === step && styles.indicatorBarCurrent,
+                  // A step you're not looking at can still be the broken one,
+                  // and on the one you are, red is the more useful colour.
                   stepsWithErrors.has(index) && styles.indicatorBarError,
                 ]}
               />
@@ -496,7 +675,7 @@ export default function RecipeForm({
                     stepsWithErrors.has(index) && styles.indicatorLabelError,
                   ]}
                 >
-                  {label}
+                  {t(stepKeyName)}
                 </Text>
                 {stepsWithErrors.has(index) && (
                   <Ionicons name="alert-circle" size={13} color={c.danger} />
@@ -507,365 +686,368 @@ export default function RecipeForm({
         })}
       </View>
 
-      <ScrollView
-        ref={scrollRef}
-        style={styles.scroll}
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="interactive"
-        showsVerticalScrollIndicator={false}
-      >
-        {step === 0 && (
-          <>
-            <View onLayout={registerField('photoUrl')}>
-              <Pressable
-                style={[styles.photoPicker, invalid('photoUrl') && styles.photoPickerInvalid]}
-                onPress={handlePickPhoto}
-                disabled={uploading}
-                accessibilityRole="button"
-                accessibilityLabel={photoUrl ? 'Change photo' : 'Add a photo'}
-              >
-                {uploading ? (
-                  <ActivityIndicator color={c.primary} />
-                ) : photoUrl ? (
-                  <>
-                    <Image source={{ uri: photoUrl }} style={StyleSheet.absoluteFill} contentFit="cover" />
-                    <View style={styles.photoChange}>
-                      <Ionicons name="camera" size={14} color={c.onPrimary} />
-                      <Text style={styles.photoChangeText}>Change</Text>
-                    </View>
-                  </>
-                ) : (
-                  <>
-                    <Ionicons
-                      name="camera-outline"
-                      size={26}
-                      color={invalid('photoUrl') ? c.danger : c.textPlaceholder}
-                    />
-                    <Text style={styles.photoPickerText}>Add a photo</Text>
-                    <Text style={styles.photoPickerHint}>Required</Text>
-                  </>
-                )}
-              </Pressable>
-            </View>
-
-            <View onLayout={registerField('title')}>
-              <Field
-                label="Title"
-                value={title}
-                onChangeText={(v) => {
-                  setTitle(v)
-                  clearError('title')
-                }}
-                placeholder="e.g. Spaghetti Carbonara"
-                invalid={invalid('title')}
-              />
-            </View>
-            <View onLayout={registerField('description')}>
-              <Field
-                label="Description"
-                value={description}
-                onChangeText={(v) => {
-                  setDescription(v)
-                  clearError('description')
-                }}
-                placeholder="e.g. Classic Italian pasta with egg and pancetta"
-                multiline
-                invalid={invalid('description')}
-              />
-            </View>
-
-            <View style={styles.group}>
-              <Text style={styles.label}>Mealtime</Text>
-              <View style={styles.chipRow}>
-                {MEALTIMES.map((option) => (
-                  <Chip
-                    key={option}
-                    label={option}
-                    active={mealtime === option}
-                    // Tapping the active chip clears it — mealtime is optional.
-                    onPress={() => setMealtime(mealtime === option ? undefined : option)}
-                  />
-                ))}
-              </View>
-            </View>
-
-            <View style={styles.group}>
-              <Text style={styles.label}>Difficulty</Text>
-              <View style={styles.segmented}>
-                {DIFFICULTIES.map((option) => (
-                  <Pressable
-                    key={option}
-                    style={[styles.segment, difficulty === option && styles.segmentActive]}
-                    onPress={() => setDifficulty(option)}
-                  >
-                    <Text
-                      style={[
-                        styles.segmentText,
-                        difficulty === option && styles.segmentTextActive,
-                      ]}
-                    >
-                      {option}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-            </View>
-
-            {/* Registered as one block: the two fields sit side by side, so a
-                message about either scrolls to the same place. */}
-            <View onLayout={registerField('totalMinutes', 'servings')} style={styles.row}>
-              <Field
-                label="Total minutes"
-                value={totalMinutes}
-                onChangeText={(v) => {
-                  setTotalMinutes(v)
-                  clearError('totalMinutes')
-                }}
-                keyboardType="number-pad"
-                placeholder="e.g. 30"
-                containerStyle={styles.rowItem}
-                invalid={invalid('totalMinutes')}
-              />
-              <Field
-                label="Servings"
-                value={servings}
-                onChangeText={(v) => {
-                  setServings(v)
-                  clearError('servings')
-                }}
-                keyboardType="number-pad"
-                placeholder="e.g. 4"
-                containerStyle={styles.rowItem}
-                invalid={invalid('servings')}
-              />
-            </View>
-
-            <Select
-              label="Cuisine"
-              value={cuisine || undefined}
-              onChange={(value) => {
-                setCuisine(value ?? '')
-                clearError('cuisine')
-              }}
-              options={CUISINE_OPTIONS}
-              placeholder="Select a cuisine"
-              title="Cuisine"
-              searchPlaceholder="Search cuisines"
-              emojiFor={emojiForCuisine}
-              // The column is free text, so the list is a shortcut, not a limit.
-              allowCustom
-            />
-            <View onLayout={registerField('tools')}>
-              <Field
-                label="Tools"
-                value={tools}
-                onChangeText={(v) => {
-                  setTools(v)
-                  clearError('tools')
-                }}
-                placeholder="e.g. large pot, frying pan"
-                hint="Separate with commas"
-                invalid={invalid('tools')}
-              />
-            </View>
-          </>
-        )}
-
-        {step === 1 && (
-          <>
-            <Text style={styles.stepHeading}>What goes in?</Text>
-
-            <Pressable
-              onPress={() => setPickerOpen(true)}
-              style={({ pressed }) => [styles.browse, pressed && styles.browsePressed]}
-              accessibilityRole="button"
-            >
-              <Text style={styles.browseEmoji}>🧄</Text>
-              <View style={styles.browseText}>
-                <Text style={styles.browseTitle}>Pick from common ingredients</Text>
-                <Text style={styles.browseHint}>Garlic, soy sauce, rice…</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={c.textMuted} />
-            </Pressable>
-
-            {/* One bordered row holding three borderless inputs, rather than
-                three separate Fields — fixed widths and a single container are
-                what keep the unit on the same line as the name on a phone. */}
-            {ingredients.map((ingredient) => (
-              <View
-                key={ingredient.id}
-                onLayout={registerField(ingredientKey(ingredient.id))}
-                style={[
-                  styles.ingredientRow,
-                  invalid(ingredientKey(ingredient.id)) && styles.rowInvalid,
-                ]}
-              >
-                <Text style={styles.ingredientEmoji}>{emojiForIngredient(ingredient.name)}</Text>
-                <TextInput
-                  style={styles.ingredientName}
-                  value={ingredient.name}
-                  onChangeText={(v) => updateIngredient(ingredient.id, 'name', v)}
-                  placeholder="Ingredient"
-                  placeholderTextColor={c.textPlaceholder}
-                  keyboardAppearance={isDark ? 'dark' : 'light'}
-                />
-                <View style={styles.ingredientDivider} />
-                <TextInput
-                  style={styles.ingredientQuantity}
-                  value={ingredient.quantity}
-                  onChangeText={(v) => updateIngredient(ingredient.id, 'quantity', v)}
-                  placeholder="0"
-                  placeholderTextColor={c.textPlaceholder}
-                  keyboardAppearance={isDark ? 'dark' : 'light'}
-                  keyboardType="numeric"
-                />
-                <TextInput
-                  style={styles.ingredientUnit}
-                  value={ingredient.unit}
-                  onChangeText={(v) => updateIngredient(ingredient.id, 'unit', v)}
-                  placeholder="unit"
-                  placeholderTextColor={c.textPlaceholder}
-                  keyboardAppearance={isDark ? 'dark' : 'light'}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
+      <View style={styles.pagerWrap} onLayout={(e) => setPageWidth(e.nativeEvent.layout.width)}>
+        {pageWidth > 0 && (
+          <ScrollView
+            ref={pagerRef}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            // Without this, a swipe that starts on a focused input is spent
+            // dismissing the keyboard instead of turning the page.
+            keyboardShouldPersistTaps="handled"
+            // Native, so it beats the JS handler to it. A tap that stays a tap
+            // is untouched — only an actual drag closes the keyboard.
+            keyboardDismissMode="on-drag"
+            onScrollBeginDrag={onPagerDragStart}
+            onMomentumScrollEnd={onPagerSettled}
+            scrollEventThrottle={16}
+          >
+            <Page ref={pageRefs[0]} width={pageWidth} contentStyle={styles.content}>
+              <View onLayout={registerField('photoUrl')}>
                 <Pressable
-                  onPress={() => removeIngredient(ingredient.id)}
-                  hitSlop={10}
-                  style={styles.ingredientRemove}
-                  accessibilityLabel={`Remove ${ingredient.name || 'ingredient'}`}
+                  style={[styles.photoPicker, invalid('photoUrl') && styles.photoPickerInvalid]}
+                  onPress={handlePickPhoto}
+                  disabled={uploading}
+                  accessibilityRole="button"
+                  accessibilityLabel={photoUrl ? t('form.changePhoto') : t('form.addPhoto')}
                 >
-                  <Ionicons name="close" size={16} color={c.textMuted} />
+                  {uploading ? (
+                    <ActivityIndicator color={c.primary} />
+                  ) : photoUrl ? (
+                    <>
+                      <Image source={{ uri: photoUrl }} style={StyleSheet.absoluteFill} contentFit="cover" />
+                      <View style={styles.photoChange}>
+                        <Ionicons name="camera" size={14} color={c.onPrimary} />
+                        <Text style={styles.photoChangeText}>{t('form.change')}</Text>
+                      </View>
+                    </>
+                  ) : (
+                    <>
+                      <Ionicons
+                        name="camera-outline"
+                        size={26}
+                        color={invalid('photoUrl') ? c.danger : c.textPlaceholder}
+                      />
+                      <Text style={styles.photoPickerText}>{t('form.addPhoto')}</Text>
+                      <Text style={styles.photoPickerHint}>{t('form.required')}</Text>
+                    </>
+                  )}
                 </Pressable>
               </View>
-            ))}
-            {/* With no rows there's no box to outline, so the hint that's
-                already here turns red rather than a second line appearing. */}
-            {ingredients.length === 0 && (
-              <Text
-                style={[styles.emptyHint, invalid('ingredients') && styles.emptyHintInvalid]}
-                onLayout={registerField('ingredients')}
-              >
-                No ingredients yet — pick some above, or add your own below.
-              </Text>
-            )}
-            <Pressable onPress={addIngredient} style={styles.addRow}>
-              <Ionicons name="add-circle-outline" size={18} color={c.text} />
-              <Text style={styles.addRowText}>Add your own</Text>
-            </Pressable>
-          </>
-        )}
 
-        {step === 2 && (
-          <>
-            <Text style={styles.stepHeading}>How is it made?</Text>
-
-            {steps.map((s, index) => (
-              <View key={s.id} onLayout={registerField(stepKey(s.id))} style={styles.stepRow}>
-                <View style={styles.stepNumber}>
-                  <Text style={styles.stepNumberText}>{index + 1}</Text>
-                </View>
+              <View onLayout={registerField('title')}>
                 <Field
-                  value={s.instruction}
-                  onChangeText={(v) => updateStep(s.id, v)}
-                  placeholder="e.g. Boil the pasta until al dente"
-                  multiline
-                  containerStyle={styles.stepInput}
-                  invalid={invalid(stepKey(s.id))}
+                  label={t('form.title')}
+                  value={title}
+                  onChangeText={(v) => {
+                    setTitle(v)
+                    clearError('title')
+                  }}
+                  placeholder={t('form.titlePlaceholder')}
+                  invalid={invalid('title')}
                 />
-                <Pressable
-                  onPress={() => removeStep(s.id)}
-                  hitSlop={8}
-                  style={[styles.remove, styles.removeStep]}
-                  accessibilityLabel="Remove step"
-                >
-                  <Ionicons name="close" size={18} color={c.danger} />
-                </Pressable>
               </View>
-            ))}
-            {steps.length === 0 && (
-              <Text
-                style={[styles.emptyHint, invalid('steps') && styles.emptyHintInvalid]}
-                onLayout={registerField('steps')}
+              <View onLayout={registerField('description')}>
+                <Field
+                  label={t('form.description')}
+                  value={description}
+                  onChangeText={(v) => {
+                    setDescription(v)
+                    clearError('description')
+                  }}
+                  placeholder={t('form.descriptionPlaceholder')}
+                  multiline
+                  invalid={invalid('description')}
+                />
+              </View>
+
+              <View style={styles.group}>
+                <Text style={styles.label}>{t('form.mealtime')}</Text>
+                <View style={styles.chipRow}>
+                  {MEALTIMES.map((option) => (
+                    <Chip
+                      key={option}
+                      label={mealtimeLabel(option)}
+                      active={mealtime === option}
+                      // Tapping the active chip clears it — mealtime is optional.
+                      onPress={() => setMealtime(mealtime === option ? undefined : option)}
+                    />
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.group}>
+                <Text style={styles.label}>{t('form.difficulty')}</Text>
+                <View style={styles.segmented}>
+                  {DIFFICULTIES.map((option) => (
+                    <Pressable
+                      key={option}
+                      style={[styles.segment, difficulty === option && styles.segmentActive]}
+                      onPress={() => setDifficulty(option)}
+                    >
+                      <Text
+                        style={[
+                          styles.segmentText,
+                          difficulty === option && styles.segmentTextActive,
+                        ]}
+                      >
+                        {difficultyLabel(option)}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+
+              {/* Registered as one block: the two fields sit side by side, so a
+                  message about either scrolls to the same place. */}
+              <View onLayout={registerField('totalMinutes', 'servings')} style={styles.row}>
+                <Field
+                  label={t('form.totalMinutes')}
+                  value={totalMinutes}
+                  onChangeText={(v) => {
+                    setTotalMinutes(v)
+                    clearError('totalMinutes')
+                  }}
+                  keyboardType="number-pad"
+                  placeholder={t('form.totalMinutesPlaceholder')}
+                  containerStyle={styles.rowItem}
+                  invalid={invalid('totalMinutes')}
+                />
+                <Field
+                  label={t('form.servings')}
+                  value={servings}
+                  onChangeText={(v) => {
+                    setServings(v)
+                    clearError('servings')
+                  }}
+                  keyboardType="number-pad"
+                  placeholder={t('form.servingsPlaceholder')}
+                  containerStyle={styles.rowItem}
+                  invalid={invalid('servings')}
+                />
+              </View>
+
+              <Select
+                label={t('form.cuisine')}
+                value={cuisine || undefined}
+                onChange={(value) => {
+                  setCuisine(value ?? '')
+                  clearError('cuisine')
+                }}
+                options={cuisineOptions}
+                placeholder={t('form.cuisinePlaceholder')}
+                title={t('form.cuisine')}
+                searchPlaceholder={t('form.cuisineSearch')}
+                emojiFor={emojiForCuisine}
+                // The column is free text, so the list is a shortcut, not a limit.
+                allowCustom
+              />
+              <View onLayout={registerField('tools')}>
+                <Field
+                  label={t('form.tools')}
+                  value={tools}
+                  onChangeText={(v) => {
+                    setTools(v)
+                    clearError('tools')
+                  }}
+                  placeholder={t('form.toolsPlaceholder')}
+                  hint={t('form.toolsHint')}
+                  invalid={invalid('tools')}
+                />
+              </View>
+            </Page>
+
+            <Page ref={pageRefs[1]} width={pageWidth} contentStyle={styles.content}>
+              <Text style={styles.stepHeading}>{t('form.ingredientsHeading')}</Text>
+
+              <Pressable
+                onPress={() => setPickerOpen(true)}
+                style={({ pressed }) => [styles.browse, pressed && styles.browsePressed]}
+                accessibilityRole="button"
               >
-                No steps yet — add the first one below.
+                <Text style={styles.browseEmoji}>🧄</Text>
+                <View style={styles.browseText}>
+                  <Text style={styles.browseTitle}>{t('form.pickCommon')}</Text>
+                  <Text style={styles.browseHint}>{t('form.pickCommonHint')}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={c.textMuted} />
+              </Pressable>
+
+              {/* One bordered row holding three borderless inputs, rather than
+                  three separate Fields — fixed widths and a single container are
+                  what keep the unit on the same line as the name on a phone. */}
+              {ingredients.map((ingredient) => (
+                <View
+                  key={ingredient.id}
+                  onLayout={registerField(ingredientKey(ingredient.id))}
+                  style={[
+                    styles.ingredientRow,
+                    invalid(ingredientKey(ingredient.id)) && styles.rowInvalid,
+                  ]}
+                >
+                  <Text style={styles.ingredientEmoji}>{emojiForIngredient(ingredient.name)}</Text>
+                  <TextInput
+                    style={styles.ingredientName}
+                    value={ingredient.name}
+                    onChangeText={(v) => updateIngredient(ingredient.id, 'name', v)}
+                    placeholder={t('form.ingredientPlaceholder')}
+                    placeholderTextColor={c.textPlaceholder}
+                    keyboardAppearance={isDark ? 'dark' : 'light'}
+                  />
+                  <View style={styles.ingredientDivider} />
+                  <TextInput
+                    style={styles.ingredientQuantity}
+                    value={ingredient.quantity}
+                    onChangeText={(v) => updateIngredient(ingredient.id, 'quantity', v)}
+                    placeholder="0"
+                    placeholderTextColor={c.textPlaceholder}
+                    keyboardAppearance={isDark ? 'dark' : 'light'}
+                    keyboardType="numeric"
+                  />
+                  <TextInput
+                    style={styles.ingredientUnit}
+                    value={ingredient.unit}
+                    onChangeText={(v) => updateIngredient(ingredient.id, 'unit', v)}
+                    placeholder={t('form.unitPlaceholder')}
+                    placeholderTextColor={c.textPlaceholder}
+                    keyboardAppearance={isDark ? 'dark' : 'light'}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                  <Pressable
+                    onPress={() => removeIngredient(ingredient.id)}
+                    hitSlop={10}
+                    style={styles.ingredientRemove}
+                    accessibilityLabel={`${t('common.delete')} ${ingredient.name || t('form.ingredientPlaceholder')}`}
+                  >
+                    <Ionicons name="close" size={16} color={c.textMuted} />
+                  </Pressable>
+                </View>
+              ))}
+              {/* With no rows there's no box to outline, so the hint that's
+                  already here turns red rather than a second line appearing. */}
+              {ingredients.length === 0 && (
+                <Text
+                  style={[styles.emptyHint, invalid('ingredients') && styles.emptyHintInvalid]}
+                  onLayout={registerField('ingredients')}
+                >
+                  {t('form.noIngredients')}
+                </Text>
+              )}
+              <Pressable onPress={addIngredient} style={styles.addRow}>
+                <Ionicons name="add-circle-outline" size={18} color={c.text} />
+                <Text style={styles.addRowText}>{t('form.addYourOwn')}</Text>
+              </Pressable>
+            </Page>
+
+            <Page ref={pageRefs[2]} width={pageWidth} contentStyle={styles.content}>
+              <Text style={styles.stepHeading}>{t('form.stepsHeading')}</Text>
+
+              {steps.map((s, index) => (
+                <View key={s.id} onLayout={registerField(stepKey(s.id))} style={styles.stepRow}>
+                  <View style={styles.stepNumber}>
+                    <Text style={styles.stepNumberText}>{index + 1}</Text>
+                  </View>
+                  <Field
+                    value={s.instruction}
+                    onChangeText={(v) => updateStep(s.id, v)}
+                    placeholder={t('form.stepPlaceholder')}
+                    multiline
+                    containerStyle={styles.stepInput}
+                    invalid={invalid(stepKey(s.id))}
+                  />
+                  <Pressable
+                    onPress={() => removeStep(s.id)}
+                    hitSlop={8}
+                    style={[styles.remove, styles.removeStep]}
+                    accessibilityLabel={t('form.removeStep')}
+                  >
+                    <Ionicons name="close" size={18} color={c.danger} />
+                  </Pressable>
+                </View>
+              ))}
+              {steps.length === 0 && (
+                <Text
+                  style={[styles.emptyHint, invalid('steps') && styles.emptyHintInvalid]}
+                  onLayout={registerField('steps')}
+                >
+                  {t('form.noSteps')}
+                </Text>
+              )}
+              <Pressable onPress={addStep} style={styles.addRow}>
+                <Ionicons name="add-circle-outline" size={18} color={c.text} />
+                <Text style={styles.addRowText}>{t('form.addStep')}</Text>
+              </Pressable>
+            </Page>
+
+            <Page ref={pageRefs[3]} width={pageWidth} contentStyle={styles.content}>
+              {/* Every field here is optional, so this step never blocks Save. The
+                  numbers are per serving — say so, because nothing else can: the
+                  columns are bare floats and a reader has no way to tell whether
+                  520 kcal is one plate or the whole tray. */}
+              <Text style={styles.stepHeading}>{t('form.nutritionHeading')}</Text>
+              <Text style={styles.stepIntro}>
+                {t('form.nutritionIntro')}
               </Text>
-            )}
-            <Pressable onPress={addStep} style={styles.addRow}>
-              <Ionicons name="add-circle-outline" size={18} color={c.text} />
-              <Text style={styles.addRowText}>Add step</Text>
-            </Pressable>
-          </>
+
+              <View onLayout={registerField('calories', 'protein')} style={styles.row}>
+                <Field
+                  label={t('form.calories')}
+                  value={calories}
+                  onChangeText={(v) => {
+                    setCalories(v)
+                    clearError('calories')
+                  }}
+                  keyboardType="decimal-pad"
+                  placeholder={t('form.caloriesPlaceholder')}
+                  containerStyle={styles.rowItem}
+                  invalid={invalid('calories')}
+                />
+                <Field
+                  label={t('form.protein')}
+                  value={protein}
+                  onChangeText={(v) => {
+                    setProtein(v)
+                    clearError('protein')
+                  }}
+                  keyboardType="decimal-pad"
+                  placeholder={t('form.proteinPlaceholder')}
+                  containerStyle={styles.rowItem}
+                  invalid={invalid('protein')}
+                />
+              </View>
+
+              <View onLayout={registerField('carbs', 'fat')} style={styles.row}>
+                <Field
+                  label={t('form.carbs')}
+                  value={carbs}
+                  onChangeText={(v) => {
+                    setCarbs(v)
+                    clearError('carbs')
+                  }}
+                  keyboardType="decimal-pad"
+                  placeholder={t('form.carbsPlaceholder')}
+                  containerStyle={styles.rowItem}
+                  invalid={invalid('carbs')}
+                />
+                <Field
+                  label={t('form.fat')}
+                  value={fat}
+                  onChangeText={(v) => {
+                    setFat(v)
+                    clearError('fat')
+                  }}
+                  keyboardType="decimal-pad"
+                  placeholder={t('form.fatPlaceholder')}
+                  containerStyle={styles.rowItem}
+                  invalid={invalid('fat')}
+                />
+              </View>
+            </Page>
+          </ScrollView>
         )}
-
-        {/* Every field here is optional, so this step never blocks Save. The
-            numbers are per serving — say so, because nothing else can: the
-            columns are bare floats and a reader has no way to tell whether 520
-            kcal is one plate or the whole tray. */}
-        {step === 3 && (
-          <>
-            <Text style={styles.stepHeading}>What&apos;s in a serving?</Text>
-            <Text style={styles.stepIntro}>
-              All optional, and all per serving. Leave anything you don&apos;t know blank.
-            </Text>
-
-            <View onLayout={registerField('calories', 'protein')} style={styles.row}>
-              <Field
-                label="Calories (kcal)"
-                value={calories}
-                onChangeText={(v) => {
-                  setCalories(v)
-                  clearError('calories')
-                }}
-                keyboardType="decimal-pad"
-                placeholder="e.g. 520"
-                containerStyle={styles.rowItem}
-                invalid={invalid('calories')}
-              />
-              <Field
-                label="Protein (g)"
-                value={protein}
-                onChangeText={(v) => {
-                  setProtein(v)
-                  clearError('protein')
-                }}
-                keyboardType="decimal-pad"
-                placeholder="e.g. 31"
-                containerStyle={styles.rowItem}
-                invalid={invalid('protein')}
-              />
-            </View>
-
-            <View onLayout={registerField('carbs', 'fat')} style={styles.row}>
-              <Field
-                label="Carbs (g)"
-                value={carbs}
-                onChangeText={(v) => {
-                  setCarbs(v)
-                  clearError('carbs')
-                }}
-                keyboardType="decimal-pad"
-                placeholder="e.g. 48"
-                containerStyle={styles.rowItem}
-                invalid={invalid('carbs')}
-              />
-              <Field
-                label="Fat (g)"
-                value={fat}
-                onChangeText={(v) => {
-                  setFat(v)
-                  clearError('fat')
-                }}
-                keyboardType="decimal-pad"
-                placeholder="e.g. 22"
-                containerStyle={styles.rowItem}
-                invalid={invalid('fat')}
-              />
-            </View>
-          </>
-        )}
-      </ScrollView>
+      </View>
 
       {/* A pointer, not the message itself: the wording that says what to change
           lives under the field. This only says how many, and that they're above. */}
@@ -879,7 +1061,7 @@ export default function RecipeForm({
         <View style={styles.footerButtons}>
           {step > 0 && !isEditing && (
             <PrimaryButton
-              label="Back"
+              label={t('common.back')}
               variant="outline"
               onPress={() => goTo(step - 1)}
               style={styles.footerButton}
@@ -887,14 +1069,14 @@ export default function RecipeForm({
           )}
           {isEditing || onLastStep ? (
             <PrimaryButton
-              label={submitLabel}
+              label={t(submitLabel)}
               onPress={handleSubmit}
               loading={submitting}
               disabled={uploading}
               style={styles.footerButton}
             />
           ) : (
-            <PrimaryButton label="Next" onPress={handleNext} style={styles.footerButton} />
+            <PrimaryButton label={t('common.next')} onPress={handleNext} style={styles.footerButton} />
           )}
         </View>
       </View>
@@ -910,18 +1092,25 @@ export default function RecipeForm({
   )
 }
 
-const makeStyles = (c: ThemeColors) => StyleSheet.create({
+const makeStyles = (c: ThemeColors, type: TypeScale) => StyleSheet.create({
   container: { flex: 1, backgroundColor: c.bg },
   indicator: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingTop: spacing.md },
   indicatorItem: { flex: 1, gap: spacing.sm },
   indicatorBar: { height: 3, borderRadius: radius.pill, backgroundColor: c.border },
-  indicatorBarActive: { backgroundColor: c.primary },
+  // Passes validation, but you're somewhere else — a step further down the
+  // contrast scale than the one you're on, so it never competes with it.
+  indicatorBarComplete: { backgroundColor: c.borderStrong },
+  // The page you are actually looking at. Applied last of the three so it wins.
+  indicatorBarCurrent: { backgroundColor: c.primary },
   indicatorBarError: { backgroundColor: c.danger },
   indicatorLabelRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   indicatorLabel: { ...type.caption, color: c.textPlaceholder },
-  indicatorLabelActive: { color: c.text },
+  // Weight, not just colour: on the current step the bar goes red when that
+  // step has errors, so position has to stay readable without it.
+  indicatorLabelActive: { color: c.text, fontWeight: '700' },
   indicatorLabelError: { color: c.danger },
-  scroll: { flex: 1 },
+  // Holds the pager and supplies the width each page measures itself against.
+  pagerWrap: { flex: 1 },
   content: { padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing.xxl },
   stepHeading: { ...type.title, color: c.text, marginBottom: spacing.xs },
   // Pulled up against the heading: the content gap is `lg`, which reads as two
@@ -1005,8 +1194,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   ingredientName: {
     flex: 1,
     minWidth: 0,
-    ...type.body,
-    fontSize: 16,
+    ...type.bodyLarge,
     color: c.text,
     paddingVertical: 0,
   },
@@ -1014,15 +1202,17 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   ingredientQuantity: {
     width: 40,
     textAlign: 'right',
-    ...type.body,
-    fontSize: 16,
+    ...type.bodyLarge,
     color: c.text,
     paddingVertical: 0,
   },
+  // A step below the name and quantity, and the only one of the three left
+  // on `body`. The three fixed widths are what stop this row wrapping onto a
+  // second line, so a larger face costs visible characters, never layout —
+  // these are TextInputs and they scroll.
   ingredientUnit: {
     width: 46,
     ...type.body,
-    fontSize: 15,
     color: c.textMuted,
     paddingVertical: 0,
   },

@@ -42,3 +42,8 @@ example
 # generated native folders
 /ios
 /android
+
+# Design handoffs. Source material, not app code — the images the app actually
+# loads are extracted into assets/onboarding/. Git never forgets a blob, so the
+# archives stay out.
+*.zip

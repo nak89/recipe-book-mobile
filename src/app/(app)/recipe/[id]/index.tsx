@@ -7,18 +7,26 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useAuth } from '@/context/AuthContext'
 import { deleteRecipe, getRecipe, setFavourite } from '@/lib/api'
+import { favouriteFeedback } from '@/lib/haptics'
 import RecipeDetailSkeleton from '@/components/RecipeDetailSkeleton'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import PrimaryButton from '@/components/ui/PrimaryButton'
 import { emojiForCuisine } from '@/data/cuisines'
 import { emojiForIngredient } from '@/data/ingredients'
-import { radius, spacing, type, useTheme, useThemedStyles } from '@/theme'
-import type { ThemeColors } from '@/theme'
+import { useT } from '@/i18n'
+import type { StringKey } from '@/i18n'
+import { apiErrorKey } from '@/i18n/errors'
+import { useDifficultyLabel, useMealtimeLabel } from '@/i18n/labels'
+import { radius, spacing, useTheme, useThemedStyles } from '@/theme'
+import type { ThemeColors, TypeScale } from '@/theme'
 import type { Recipe } from '@/types/recipe'
 
 export default function RecipeDetailScreen() {
   const { colors: c } = useTheme()
   const styles = useThemedStyles(makeStyles)
+  const t = useT()
+  const mealtimeLabel = useMealtimeLabel()
+  const difficultyLabel = useDifficultyLabel()
   const { id } = useLocalSearchParams<{ id: string }>()
   const { token } = useAuth()
   const router = useRouter()
@@ -26,7 +34,10 @@ export default function RecipeDetailScreen() {
 
   const [recipe, setRecipe] = useState<Recipe | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  // The *key*, not the translated sentence — so an error already on screen
+  // re-renders in the new language when the toggle moves, and `t` never
+  // becomes a dependency of the fetch effect.
+  const [error, setError] = useState<StringKey | null>(null)
   const [confirming, setConfirming] = useState(false)
 
   useFocusEffect(
@@ -35,10 +46,14 @@ export default function RecipeDetailScreen() {
       let cancelled = false
       getRecipe(id, token)
         .then((data) => {
-          if (!cancelled) setRecipe(data)
+          if (cancelled) return
+          // Coming back from an edit you cancelled re-fetches the same recipe.
+          // Bail out rather than remount the hero, the ingredients and the steps
+          // over the top of the screen transition — see the dashboard for why.
+          setRecipe((prev) => (JSON.stringify(prev) === JSON.stringify(data) ? prev : data))
         })
         .catch((err) => {
-          if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load recipe')
+          if (!cancelled) setError(apiErrorKey(err))
         })
         .finally(() => {
           if (!cancelled) setLoading(false)
@@ -52,6 +67,7 @@ export default function RecipeDetailScreen() {
   async function handleToggleFavourite() {
     if (!token || !recipe) return
     const next = !recipe.isFavourite
+    favouriteFeedback()
     setRecipe({ ...recipe, isFavourite: next })
     try {
       await setFavourite(recipe.id, next, token)
@@ -66,7 +82,7 @@ export default function RecipeDetailScreen() {
       await deleteRecipe(recipe.id, token)
       router.back()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete recipe')
+      setError(apiErrorKey(err))
     }
   }
 
@@ -74,10 +90,10 @@ export default function RecipeDetailScreen() {
   // showing, and dropping it would be a silent lie about the recipe.
   const nutrition = recipe
     ? ([
-        { label: 'Calories', value: recipe.calories, unit: 'kcal' },
-        { label: 'Protein', value: recipe.protein, unit: 'g' },
-        { label: 'Carbs', value: recipe.carbs, unit: 'g' },
-        { label: 'Fat', value: recipe.fat, unit: 'g' },
+        { label: t('detail.calories'), value: recipe.calories, unit: 'kcal' },
+        { label: t('detail.protein'), value: recipe.protein, unit: 'g' },
+        { label: t('detail.carbs'), value: recipe.carbs, unit: 'g' },
+        { label: t('detail.fat'), value: recipe.fat, unit: 'g' },
       ].filter((stat) => stat.value != null) as { label: string; value: number; unit: string }[])
     : []
 
@@ -85,7 +101,7 @@ export default function RecipeDetailScreen() {
   if (!recipe) {
     return (
       <View style={styles.centered}>
-        <Text style={styles.error}>{error ?? 'Recipe not found'}</Text>
+        <Text style={styles.error}>{error ? t(error) : t('detail.notFound')}</Text>
       </View>
     )
   }
@@ -110,7 +126,7 @@ export default function RecipeDetailScreen() {
             <Pressable
               onPress={() => router.back()}
               style={styles.circleButton}
-              accessibilityLabel="Go back"
+              accessibilityLabel={t('detail.back')}
             >
               <Ionicons name="chevron-back" size={22} color={c.textOnPhoto} />
             </Pressable>
@@ -118,7 +134,7 @@ export default function RecipeDetailScreen() {
               onPress={handleToggleFavourite}
               style={styles.circleButton}
               accessibilityLabel={
-                recipe.isFavourite ? 'Remove from favourites' : 'Add to favourites'
+                recipe.isFavourite ? t('detail.removeFavourite') : t('detail.addFavourite')
               }
             >
               <Ionicons
@@ -134,14 +150,14 @@ export default function RecipeDetailScreen() {
           <Text style={styles.title}>{recipe.title}</Text>
 
           <View style={styles.metaRow}>
-            <Meta icon="time-outline" label={`${recipe.totalMinutes} min`} />
-            <Meta icon="restaurant-outline" label={`Serves ${recipe.servings}`} />
-            <Meta icon="speedometer-outline" label={recipe.difficulty} />
+            <Meta icon="time-outline" label={`${recipe.totalMinutes} ${t('detail.minutes')}`} />
+            <Meta icon="restaurant-outline" label={`${recipe.servings} ${t('detail.servings')}`} />
+            <Meta icon="speedometer-outline" label={difficultyLabel(recipe.difficulty)} />
           </View>
 
           {(recipe.mealtime || recipe.cuisine) && (
             <View style={styles.tagRow}>
-              {recipe.mealtime && <Text style={styles.tag}>{recipe.mealtime}</Text>}
+              {recipe.mealtime && <Text style={styles.tag}>{mealtimeLabel(recipe.mealtime)}</Text>}
               {recipe.cuisine && (
                 <Text style={styles.tag}>
                   {emojiForCuisine(recipe.cuisine)} {recipe.cuisine}
@@ -152,10 +168,10 @@ export default function RecipeDetailScreen() {
 
           {recipe.description && <Text style={styles.description}>{recipe.description}</Text>}
 
-          {error && <Text style={styles.error}>{error}</Text>}
+          {error && <Text style={styles.error}>{t(error)}</Text>}
 
           {recipe.tools.length > 0 && (
-            <Section title="Tools">
+            <Section title={t('detail.tools')}>
               <Text style={styles.paragraph}>{recipe.tools.join(' · ')}</Text>
             </Section>
           )}
@@ -164,8 +180,8 @@ export default function RecipeDetailScreen() {
               none were — nutrition is optional and most recipes won't have it,
               so an empty heading would be on more screens than a full one. */}
           {nutrition.length > 0 && (
-            <Section title="Nutrition">
-              <Text style={styles.sectionCaption}>Per serving</Text>
+            <Section title={t('detail.nutrition')}>
+              <Text style={styles.sectionCaption}>{t('detail.perServing')}</Text>
               <View style={styles.nutritionRow}>
                 {nutrition.map((stat) => (
                   <View key={stat.label} style={styles.nutritionTile}>
@@ -180,7 +196,7 @@ export default function RecipeDetailScreen() {
             </Section>
           )}
 
-          <Section title="Ingredients">
+          <Section title={t('detail.ingredients')}>
             {recipe.ingredients.map((ingredient, index) => (
               <View key={ingredient.id ?? index} style={styles.ingredient}>
                 <Text style={styles.ingredientEmoji}>{emojiForIngredient(ingredient.name)}</Text>
@@ -192,7 +208,7 @@ export default function RecipeDetailScreen() {
             ))}
           </Section>
 
-          <Section title="Steps">
+          <Section title={t('detail.steps')}>
             {[...recipe.steps]
               .sort((a, b) => a.stepNumber - b.stepNumber)
               .map((step) => (
@@ -207,12 +223,12 @@ export default function RecipeDetailScreen() {
 
           <View style={styles.actions}>
             <PrimaryButton
-              label="Edit recipe"
+              label={t('detail.editRecipe')}
               onPress={() => router.push(`/recipe/${recipe.id}/edit`)}
               style={styles.action}
             />
             <PrimaryButton
-              label="Delete"
+              label={t('common.delete')}
               variant="danger"
               onPress={() => setConfirming(true)}
               style={styles.action}
@@ -223,8 +239,8 @@ export default function RecipeDetailScreen() {
 
       <ConfirmDialog
         visible={confirming}
-        title="Delete recipe?"
-        message={`"${recipe.title}" will be permanently removed.`}
+        title={t('dashboard.deleteTitle')}
+        message={`“${recipe.title}” — ${t('dashboard.deleteMessage')}`}
         onCancel={() => setConfirming(false)}
         onConfirm={() => {
           setConfirming(false)
@@ -265,7 +281,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   )
 }
 
-const makeStyles = (c: ThemeColors) => StyleSheet.create({
+const makeStyles = (c: ThemeColors, type: TypeScale) => StyleSheet.create({
   container: { flex: 1, backgroundColor: c.bg },
   centered: {
     flex: 1,
@@ -314,7 +330,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     paddingVertical: 5,
     overflow: 'hidden',
   },
-  description: { ...type.body, color: c.textMuted, lineHeight: 22 },
+  description: { ...type.bodyRead, color: c.textMuted },
   error: { ...type.body, color: c.danger },
   section: { gap: spacing.sm, marginTop: spacing.lg },
   sectionTitle: { ...type.section, color: c.text },
@@ -360,7 +376,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     justifyContent: 'center',
   },
   stepNumberText: { ...type.caption, color: c.onPrimary },
-  stepText: { ...type.body, color: c.text, flex: 1, minWidth: 0, lineHeight: 22 },
+  stepText: { ...type.bodyRead, color: c.text, flex: 1, minWidth: 0 },
   actions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xl },
   action: { flex: 1 },
 })

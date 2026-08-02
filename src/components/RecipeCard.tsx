@@ -3,8 +3,9 @@ import { Image } from 'expo-image'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import type { StyleProp, ViewStyle } from 'react-native'
-import { radius, shadow, spacing, type, useTheme, useThemedStyles } from '@/theme'
-import type { ThemeColors } from '@/theme'
+import { radius, shadow, sized, spacing, useTheme, useThemedStyles } from '@/theme'
+import type { ThemeColors, TypeScale } from '@/theme'
+import { useT } from '@/i18n'
 import type { Recipe } from '@/types/recipe'
 
 /**
@@ -32,6 +33,7 @@ export default function RecipeCard({
 }) {
   const { colors: c } = useTheme()
   const styles = useThemedStyles(makeStyles)
+  const t = useT()
   const featured = variant === 'featured'
 
   return (
@@ -72,7 +74,7 @@ export default function RecipeCard({
           }}
           hitSlop={8}
           accessibilityRole="button"
-          accessibilityLabel={recipe.isFavourite ? 'Remove from favourites' : 'Add to favourites'}
+          accessibilityLabel={recipe.isFavourite ? t('detail.removeFavourite') : t('detail.addFavourite')}
           style={styles.favourite}
         >
           <Ionicons
@@ -90,12 +92,12 @@ export default function RecipeCard({
         <View style={styles.badges}>
           <View style={styles.badge}>
             <Ionicons name="time-outline" size={11} color={c.textOnPhoto} />
-            <Text style={styles.badgeText}>{recipe.totalMinutes} min</Text>
+            <Text style={styles.badgeText}>{`${recipe.totalMinutes} ${t('detail.minutes')}`}</Text>
           </View>
           {featured && (
             <View style={styles.badge}>
               <Ionicons name="restaurant-outline" size={11} color={c.textOnPhoto} />
-              <Text style={styles.badgeText}>Serves {recipe.servings}</Text>
+              <Text style={styles.badgeText}>{`${recipe.servings} ${t('detail.servings')}`}</Text>
             </View>
           )}
         </View>
@@ -104,7 +106,7 @@ export default function RecipeCard({
   )
 }
 
-const makeStyles = (c: ThemeColors) => StyleSheet.create({
+const makeStyles = (c: ThemeColors, type: TypeScale) => StyleSheet.create({
   card: {
     borderRadius: radius.lg,
     overflow: 'hidden',
@@ -127,7 +129,11 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     justifyContent: 'center',
   },
   content: { padding: spacing.md, gap: spacing.sm },
-  title: { ...type.bodyStrong, fontSize: 14, color: c.textOnPhoto },
+  // `sized` rather than a bare `fontSize` override, so that a token carrying a
+  // lineHeight has it scaled down too instead of spacing two title lines like
+  // three. No token spread here pins one today, which makes this exactly the
+  // old override — the point is that it stays correct if one ever does.
+  title: { ...sized(type.bodyStrong, 14), color: c.textOnPhoto },
   titleFeatured: { fontSize: 16 },
   badges: { flexDirection: 'row', gap: spacing.xs, flexWrap: 'wrap' },
   badge: {
@@ -139,5 +145,5 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: 3,
   },
-  badgeText: { ...type.caption, fontSize: 11, color: c.textOnPhoto },
+  badgeText: { ...sized(type.caption, 11), color: c.textOnPhoto },
 })

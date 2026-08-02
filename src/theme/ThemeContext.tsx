@@ -78,18 +78,7 @@ export function useTheme(): ThemeValue {
   return value
 }
 
-/**
- * The replacement for a module-scope `StyleSheet.create`.
- *
- * Pass a factory declared at module scope — it's a stable reference, so the
- * memo only recomputes when the palette actually changes, and the stylesheet is
- * built once per theme rather than once per render.
- *
- *     const styles = useThemedStyles(makeStyles)
- *     ...
- *     const makeStyles = (c: ThemeColors) => StyleSheet.create({ ... })
- */
-export function useThemedStyles<T>(factory: (colors: ThemeColors) => T): T {
-  const { colors } = useTheme()
-  return useMemo(() => factory(colors), [factory, colors])
-}
+// `useThemedStyles` used to live here. It moved to `./index` when the type
+// scale became language-dependent: it reads `@/i18n` now, and importing that
+// from this module would point the dependency back the way it isn't allowed to
+// run (palettes + typography -> ThemeContext -> index).

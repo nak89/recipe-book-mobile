@@ -7,13 +7,29 @@
  * free-text row is the real input. Adding an entry here also teaches
  * `emojiForIngredient` a new word, so prefer extending this list over
  * hardcoding an emoji anywhere else.
+ *
+ * The Khmer pantry lives in `ingredients.km.ts` and is a *different list*, not a
+ * translation of this one. `emojiForIngredient` below knows about both.
  */
-export interface CommonIngredient {
+import { foldForCompare } from '@/lib/text'
+// A value import, and `ingredients.km.ts` imports only a *type* back — that's
+// erased at compile time, so there is no runtime cycle between the two.
+import { KHMER_INGREDIENTS } from './ingredients.km'
+
+/**
+ * Generic over its category so each language's pantry can keep its own sections
+ * *and* its own compile-time check that every entry names a real one. The two
+ * lists differ in length, sections and contents; nothing pairs them.
+ *
+ * The bare `CommonIngredient` (category widened to `string`) is what the picker
+ * and the form consume, since they handle either list.
+ */
+export interface CommonIngredient<C extends string = string> {
   name: string
   emoji: string
   /** Prefilled when picked, so the usual case is one number away from done. */
   unit: string
-  category: IngredientCategory
+  category: C
 }
 
 export const INGREDIENT_CATEGORIES = [
@@ -29,7 +45,7 @@ export const INGREDIENT_CATEGORIES = [
 
 export type IngredientCategory = (typeof INGREDIENT_CATEGORIES)[number]
 
-export const COMMON_INGREDIENTS: CommonIngredient[] = [
+export const COMMON_INGREDIENTS: CommonIngredient<IngredientCategory>[] = [
   // Vegetables
   { name: 'Garlic', emoji: '🧄', unit: 'cloves', category: 'Vegetables' },
   { name: 'Onion', emoji: '🧅', unit: '', category: 'Vegetables' },
@@ -51,6 +67,13 @@ export const COMMON_INGREDIENTS: CommonIngredient[] = [
   { name: 'Avocado', emoji: '🥑', unit: '', category: 'Vegetables' },
   { name: 'Peas', emoji: '🫛', unit: 'g', category: 'Vegetables' },
   { name: 'Beansprouts', emoji: '🌱', unit: 'g', category: 'Vegetables' },
+  // Pulses, added for the starter packs, which lean on them. Note the ordering
+  // these rely on: `emojiForIngredient` matches whole words longest-first, so
+  // 'Kidney beans' and 'White beans' win over a bare 'beans' appearing inside
+  // another name.
+  { name: 'Chickpeas', emoji: '🫘', unit: 'g', category: 'Vegetables' },
+  { name: 'Kidney beans', emoji: '🫘', unit: 'g', category: 'Vegetables' },
+  { name: 'White beans', emoji: '🫘', unit: 'g', category: 'Vegetables' },
   { name: 'Ginger', emoji: '🫚', unit: 'g', category: 'Vegetables' },
   { name: 'Lemongrass', emoji: '🌾', unit: 'stalks', category: 'Vegetables' },
 
@@ -120,6 +143,7 @@ export const COMMON_INGREDIENTS: CommonIngredient[] = [
   { name: 'Mint', emoji: '🌿', unit: 'g', category: 'Herbs & Spices' },
   { name: 'Thyme', emoji: '🌿', unit: 'sprigs', category: 'Herbs & Spices' },
   { name: 'Rosemary', emoji: '🌿', unit: 'sprigs', category: 'Herbs & Spices' },
+  { name: 'Oregano', emoji: '🌿', unit: 'tsp', category: 'Herbs & Spices' },
   { name: 'Bay leaf', emoji: '🍃', unit: '', category: 'Herbs & Spices' },
 
   // Sauces & Oils
@@ -154,11 +178,31 @@ export const COMMON_INGREDIENTS: CommonIngredient[] = [
 /** Fallback for anything the list doesn't recognise. */
 export const DEFAULT_INGREDIENT_EMOJI = '🥄'
 
-const BY_NAME = new Map(COMMON_INGREDIENTS.map((i) => [i.name.toLowerCase(), i.emoji]))
+/**
+ * **Both pantries, unconditionally — this must never consult the language.**
+ *
+ * The picker swaps lists when the toggle moves, because what it writes has to be
+ * in the language you're working in. This lookup is the opposite case: it runs on
+ * the *stored* name at render time, on recipes written who-knows-when. If it
+ * followed the current language, flipping to English would strip the emoji off
+ * every recipe the user had written in Khmer, and flipping back would restore
+ * them. That's the toggle reaching into content, which is the one thing the
+ * language feature promises not to do.
+ *
+ * Knowing both lists costs one concatenation and makes the question moot.
+ */
+const BY_NAME = new Map(
+  [...COMMON_INGREDIENTS, ...KHMER_INGREDIENTS].map((i) => [foldForCompare(i.name), i.emoji])
+)
 
 // Longest first so "chicken breast" wins over "chicken", and "coconut milk"
-// over "milk".
-const BY_LENGTH = [...COMMON_INGREDIENTS].sort((a, b) => b.name.length - a.name.length)
+// over "milk". Kept per-script: the fallback scan below picks the list matching
+// the query, so a Latin regex never walks a hundred Khmer names it cannot match.
+const LATIN_BY_LENGTH = [...COMMON_INGREDIENTS].sort((a, b) => b.name.length - a.name.length)
+const KHMER_BY_LENGTH = [...KHMER_INGREDIENTS].sort((a, b) => b.name.length - a.name.length)
+
+/** The Khmer block. Enough to route a name to the right fallback strategy. */
+const HAS_KHMER = /[ក-៿]/
 
 function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -173,19 +217,33 @@ function singular(value: string) {
 }
 
 /**
- * Best-effort emoji for a free-text ingredient name. Exact match first, then a
- * whole-word search so "2 cloves of garlic" and "garlic paste" both land on 🧄
- * without "oil" matching inside "boiling".
+ * Best-effort emoji for a free-text ingredient name, in either language. Exact
+ * match first, then a fallback scan whose strategy depends on the script.
+ *
+ * Folded rather than lowercased throughout, so a Khmer name carrying an
+ * invisible zero-width space still finds its entry — see `lib/text.ts`.
  */
 export function emojiForIngredient(name: string): string {
-  const key = name.trim().toLowerCase()
+  const key = foldForCompare(name)
   if (!key) return DEFAULT_INGREDIENT_EMOJI
 
   const exact = BY_NAME.get(key) ?? BY_NAME.get(singular(key))
   if (exact) return exact
 
-  const match = BY_LENGTH.find((i) =>
-    new RegExp(`\\b${escapeRegExp(i.name.toLowerCase())}s?\\b`).test(key)
+  if (HAS_KHMER.test(key)) {
+    // Khmer is written without spaces between words, so there are no boundaries
+    // to anchor on — `\b` is defined over [A-Za-z0-9_] and can never match here.
+    // A longest-first substring scan is what the absence of spaces actually
+    // calls for, and with no pluralisation to undo it's simpler than the Latin
+    // path rather than harder.
+    const match = KHMER_BY_LENGTH.find((i) => key.includes(foldForCompare(i.name)))
+    return match?.emoji ?? DEFAULT_INGREDIENT_EMOJI
+  }
+
+  // Whole words, so "2 cloves of garlic" and "garlic paste" both land on 🧄
+  // without "oil" matching inside "boiling".
+  const match = LATIN_BY_LENGTH.find((i) =>
+    new RegExp(`\\b${escapeRegExp(foldForCompare(i.name))}s?\\b`).test(key)
   )
   return match?.emoji ?? DEFAULT_INGREDIENT_EMOJI
 }

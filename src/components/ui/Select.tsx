@@ -3,8 +3,9 @@ import { Ionicons } from '@expo/vector-icons'
 import { FlatList, Modal, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import SearchBar from '@/components/ui/SearchBar'
-import { radius, spacing, type, useTheme, useThemedStyles } from '@/theme'
-import type { ThemeColors } from '@/theme'
+import { radius, spacing, useTheme, useThemedStyles } from '@/theme'
+import type { ThemeColors, TypeScale } from '@/theme'
+import { useT } from '@/i18n'
 
 export interface SelectOption {
   label: string
@@ -25,9 +26,9 @@ export default function Select({
   label,
   value,
   options,
-  placeholder = 'Select',
+  placeholder,
   title,
-  searchPlaceholder = 'Search',
+  searchPlaceholder,
   allowCustom = false,
   clearable = true,
   emojiFor,
@@ -46,6 +47,11 @@ export default function Select({
 }) {
   const { colors: c } = useTheme()
   const styles = useThemedStyles(makeStyles)
+  const t = useT()
+  // Defaulted here rather than in the signature: a parameter default can't
+  // call a hook, and every one of these needs translating.
+  const placeholderText = placeholder ?? t('select.placeholder')
+  const searchText = searchPlaceholder ?? t('select.search')
   const insets = useSafeAreaInsets()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -91,11 +97,11 @@ export default function Select({
         onPress={() => setOpen(true)}
         style={({ pressed }) => [styles.trigger, pressed && styles.triggerPressed]}
         accessibilityRole="button"
-        accessibilityLabel={label ? `${label}: ${value ?? placeholder}` : placeholder}
+        accessibilityLabel={label ? `${label}: ${value ?? placeholderText}` : placeholderText}
       >
         {value ? <Text style={styles.triggerEmoji}>{emojiFor?.(value)}</Text> : null}
         <Text style={[styles.triggerText, !value && styles.triggerPlaceholder]} numberOfLines={1}>
-          {value || placeholder}
+          {value || placeholderText}
         </Text>
         <Ionicons name="chevron-down" size={18} color={c.textMuted} />
       </Pressable>
@@ -104,13 +110,13 @@ export default function Select({
         <View style={[styles.sheet, { paddingTop: insets.top }]}>
           <View style={styles.header}>
             <View style={styles.headerRow}>
-              <Text style={styles.title}>{title ?? label ?? placeholder}</Text>
+              <Text style={styles.title}>{title ?? label ?? placeholderText}</Text>
               <Pressable
                 onPress={close}
                 hitSlop={10}
                 style={styles.close}
                 accessibilityRole="button"
-                accessibilityLabel="Close"
+                accessibilityLabel={t('common.close')}
               >
                 <Ionicons name="close" size={20} color={c.text} />
               </Pressable>
@@ -118,7 +124,7 @@ export default function Select({
             <SearchBar
               value={query}
               onChangeText={setQuery}
-              placeholder={allowCustom ? `${searchPlaceholder} or type your own` : searchPlaceholder}
+              placeholder={allowCustom ? `${searchText} ${t('select.orTypeYourOwn')}` : searchText}
             />
           </View>
 
@@ -148,7 +154,7 @@ export default function Select({
                     style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
                   >
                     <Text style={styles.emoji}>🚫</Text>
-                    <Text style={[styles.name, styles.clear]}>None</Text>
+                    <Text style={[styles.name, styles.clear]}>{t('select.none')}</Text>
                   </Pressable>
                 )}
               </>
@@ -186,7 +192,7 @@ export default function Select({
   )
 }
 
-const makeStyles = (c: ThemeColors) => StyleSheet.create({
+const makeStyles = (c: ThemeColors, type: TypeScale) => StyleSheet.create({
   wrapper: { gap: spacing.sm },
   label: { ...type.label, color: c.text },
   // Deliberately identical to Field's input box so the two line up in a form.
@@ -203,7 +209,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   },
   triggerPressed: { backgroundColor: c.surfaceSunken },
   triggerEmoji: { fontSize: 18 },
-  triggerText: { ...type.body, fontSize: 16, color: c.text, flex: 1, minWidth: 0 },
+  triggerText: { ...type.bodyLarge, color: c.text, flex: 1, minWidth: 0 },
   triggerPlaceholder: { color: c.textPlaceholder },
   sheet: { flex: 1, backgroundColor: c.bg },
   header: { padding: spacing.lg, gap: spacing.lg },
@@ -229,7 +235,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   rowSelected: { backgroundColor: c.surfaceAlt },
   rowPressed: { opacity: 0.6 },
   emoji: { fontSize: 20 },
-  name: { ...type.body, fontSize: 16, color: c.text, flex: 1, minWidth: 0 },
+  name: { ...type.bodyLarge, color: c.text, flex: 1, minWidth: 0 },
   clear: { color: c.textMuted },
   empty: { ...type.body, color: c.textMuted, textAlign: 'center', paddingVertical: spacing.xxl },
 })

@@ -1,8 +1,8 @@
 import { forwardRef } from 'react'
 import { StyleSheet, Text, TextInput, View } from 'react-native'
 import type { StyleProp, TextInputProps, ViewStyle } from 'react-native'
-import { radius, spacing, type, useTheme, useThemedStyles } from '@/theme'
-import type { ThemeColors } from '@/theme'
+import { radius, spacing, useTheme, useThemedStyles } from '@/theme'
+import type { ThemeColors, TypeScale } from '@/theme'
 
 /**
  * Label + input pair. Centralising `placeholderTextColor` here is what stops
@@ -47,7 +47,7 @@ const Field = forwardRef<
 
 export default Field
 
-const makeStyles = (c: ThemeColors) => StyleSheet.create({
+const makeStyles = (c: ThemeColors, type: TypeScale) => StyleSheet.create({
   wrapper: { gap: spacing.sm },
   label: { ...type.label, color: c.text },
   input: {
@@ -57,8 +57,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     borderRadius: radius.md,
     paddingHorizontal: spacing.lg,
     height: 50,
-    ...type.body,
-    fontSize: 16,
+    ...type.bodyLarge,
     color: c.text,
   },
   multiline: { height: undefined, minHeight: 92, paddingTop: spacing.md, textAlignVertical: 'top' },

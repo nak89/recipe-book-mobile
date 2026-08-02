@@ -23,6 +23,11 @@ export function usePulse(): Animated.Value {
         easing: Easing.inOut(Easing.ease),
         // react-native-web has no native driver to hand off to.
         useNativeDriver: Platform.OS !== 'web',
+        // Decoration, not an interaction. Left at its default, this loop holds
+        // an InteractionManager handle open for as long as a placeholder is on
+        // screen — so anything deferred with `runAfterInteractions` ends up
+        // waiting on a pulse that never stops.
+        isInteraction: false,
       })
 
     const animation = Animated.loop(Animated.sequence([step(1), step(0.5)]))

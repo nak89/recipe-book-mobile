@@ -1,12 +1,13 @@
 import { Ionicons } from '@expo/vector-icons'
 import { Pressable, StyleSheet, TextInput, View } from 'react-native'
-import { radius, spacing, type, useTheme, useThemedStyles } from '@/theme'
-import type { ThemeColors } from '@/theme'
+import { radius, spacing, useTheme, useThemedStyles } from '@/theme'
+import type { ThemeColors, TypeScale } from '@/theme'
+import { useT } from '@/i18n'
 
 export default function SearchBar({
   value,
   onChangeText,
-  placeholder = 'Search recipes',
+  placeholder,
 }: {
   value: string
   onChangeText: (value: string) => void
@@ -14,6 +15,7 @@ export default function SearchBar({
 }) {
   const { colors: c, isDark } = useTheme()
   const styles = useThemedStyles(makeStyles)
+  const t = useT()
   return (
     <View style={styles.wrapper}>
       <Ionicons name="search" size={18} color={c.textPlaceholder} />
@@ -21,7 +23,8 @@ export default function SearchBar({
         style={styles.input}
         value={value}
         onChangeText={onChangeText}
-        placeholder={placeholder}
+        // Defaulted here, not in the signature — the fallback needs `t`.
+        placeholder={placeholder ?? t('search.placeholder')}
         placeholderTextColor={c.textPlaceholder}
         keyboardAppearance={isDark ? 'dark' : 'light'}
         autoCapitalize="none"
@@ -29,7 +32,7 @@ export default function SearchBar({
         returnKeyType="search"
       />
       {value.length > 0 && (
-        <Pressable onPress={() => onChangeText('')} hitSlop={10} accessibilityLabel="Clear search">
+        <Pressable onPress={() => onChangeText('')} hitSlop={10} accessibilityLabel={t('search.clear')}>
           <Ionicons name="close-circle" size={18} color={c.textPlaceholder} />
         </Pressable>
       )}
@@ -37,7 +40,7 @@ export default function SearchBar({
   )
 }
 
-const makeStyles = (c: ThemeColors) => StyleSheet.create({
+const makeStyles = (c: ThemeColors, type: TypeScale) => StyleSheet.create({
   wrapper: {
     flexDirection: 'row',
     alignItems: 'center',

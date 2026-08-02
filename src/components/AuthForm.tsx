@@ -12,8 +12,11 @@ import {
   View,
 } from 'react-native'
 import PrimaryButton from '@/components/ui/PrimaryButton'
-import { radius, spacing, type, useTheme, useThemedStyles } from '@/theme'
-import type { ThemeColors } from '@/theme'
+import LanguageToggle from '@/components/ui/LanguageToggle'
+import { useT } from '@/i18n'
+import { authErrorKey } from '@/i18n/errors'
+import { radius, spacing, useTheme, useThemedStyles } from '@/theme'
+import type { ThemeColors, TypeScale } from '@/theme'
 
 /**
  * Shared by login and signup — the two screens differ only in copy and which
@@ -42,6 +45,7 @@ export default function AuthForm({
 }) {
   const { colors: c, isDark } = useTheme()
   const styles = useThemedStyles(makeStyles)
+  const t = useT()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -50,7 +54,7 @@ export default function AuthForm({
 
   async function handleSubmit() {
     if (!email.trim() || !password) {
-      setError('Enter your email and password')
+      setError(t('auth.missingFields'))
       return
     }
     setError(null)
@@ -58,7 +62,10 @@ export default function AuthForm({
     try {
       await onSubmit(email.trim(), password)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong')
+      // Supabase's messages are English and not ours to change, so they're
+      // mapped onto keys rather than shown raw — an unrecognised one falls
+      // back to a generic *translated* message. See i18n/errors.ts.
+      setError(t(authErrorKey(err)))
     } finally {
       setSubmitting(false)
     }
@@ -74,6 +81,13 @@ export default function AuthForm({
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
+        {/* Above the brand and right-aligned, so it's the first thing found and
+            the last thing read. It has to be reachable here and not only on the
+            intro carousel: a returning user who reinstalls skips straight past
+            the carousel to this screen, and without a control here there'd be no
+            way into Khmer at all before signing in. */}
+        <LanguageToggle style={styles.language} />
+
         <View style={styles.brand}>
           <View style={styles.mark}>
             <Ionicons name="restaurant" size={26} color={c.onPrimary} />
@@ -84,10 +98,10 @@ export default function AuthForm({
 
         <View style={styles.fields}>
           <View style={styles.field}>
-            <Text style={styles.label}>Email</Text>
+            <Text style={styles.label}>{t('auth.email')}</Text>
             <TextInput
               style={styles.input}
-              placeholder="you@example.com"
+              placeholder={t('auth.emailPlaceholder')}
               placeholderTextColor={c.textPlaceholder}
               keyboardAppearance={isDark ? 'dark' : 'light'}
               autoCapitalize="none"
@@ -101,11 +115,11 @@ export default function AuthForm({
           </View>
 
           <View style={styles.field}>
-            <Text style={styles.label}>Password</Text>
+            <Text style={styles.label}>{t('auth.password')}</Text>
             <View style={styles.passwordWrapper}>
               <TextInput
                 style={styles.passwordInput}
-                placeholder="Enter your password"
+                placeholder={t('auth.passwordPlaceholder')}
                 placeholderTextColor={c.textPlaceholder}
                 keyboardAppearance={isDark ? 'dark' : 'light'}
                 secureTextEntry={!showPassword}
@@ -118,7 +132,7 @@ export default function AuthForm({
               <Pressable
                 onPress={() => setShowPassword((v) => !v)}
                 hitSlop={8}
-                accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+                accessibilityLabel={showPassword ? t('auth.hidePassword') : t('auth.showPassword')}
               >
                 <Ionicons
                   name={showPassword ? 'eye-off-outline' : 'eye-outline'}
@@ -145,9 +159,14 @@ export default function AuthForm({
   )
 }
 
-const makeStyles = (c: ThemeColors) => StyleSheet.create({
+const makeStyles = (c: ThemeColors, type: TypeScale) => StyleSheet.create({
   container: { flex: 1, backgroundColor: c.bg },
   content: { flexGrow: 1, justifyContent: 'center', padding: spacing.xl, gap: spacing.xxl },
+  // `alignSelf` rather than a wrapper: the toggle sizes to its content, so
+  // pushing it right is all the placement it needs. Negative bottom margin
+  // absorbs the content gap, keeping it visually attached to the top of the
+  // screen instead of floating a third of the way down beside the brand.
+  language: { alignSelf: 'flex-end', marginBottom: -spacing.lg },
   brand: { alignItems: 'center', gap: spacing.sm },
   mark: {
     width: 60,
@@ -186,7 +205,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     height: 52,
   },
   // minWidth: 0 so a long password can't push the eye toggle off the edge.
-  passwordInput: { flex: 1, minWidth: 0, ...type.body, fontSize: 16, color: c.text },
+  passwordInput: { flex: 1, minWidth: 0, ...type.bodyLarge, color: c.text },
   error: { ...type.body, color: c.danger },
   footer: { flexDirection: 'row', justifyContent: 'center', gap: spacing.xs },
   footerText: { ...type.body, color: c.textMuted },

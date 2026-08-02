@@ -1,8 +1,9 @@
 import { Ionicons } from '@expo/vector-icons'
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { radius, shadow, spacing, type, useTheme, useThemedStyles } from '@/theme'
-import type { ThemeColors } from '@/theme'
+import { useT } from '@/i18n'
+import { radius, shadow, spacing, useTheme, useThemedStyles } from '@/theme'
+import type { ThemeColors, TypeScale } from '@/theme'
 
 export interface SheetAction {
   label: string
@@ -30,10 +31,11 @@ export default function ActionSheet({
   const { colors: c } = useTheme()
   const styles = useThemedStyles(makeStyles)
   const insets = useSafeAreaInsets()
+  const t = useT()
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Dismiss">
+      <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel={t('common.dismiss')}>
         {/* Swallow taps on the sheet itself so they don't dismiss it. */}
         <Pressable
           style={[styles.sheet, { paddingBottom: insets.bottom + spacing.md }]}
@@ -68,7 +70,7 @@ export default function ActionSheet({
             onPress={onClose}
             style={({ pressed }) => [styles.cancel, pressed && styles.actionPressed]}
           >
-            <Text style={styles.cancelLabel}>Cancel</Text>
+            <Text style={styles.cancelLabel}>{t('common.cancel')}</Text>
           </Pressable>
         </Pressable>
       </Pressable>
@@ -76,7 +78,7 @@ export default function ActionSheet({
   )
 }
 
-const makeStyles = (c: ThemeColors) => StyleSheet.create({
+const makeStyles = (c: ThemeColors, type: TypeScale) => StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
   sheet: {
     backgroundColor: c.surface,
@@ -110,7 +112,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     borderRadius: radius.md,
   },
   actionPressed: { backgroundColor: c.surfaceAlt },
-  actionLabel: { ...type.body, fontSize: 16, color: c.text },
+  actionLabel: { ...type.bodyLarge, color: c.text },
   destructive: { color: c.danger },
   cancel: {
     marginTop: spacing.xs,
@@ -119,5 +121,5 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     borderRadius: radius.md,
     backgroundColor: c.surfaceAlt,
   },
-  cancelLabel: { ...type.bodyStrong, fontSize: 16, color: c.text },
+  cancelLabel: { ...type.bodyLargeStrong, color: c.text },
 })

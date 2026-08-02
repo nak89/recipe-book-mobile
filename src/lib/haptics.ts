@@ -29,3 +29,36 @@ export function refreshFeedback() {
   if (Platform.OS === 'web') return
   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {})
 }
+
+/**
+ * Fired when the favourite heart is tapped — on the press, next to the
+ * optimistic flip, not after the request lands.
+ *
+ * The heart already fills under your finger and rolls back if the save fails,
+ * so waiting on the server would put the buzz a beat behind the thing it is
+ * confirming. Light because this is a toggle people hit repeatedly; anything
+ * heavier stops being satisfying and starts being tiring.
+ *
+ * Both toggle handlers call this — the dashboard's covers the two card variants
+ * *and* the action sheet, the detail screen's covers the hero. That's all three
+ * hearts, and keeping the call beside the state change is what stops the buzz
+ * and the fill drifting apart.
+ */
+export function favouriteFeedback() {
+  if (Platform.OS === 'web') return
+  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {})
+}
+
+/**
+ * Onboarding: advancing a carousel slide, and picking a starter pack.
+ *
+ * `selectionAsync` rather than an impact, because nothing is being *hit* — the
+ * user is moving through a set of options, which is the exact case iOS's
+ * selection feedback exists for. It is noticeably lighter than
+ * `ImpactFeedbackStyle.Light`, which matters on a screen that can fire it three
+ * times in as many seconds.
+ */
+export function selectionFeedback() {
+  if (Platform.OS === 'web') return
+  Haptics.selectionAsync().catch(() => {})
+}

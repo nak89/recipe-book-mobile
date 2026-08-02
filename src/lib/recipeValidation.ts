@@ -10,7 +10,28 @@
 // ordinary maps to `''`: the box is highlighted, and that's enough. So presence
 // of a key means "this field is wrong", never the truthiness of its value.
 
+import { foldForCompare } from '@/lib/text'
+import type { StringKey } from '@/i18n'
 import type { FormIngredient, FormStep } from '@/types/recipe'
+
+/**
+ * The translator, passed in rather than pulled from a hook.
+ *
+ * `validateStep` and `summarise` are plain functions — they're called from
+ * `handleSubmit` and from inside callbacks, not during render, so they can't
+ * call `useT()`. Threading `t` through is the honest version of that constraint;
+ * the alternative (returning keys and translating at every call site) would push
+ * the `{n}` substitutions out to the screens, where the limits aren't in scope.
+ */
+export type Translate = (key: StringKey) => string
+
+/** Fills `{name}` placeholders. Small because the messages are. */
+function fill(template: string, values: Record<string, string | number>): string {
+  return Object.entries(values).reduce(
+    (out, [key, value]) => out.replace(`{${key}}`, String(value)),
+    template
+  )
+}
 
 /** Field key → short explanation, or `''` when the highlight speaks for itself. */
 export type FieldErrors = Record<string, string>
@@ -104,10 +125,13 @@ export function utf8ByteLength(value: string): number {
  * capped — 100 steps of 2000 characters each is every field within its own
  * limit and still a quarter of a megabyte.
  */
-export function recipeSizeError(body: unknown): string | null {
+export function recipeSizeError(body: unknown, t: Translate): string | null {
   const bytes = utf8ByteLength(JSON.stringify(body))
   if (bytes <= MAX_RECIPE_BYTES) return null
-  return `This recipe is ${Math.round(bytes / 1024)}KB — the limit is ${MAX_RECIPE_BYTES / 1024}KB. Shorten the description or remove some steps.`
+  return fill(t('validation.tooBig'), {
+    n: Math.round(bytes / 1024),
+    max: MAX_RECIPE_BYTES / 1024,
+  })
 }
 
 /**
@@ -118,10 +142,10 @@ export function recipeSizeError(body: unknown): string | null {
  * wizard. `30.5` is also the one case worth a sentence: the box looks filled in,
  * so a bare highlight would leave you staring at it.
  */
-function wholeNumber(raw: string, label: string, max: number): string | null {
+function wholeNumber(raw: string, label: string, max: number, t: Translate): string | null {
   const value = raw.trim()
   if (!value) return HIGHLIGHT_ONLY
-  if (/^\d*[.,]\d+$/.test(value)) return `${label} must be a whole number.`
+  if (/^\d*[.,]\d+$/.test(value)) return fill(t('validation.wholeNumber'), { field: label })
   if (!/^\d+$/.test(value)) return HIGHLIGHT_ONLY
   const parsed = Number(value)
   if (parsed < 1 || parsed > max) return HIGHLIGHT_ONLY
@@ -145,8 +169,8 @@ function decimalNumber(raw: string, message: string, max: number): string | null
 }
 
 /** Quantities may be fractional and may be left blank (saved as 0). */
-function quantityError(raw: string): string | null {
-  return decimalNumber(raw, 'Amounts must be numbers.', LIMITS.quantity)
+function quantityError(raw: string, t: Translate): string | null {
+  return decimalNumber(raw, t('validation.amountsNumbers'), LIMITS.quantity)
 }
 
 /** Rows the user has actually started filling in; wholly blank rows are dropped. */
@@ -162,7 +186,11 @@ export function usedSteps(rows: FormStep[]) {
  * Errors for one wizard step. Keys are inserted in the order the fields appear
  * on screen, so the first key is the field to scroll to.
  */
-export function validateStep(index: number, values: RecipeFormValues): FieldErrors {
+export function validateStep(
+  index: number,
+  values: RecipeFormValues,
+  t: Translate
+): FieldErrors {
   const errors: FieldErrors = {}
 
   if (index === 0) {
@@ -172,24 +200,30 @@ export function validateStep(index: number, values: RecipeFormValues): FieldErro
     if (!title) {
       errors.title = HIGHLIGHT_ONLY
     } else if (title.length > LIMITS.title) {
-      errors.title = `Title is too long (${LIMITS.title} characters max).`
-    } else if (values.takenTitles.has(title.toLowerCase())) {
+      errors.title = fill(t('validation.titleTooLong'), { n: LIMITS.title })
+      // `takenTitles` is folded by the caller, so the needle must be folded too —
+      // an invisible zero-width space on either side would slip the check.
+    } else if (values.takenTitles.has(foldForCompare(title))) {
       // The one error where the field looks perfectly fine.
-      errors.title = 'You already have a recipe with this title.'
+      errors.title = t('error.api.titleTaken')
     }
 
     // Optional fields still need a ceiling — "optional" means you may leave it
     // out, not that anything goes once you fill it in.
     if (countWords(values.description) > LIMITS.descriptionWords) {
-      errors.description = `Description is too long (${LIMITS.descriptionWords.toLocaleString()} words max).`
+      errors.description = fill(t('validation.descriptionWords'), {
+        n: LIMITS.descriptionWords.toLocaleString(),
+      })
     } else if (values.description.trim().length > LIMITS.description) {
-      errors.description = `Description is too long (${LIMITS.description.toLocaleString()} characters max).`
+      errors.description = fill(t('validation.descriptionChars'), {
+        n: LIMITS.description.toLocaleString(),
+      })
     }
 
-    const minutes = wholeNumber(values.totalMinutes, 'Total minutes', LIMITS.totalMinutes)
+    const minutes = wholeNumber(values.totalMinutes, t('form.totalMinutes'), LIMITS.totalMinutes, t)
     if (minutes !== null) errors.totalMinutes = minutes
 
-    const servings = wholeNumber(values.servings, 'Servings', LIMITS.servings)
+    const servings = wholeNumber(values.servings, t('form.servings'), LIMITS.servings, t)
     if (servings !== null) errors.servings = servings
 
     if (values.cuisine.trim().length > LIMITS.cuisine) errors.cuisine = HIGHLIGHT_ONLY
@@ -199,9 +233,9 @@ export function validateStep(index: number, values: RecipeFormValues): FieldErro
       .map((t) => t.trim())
       .filter(Boolean)
     if (tools.length > LIMITS.tools) {
-      errors.tools = `Too many tools (${LIMITS.tools} max).`
+      errors.tools = fill(t('validation.tooManyTools'), { n: LIMITS.tools })
     } else if (tools.some((t) => t.length > LIMITS.tool)) {
-      errors.tools = 'Separate tools with commas — one of them is too long.'
+      errors.tools = t('validation.toolTooLong')
     }
   }
 
@@ -215,7 +249,7 @@ export function validateStep(index: number, values: RecipeFormValues): FieldErro
       errors.ingredients = HIGHLIGHT_ONLY
       for (const row of used) errors[ingredientKey(row.id)] = HIGHLIGHT_ONLY
     } else if (used.length > LIMITS.ingredients) {
-      errors.ingredients = `Too many ingredients (${LIMITS.ingredients} max).`
+      errors.ingredients = fill(t('validation.tooManyIngredients'), { n: LIMITS.ingredients })
     }
 
     for (const row of used) {
@@ -224,7 +258,7 @@ export function validateStep(index: number, values: RecipeFormValues): FieldErro
         errors[ingredientKey(row.id)] = HIGHLIGHT_ONLY
         continue
       }
-      const quantity = quantityError(row.quantity)
+      const quantity = quantityError(row.quantity, t)
       if (quantity !== null) {
         errors[ingredientKey(row.id)] = quantity
         continue
@@ -239,12 +273,14 @@ export function validateStep(index: number, values: RecipeFormValues): FieldErro
       errors.steps = HIGHLIGHT_ONLY
       for (const row of values.steps) errors[stepKey(row.id)] = HIGHLIGHT_ONLY
     } else if (used.length > LIMITS.steps) {
-      errors.steps = `Too many steps (${LIMITS.steps} max).`
+      errors.steps = fill(t('validation.tooManySteps'), { n: LIMITS.steps })
     }
 
     for (const row of used) {
       if (row.instruction.trim().length > LIMITS.instruction) {
-        errors[stepKey(row.id)] = `A step can't be longer than ${LIMITS.instruction.toLocaleString()} characters.`
+        errors[stepKey(row.id)] = fill(t('validation.stepTooLong'), {
+          n: LIMITS.instruction.toLocaleString(),
+        })
       }
     }
   }
@@ -254,13 +290,17 @@ export function validateStep(index: number, values: RecipeFormValues): FieldErro
     // know", so this step can never block Next or Save on emptiness. It only
     // bounds what you did type.
     const nutrition: [string, string, string][] = [
-      ['calories', values.calories, 'Calories'],
-      ['protein', values.protein, 'Protein'],
-      ['carbs', values.carbs, 'Carbs'],
-      ['fat', values.fat, 'Fat'],
+      ['calories', values.calories, t('detail.calories')],
+      ['protein', values.protein, t('detail.protein')],
+      ['carbs', values.carbs, t('detail.carbs')],
+      ['fat', values.fat, t('detail.fat')],
     ]
     for (const [key, raw, label] of nutrition) {
-      const error = decimalNumber(raw, `${label} must be a number.`, LIMITS[key as keyof typeof LIMITS])
+      const error = decimalNumber(
+        raw,
+        fill(t('validation.mustBeNumber'), { field: label }),
+        LIMITS[key as keyof typeof LIMITS]
+      )
       if (error !== null) errors[key] = error
     }
   }
@@ -274,13 +314,13 @@ export function validateStep(index: number, values: RecipeFormValues): FieldErro
  * can't say — and stays generic when there's more than one thing wrong rather
  * than stacking messages.
  */
-export function summarise(errors: FieldErrors): string | null {
+export function summarise(errors: FieldErrors, t: Translate): string | null {
   const keys = Object.keys(errors)
   if (keys.length === 0) return null
   const explained = keys.map((k) => errors[k]).filter(Boolean)
-  if (explained.length === 0) return 'Fill in the highlighted fields.'
+  if (explained.length === 0) return t('validation.fillHighlighted')
   if (explained.length === 1 && keys.length === 1) return explained[0]
-  return 'Check the highlighted fields.'
+  return t('validation.checkHighlighted')
 }
 
 /** Which wizard step owns a field key — used to jump to the step with the error. */

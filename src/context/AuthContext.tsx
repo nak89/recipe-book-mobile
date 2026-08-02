@@ -11,13 +11,26 @@ interface AuthContextType {
   /** Never null once signed in — falls back to the email's local part. */
   displayName: string
   memberSince: Date | null
+  /** False until the post-signup flow (name, packs, tutorial) has been finished or skipped. */
+  onboarded: boolean
   login: (email: string, password: string) => Promise<void>
   signup: (email: string, password: string) => Promise<void>
   logout: () => Promise<void>
   updateDisplayName: (name: string) => Promise<void>
+  completeOnboarding: () => Promise<void>
+  /** Dev only — see the reset button in the profile tab. */
+  resetOnboarding: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
+
+/**
+ * Cap on the display name, shared by the onboarding step and the profile
+ * editor. Long enough for any real name, short enough that `initials()` and the
+ * profile header still lay out. It lives here because this is what owns the
+ * name — two literals in two screens is exactly the pair that drifts.
+ */
+export const MAX_NAME_LENGTH = 40
 
 /**
  * There is no `User` table — Supabase Auth owns identity — so the display name
@@ -73,6 +86,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession((current) => (current && data.user ? { ...current, user: data.user } : current))
   }
 
+  /**
+   * Marks the post-signup flow done. Called on *finish and on skip* — skipping
+   * is a decision, not a deferral, and re-offering it on the next launch would
+   * make it a nag.
+   *
+   * Supabase merges `data` into the existing `user_metadata` rather than
+   * replacing it, which is what lets this write `onboardedAt` without clobbering
+   * `displayName` set two screens earlier.
+   */
+  async function completeOnboarding() {
+    const { data, error } = await supabase.auth.updateUser({
+      data: { onboardedAt: new Date().toISOString() },
+    })
+    if (error) throw new Error(error.message)
+    setSession((current) => (current && data.user ? { ...current, user: data.user } : current))
+  }
+
+  /**
+   * The inverse, for the dev reset button — puts the account back to never
+   * having been through the flow.
+   *
+   * `null` rather than omitting the key, for the same reason the recipe routes
+   * send `null` for a cleared nutrition field: a merge treats an absent key as
+   * "leave it alone", so only an explicit null actually clears it. `onboarded`
+   * reads it through `Boolean()`, so null and absent are then the same thing.
+   */
+  async function resetOnboarding() {
+    const { data, error } = await supabase.auth.updateUser({
+      data: { onboardedAt: null },
+    })
+    if (error) throw new Error(error.message)
+    setSession((current) => (current && data.user ? { ...current, user: data.user } : current))
+  }
+
   const value = useMemo<AuthContextType>(
     () => ({
       session,
@@ -81,10 +128,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email: session?.user.email ?? null,
       displayName: nameFromSession(session),
       memberSince: session?.user.created_at ? new Date(session.user.created_at) : null,
+      // Absence is the whole gate: an account that has never finished the flow
+      // has no `onboardedAt`, and so does one that force-quit halfway through.
+      // Both should see it, so both are treated the same.
+      onboarded: Boolean(session?.user.user_metadata?.onboardedAt),
       login,
       signup,
       logout,
       updateDisplayName,
+      completeOnboarding,
+      resetOnboarding,
     }),
     [session, loading]
   )

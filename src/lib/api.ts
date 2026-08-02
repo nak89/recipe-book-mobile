@@ -75,6 +75,46 @@ export function setFavourite(id: string, isFavourite: boolean, token: string) {
   })
 }
 
+/** A starter pack as onboarding's picker needs it — no recipe bodies, by design. */
+export interface StarterPackSummary {
+  id: string
+  name: string
+  emoji: string
+  blurb: string
+  /**
+   * Khmer card copy. The endpoint returns both languages and the client picks,
+   * so the API stays stateless about language — the same reason the preference
+   * never leaves the device.
+   *
+   * `sampleTitles` has no Khmer counterpart on purpose: those are recipe titles,
+   * and the fifteen pack recipes are deliberately not translated.
+   */
+  nameKm: string
+  blurbKm: string
+  count: number
+  sampleTitles: string[]
+}
+
+export function getStarterPacks(token: string) {
+  return request<StarterPackSummary[]>('/starter-packs', token)
+}
+
+/**
+ * Sends pack *ids*, never recipes. Fifteen recipe bodies would blow past the
+ * server's 100kb body limit, and ids keep the whole import to one transaction
+ * instead of fifteen requests that could fail halfway through.
+ *
+ * `skipped` counts titles the account already had. Re-importing is deliberately
+ * a no-op rather than an error, so someone who quits mid-onboarding and comes
+ * back doesn't hit a wall of duplicate-title failures.
+ */
+export function importStarterPacks(packIds: string[], token: string) {
+  return request<{ imported: number; skipped: number }>('/recipes/import', token, {
+    method: 'POST',
+    body: JSON.stringify({ packIds }),
+  })
+}
+
 // Uploads a picked photo (local file uri) to the backend, which stores it
 // and returns a hosted URL to save as the recipe's photoUrl.
 export async function uploadPhoto(uri: string, token: string): Promise<string> {
