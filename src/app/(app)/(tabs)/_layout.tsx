@@ -13,8 +13,13 @@ export default function TabsLayout() {
         tabBar={(props) => <TabBar {...props} />}
         sceneStyle={{ backgroundColor: c.bg }}
       >
-        <SwipeTabs.Screen name="index" options={{ title: 'Home' }} />
-        <SwipeTabs.Screen name="profile" options={{ title: 'Profile' }} />
+        {/* Two destinations, and profile is deliberately not one of them — it
+            sits in each screen's header instead. A tab is somewhere you can be
+            and swipe between; settings is somewhere you go and come back from.
+            These titles are English route labels, not UI copy — the dock reads
+            its own translated strings from `tabs.*`. */}
+        <SwipeTabs.Screen name="index" options={{ title: 'Recipes' }} />
+        <SwipeTabs.Screen name="planner" options={{ title: 'Meal planner' }} />
       </SwipeTabs>
     </DockScrollProvider>
   )

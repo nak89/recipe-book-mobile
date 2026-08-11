@@ -50,6 +50,8 @@ import Field from '@/components/ui/Field'
 import PrimaryButton from '@/components/ui/PrimaryButton'
 import Select from '@/components/ui/Select'
 import IngredientPicker from '@/components/IngredientPicker'
+import ToolPicker from '@/components/ToolPicker'
+import UnitPicker from '@/components/UnitPicker'
 import { emojiForIngredient } from '@/data/ingredients'
 import type { CommonIngredient } from '@/data/ingredients'
 import { emojiForCuisine } from '@/data/cuisines'
@@ -75,6 +77,13 @@ const STEP_KEYS = [
   'form.step.steps',
   'form.step.nutrition',
 ] as const
+
+/**
+ * The round numbers a recipe's total time almost always lands on. The picker
+ * keeps `allowCustom`, so these are a shortcut and not a limit — the column
+ * takes any whole number, and plenty of existing recipes sit between them.
+ */
+const TOTAL_MINUTE_PRESETS = [5, 10, 15, 30, 45, 60, 75, 90, 120]
 
 /**
  * One page of the wizard: a full-width vertical scroller inside the pager.
@@ -226,12 +235,27 @@ export default function RecipeForm({
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [toolPickerOpen, setToolPickerOpen] = useState(false)
+  // The id of the ingredient row whose unit is being picked, or null. One picker
+  // instance serves every row — mounting one per row would put a Modal behind
+  // each of up to a hundred ingredients.
+  const [unitPickerFor, setUnitPickerFor] = useState<string | null>(null)
   const [takenTitles, setTakenTitles] = useState<Set<string>>(new Set())
 
   const cuisines = useCuisines()
   const cuisineOptions = useMemo(
     () => cuisines.map((c) => ({ label: c.name, emoji: c.emoji })),
     [cuisines]
+  )
+  const minuteOptions = useMemo(
+    () => TOTAL_MINUTE_PRESETS.map((n) => ({ label: String(n), emoji: '⏱' })),
+    []
+  )
+  // The comma string as a list. It's what the picker ticks against, so a tool
+  // typed by hand shows as added there too.
+  const selectedTools = useMemo(
+    () => tools.split(',').map((s) => s.trim()).filter(Boolean),
+    [tools]
   )
 
   // The other recipes' titles, so a duplicate is caught on this screen instead
@@ -414,6 +438,35 @@ export default function RecipeForm({
   function removeCommonIngredient(name: string) {
     const key = name.trim().toLowerCase()
     setIngredients((prev) => prev.filter((i) => i.name.trim().toLowerCase() !== key))
+  }
+
+  /**
+   * Tools stay a comma-separated string rather than becoming an array: the field
+   * below the picker is still the real input, `handleSubmit` still splits it,
+   * and the validation rules don't move. These two just edit that string.
+   *
+   * Folded, not lowercased, on both sides — a Khmer tool name can carry an
+   * invisible zero-width space, and an untick that doesn't match leaves the tool
+   * on screen looking like a dead button.
+   */
+  function addTool(name: string) {
+    setTools((prev) => {
+      const list = prev.split(',').map((s) => s.trim()).filter(Boolean)
+      if (list.some((tool) => foldForCompare(tool) === foldForCompare(name))) return prev
+      return [...list, name].join(', ')
+    })
+    clearError('tools')
+  }
+
+  function removeTool(name: string) {
+    setTools((prev) =>
+      prev
+        .split(',')
+        .map((s) => s.trim())
+        .filter((tool) => tool && foldForCompare(tool) !== foldForCompare(name))
+        .join(', ')
+    )
+    clearError('tools')
   }
 
   function updateStep(id: string, instruction: string) {
@@ -802,15 +855,25 @@ export default function RecipeForm({
               {/* Registered as one block: the two fields sit side by side, so a
                   message about either scrolls to the same place. */}
               <View onLayout={registerField('totalMinutes', 'servings')} style={styles.row}>
-                <Field
+                {/* Bare numbers as labels, because a Select stores the label it
+                    shows — "30 min" would land in the column and fail to parse.
+                    The unit is carried by the field label above the trigger. */}
+                <Select
                   label={t('form.totalMinutes')}
-                  value={totalMinutes}
-                  onChangeText={(v) => {
-                    setTotalMinutes(v)
+                  value={totalMinutes || undefined}
+                  onChange={(value) => {
+                    setTotalMinutes(value ?? '')
                     clearError('totalMinutes')
                   }}
-                  keyboardType="number-pad"
+                  options={minuteOptions}
                   placeholder={t('form.totalMinutesPlaceholder')}
+                  title={t('form.totalMinutes')}
+                  emojiFor={() => '⏱'}
+                  // Nine round numbers cover almost every recipe; the rest type
+                  // their own, and an already-stored odd time stays editable.
+                  allowCustom
+                  // Blank fails validation, so "None" would offer an invalid state.
+                  clearable={false}
                   containerStyle={styles.rowItem}
                   invalid={invalid('totalMinutes')}
                 />
@@ -843,9 +906,26 @@ export default function RecipeForm({
                 // The column is free text, so the list is a shortcut, not a limit.
                 allowCustom
               />
-              <View onLayout={registerField('tools')}>
+              {/* The label heads the whole block rather than the input, because
+                  the browse row belongs to it too — same bargain as the
+                  ingredients step: tap the common ones, type the rest below.
+                  `Recipe.tools` is free text, so the list can't be a closed set
+                  and the field has to stay. */}
+              <View onLayout={registerField('tools')} style={styles.group}>
+                <Text style={styles.label}>{t('form.tools')}</Text>
+                <Pressable
+                  onPress={() => setToolPickerOpen(true)}
+                  style={({ pressed }) => [styles.browse, pressed && styles.browsePressed]}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.browseEmoji}>🍳</Text>
+                  <View style={styles.browseText}>
+                    <Text style={styles.browseTitle}>{t('form.pickTools')}</Text>
+                    <Text style={styles.browseHint}>{t('form.pickToolsHint')}</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={c.textMuted} />
+                </Pressable>
                 <Field
-                  label={t('form.tools')}
                   value={tools}
                   onChangeText={(v) => {
                     setTools(v)
@@ -874,9 +954,10 @@ export default function RecipeForm({
                 <Ionicons name="chevron-forward" size={18} color={c.textMuted} />
               </Pressable>
 
-              {/* One bordered row holding three borderless inputs, rather than
-                  three separate Fields — fixed widths and a single container are
-                  what keep the unit on the same line as the name on a phone. */}
+              {/* One bordered row holding two borderless inputs and the unit's
+                  tap target, rather than three separate Fields — fixed widths
+                  and a single container are what keep the unit on the same line
+                  as the name on a phone. */}
               {ingredients.map((ingredient) => (
                 <View
                   key={ingredient.id}
@@ -905,16 +986,29 @@ export default function RecipeForm({
                     keyboardAppearance={isDark ? 'dark' : 'light'}
                     keyboardType="numeric"
                   />
-                  <TextInput
-                    style={styles.ingredientUnit}
-                    value={ingredient.unit}
-                    onChangeText={(v) => updateIngredient(ingredient.id, 'unit', v)}
-                    placeholder={t('form.unitPlaceholder')}
-                    placeholderTextColor={c.textPlaceholder}
-                    keyboardAppearance={isDark ? 'dark' : 'light'}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                  />
+                  {/* Tap to pick, rather than type. No chevron and no border:
+                      the 46pt is the row's whole remaining budget, and spending
+                      any of it on an affordance is what makes the row wrap. The
+                      picker keeps a free-text row, so nothing is unreachable. */}
+                  <Pressable
+                    onPress={() => setUnitPickerFor(ingredient.id)}
+                    style={({ pressed }) => [
+                      styles.ingredientUnit,
+                      pressed && styles.ingredientUnitPressed,
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${t('unitPicker.title')}: ${ingredient.unit || t('unitPicker.none')}`}
+                  >
+                    <Text
+                      style={[
+                        styles.ingredientUnitText,
+                        !ingredient.unit && styles.ingredientUnitPlaceholder,
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {ingredient.unit || t('form.unitPlaceholder')}
+                    </Text>
+                  </Pressable>
                   <Pressable
                     onPress={() => removeIngredient(ingredient.id)}
                     hitSlop={10}
@@ -1088,6 +1182,24 @@ export default function RecipeForm({
         onRemove={removeCommonIngredient}
         onClose={() => setPickerOpen(false)}
       />
+
+      <ToolPicker
+        visible={toolPickerOpen}
+        selectedNames={selectedTools}
+        onAdd={addTool}
+        onRemove={removeTool}
+        onClose={() => setToolPickerOpen(false)}
+      />
+
+      {/* One instance for the whole form; `unitPickerFor` says which row it's
+          editing. `value` reads back out of state, so reopening it shows the
+          unit currently on that row rather than the one last picked. */}
+      <UnitPicker
+        visible={unitPickerFor !== null}
+        value={ingredients.find((i) => i.id === unitPickerFor)?.unit ?? ''}
+        onSelect={(unit) => unitPickerFor && updateIngredient(unitPickerFor, 'unit', unit)}
+        onClose={() => setUnitPickerFor(null)}
+      />
     </KeyboardAvoidingView>
   )
 }
@@ -1138,12 +1250,16 @@ const makeStyles = (c: ThemeColors, type: TypeScale) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: c.scrim,
     borderRadius: radius.pill,
     paddingHorizontal: spacing.md,
     paddingVertical: 6,
   },
-  photoChangeText: { ...type.caption, color: c.onPrimary },
+  // `textOnPhoto`, not `onPrimary`. This sits on a scrim over the photograph,
+  // not on a primary fill — it only ever looked right because `onPrimary` was
+  // white too. It stopped being white when `primary` became the bright green,
+  // and ink on a 55%-black scrim is unreadable.
+  photoChangeText: { ...type.caption, color: c.textOnPhoto },
   group: { gap: spacing.sm },
   label: { ...type.label, color: c.text },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
@@ -1206,16 +1322,21 @@ const makeStyles = (c: ThemeColors, type: TypeScale) => StyleSheet.create({
     color: c.text,
     paddingVertical: 0,
   },
-  // A step below the name and quantity, and the only one of the three left
-  // on `body`. The three fixed widths are what stop this row wrapping onto a
-  // second line, so a larger face costs visible characters, never layout —
-  // these are TextInputs and they scroll.
+  // A tap target rather than an input, but the same 46pt as when it was one.
+  // The three fixed widths are what stop this row wrapping onto a second line,
+  // so nothing here is free to grow — which is also why the unit is a step
+  // below the name and quantity, and why it carries no chevron.
   ingredientUnit: {
     width: 46,
-    ...type.body,
-    color: c.textMuted,
-    paddingVertical: 0,
+    height: 34,
+    justifyContent: 'center',
+    borderRadius: radius.sm,
   },
+  ingredientUnitPressed: { backgroundColor: c.surfaceSunken },
+  // Text now, not the input itself, so `numberOfLines` can truncate a long
+  // custom unit instead of the row growing to fit it.
+  ingredientUnitText: { ...type.body, color: c.textMuted },
+  ingredientUnitPlaceholder: { color: c.textPlaceholder },
   ingredientRemove: { width: 20, alignItems: 'center', justifyContent: 'center' },
   stepRow: { flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start' },
   stepNumber: {

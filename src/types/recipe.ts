@@ -47,6 +47,33 @@ export interface Recipe {
   steps: Step[]
 }
 
+/**
+ * One planned meal. `date` is a plain `YYYY-MM-DD` calendar day, never a
+ * timestamp — a plan is "Tuesday's dinner", not an instant, and parsing it into
+ * a `Date` anywhere but at the point of formatting is how it starts sliding by
+ * a day across timezones.
+ *
+ * `recipe` is the trimmed shape the planner row renders, not a full `Recipe`:
+ * the endpoint deliberately doesn't send ingredients or steps to a screen that
+ * shows neither.
+ */
+export interface PlanSlot {
+  id: string
+  date: string
+  mealtime: Mealtime
+  recipeId: string
+  recipe: PlannedRecipe
+}
+
+export interface PlannedRecipe {
+  id: string
+  title: string
+  photoUrl?: string | null
+  totalMinutes: number
+  servings: number
+  mealtime?: Mealtime | null
+}
+
 export interface RecipeInput {
   title: string
   description?: string

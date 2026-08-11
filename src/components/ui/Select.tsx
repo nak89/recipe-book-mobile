@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Ionicons } from '@expo/vector-icons'
 import { FlatList, Modal, Pressable, StyleSheet, Text, View } from 'react-native'
+import type { StyleProp, ViewStyle } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import SearchBar from '@/components/ui/SearchBar'
 import { radius, spacing, useTheme, useThemedStyles } from '@/theme'
@@ -21,6 +22,14 @@ export interface SelectOption {
  * that doesn't match an option can be committed as-is. That's required wherever
  * the underlying column is free text, so the picker can never refuse to
  * represent a value that's already stored.
+ *
+ * There is no separate `value` on an option: **the label is the stored value.**
+ * Anything needing a different display string wants a translation layer like
+ * `i18n/labels.ts`, not a second field here — a picker over a free-text column
+ * has to be able to offer text the list has never seen.
+ *
+ * `containerStyle` and `invalid` mirror `Field`, so a Select can sit in a form
+ * row beside one and go red on the same terms.
  */
 export default function Select({
   label,
@@ -31,6 +40,8 @@ export default function Select({
   searchPlaceholder,
   allowCustom = false,
   clearable = true,
+  invalid,
+  containerStyle,
   emojiFor,
   onChange,
 }: {
@@ -42,6 +53,8 @@ export default function Select({
   searchPlaceholder?: string
   allowCustom?: boolean
   clearable?: boolean
+  invalid?: boolean
+  containerStyle?: StyleProp<ViewStyle>
   emojiFor?: (value: string) => string | undefined
   onChange: (value?: string) => void
 }) {
@@ -90,12 +103,16 @@ export default function Select({
   }
 
   return (
-    <View style={styles.wrapper}>
+    <View style={[styles.wrapper, containerStyle]}>
       {label && <Text style={styles.label}>{label}</Text>}
 
       <Pressable
         onPress={() => setOpen(true)}
-        style={({ pressed }) => [styles.trigger, pressed && styles.triggerPressed]}
+        style={({ pressed }) => [
+          styles.trigger,
+          invalid && styles.triggerInvalid,
+          pressed && styles.triggerPressed,
+        ]}
         accessibilityRole="button"
         accessibilityLabel={label ? `${label}: ${value ?? placeholderText}` : placeholderText}
       >
@@ -144,7 +161,7 @@ export default function Select({
                   >
                     <Text style={styles.emoji}>✏️</Text>
                     <Text style={styles.name} numberOfLines={1}>
-                      Use “{custom}”
+                      {`${t('select.use')} “${custom}”`}
                     </Text>
                   </Pressable>
                 )}
@@ -182,7 +199,7 @@ export default function Select({
             }}
             ListEmptyComponent={
               custom ? null : (
-                <Text style={styles.empty}>Nothing matches “{trimmed}”</Text>
+                <Text style={styles.empty}>{`${t('select.noMatch')} “${trimmed}”`}</Text>
               )
             }
           />
@@ -207,6 +224,8 @@ const makeStyles = (c: ThemeColors, type: TypeScale) => StyleSheet.create({
     paddingHorizontal: spacing.lg,
     height: 50,
   },
+  // Matches Field's `inputInvalid` — the outline is the whole message.
+  triggerInvalid: { borderColor: c.danger, backgroundColor: c.dangerSoft },
   triggerPressed: { backgroundColor: c.surfaceSunken },
   triggerEmoji: { fontSize: 18 },
   triggerText: { ...type.bodyLarge, color: c.text, flex: 1, minWidth: 0 },

@@ -58,7 +58,7 @@ function load() {
 }
 
 /**
- * Puts the carousel back, for the dev reset in the profile tab.
+ * Puts the carousel back, for the dev reset on the profile screen.
  *
  * A plain function rather than part of the hook because the caller doesn't want
  * the value, only the write — and it publishes through the same store, so the

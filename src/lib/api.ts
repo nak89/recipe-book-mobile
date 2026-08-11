@@ -1,5 +1,5 @@
 import { Platform } from 'react-native'
-import type { Recipe, RecipeInput } from '@/types/recipe'
+import type { Mealtime, PlanSlot, Recipe, RecipeInput } from '@/types/recipe'
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL
 
@@ -73,6 +73,31 @@ export function setFavourite(id: string, isFavourite: boolean, token: string) {
     method: 'PATCH',
     body: JSON.stringify({ isFavourite }),
   })
+}
+
+/**
+ * The meal planner. A slot is addressed by `(date, mealtime)`, so filling one is
+ * an idempotent PUT to a known address rather than a POST — two taps on the same
+ * slot leave one row, which is what makes the screen's optimistic writes safe.
+ *
+ * `date` is a `YYYY-MM-DD` string in both directions. Don't hand these functions
+ * a `Date`: `toISOString()` on a local-midnight Date returns the *previous* day
+ * anywhere west of UTC, which is exactly the bug the column type exists to
+ * prevent. Use `toDateKey` from `lib/week.ts`.
+ */
+export function getPlan(from: string, to: string, token: string) {
+  return request<PlanSlot[]>(`/meal-plan?from=${from}&to=${to}`, token)
+}
+
+export function setPlanSlot(date: string, mealtime: Mealtime, recipeId: string, token: string) {
+  return request<PlanSlot>(`/meal-plan/${date}/${mealtime}`, token, {
+    method: 'PUT',
+    body: JSON.stringify({ recipeId }),
+  })
+}
+
+export function clearPlanSlot(date: string, mealtime: Mealtime, token: string) {
+  return request<void>(`/meal-plan/${date}/${mealtime}`, token, { method: 'DELETE' })
 }
 
 /** A starter pack as onboarding's picker needs it — no recipe bodies, by design. */

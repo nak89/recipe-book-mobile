@@ -1,6 +1,6 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Ionicons } from '@expo/vector-icons'
-import { useFocusEffect, useRouter } from 'expo-router'
+import { useFocusEffect, useNavigation, useRouter } from 'expo-router'
 import {
   FlatList,
   Pressable,
@@ -29,6 +29,8 @@ import Chip from '@/components/ui/Chip'
 import SearchBar from '@/components/ui/SearchBar'
 import ActionSheet from '@/components/ui/ActionSheet'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
+import ProfileButton from '@/components/ui/ProfileButton'
+import type { SwipeTabsNavigationProp } from '@/navigation/SwipeTabs'
 import { radius, spacing, useTheme, useThemedStyles } from '@/theme'
 import type { ThemeColors, TypeScale } from '@/theme'
 import { MEALTIMES } from '@/types/recipe'
@@ -47,10 +49,12 @@ export default function DashboardScreen() {
   const mealtimeLabel = useMealtimeLabel()
   const { token, displayName } = useAuth()
   const router = useRouter()
+  const navigation = useNavigation<SwipeTabsNavigationProp>()
   const insets = useSafeAreaInsets()
   // The dock floats over the grid, so the last row has to be scrolled clear of it.
   const dockClearance = useDockClearance()
   const dockScrollHandler = useDockScrollHandler()
+  const listRef = useRef<FlatList<Recipe | null>>(null)
 
   const [recipes, setRecipes] = useState<Recipe[]>([])
   const [loading, setLoading] = useState(true)
@@ -103,6 +107,29 @@ export default function DashboardScreen() {
         cancelled = true
       }
     }, [token])
+  )
+
+  /**
+   * Tapping Recipes while you're already on it returns the grid to the top — the
+   * only alternative, after a few screens of recipes, is a long drag.
+   *
+   * `TabBar` emits `tabPress` whether or not the tab is focused (it only gates
+   * the `navigate` call), so the `isFocused` guard is what makes this a re-tap
+   * and not a tab change: both scenes stay mounted in the pager, and without it
+   * pressing Recipes *from the planner* would animate-scroll this grid under the
+   * page transition.
+   *
+   * `animated` is load-bearing. The upward scroll frames are what bring the dock
+   * back — `TabBar`'s reveal effect watches `state.index`, which doesn't change
+   * on a re-tap, so a jump to 0 would leave the dock hidden.
+   */
+  useEffect(
+    () =>
+      navigation.addListener('tabPress', () => {
+        if (!navigation.isFocused()) return
+        listRef.current?.scrollToOffset({ offset: 0, animated: true })
+      }),
+    [navigation]
   )
 
   const visible = useMemo(() => {
@@ -201,8 +228,9 @@ export default function DashboardScreen() {
           accessibilityLabel={t('dashboard.shuffle')}
           style={({ pressed }) => [styles.shuffle, pressed && styles.shufflePressed]}
         >
-          <Ionicons name="shuffle" size={20} color={c.accent} />
+          <Ionicons name="shuffle" size={20} color={c.text} />
         </Pressable>
+        <ProfileButton />
       </View>
 
       <SearchBar value={query} onChangeText={setQuery} placeholder={t('dashboard.search')} />
@@ -278,6 +306,7 @@ export default function DashboardScreen() {
     // Math.max floor is for web and older Androids that report 0.
     <View style={[styles.container, { paddingTop: Math.max(insets.top, spacing.lg) }]}>
       <Animated.FlatList
+        ref={listRef}
         data={gridData}
         keyExtractor={(item, index) => item?.id ?? `filler-${index}`}
         numColumns={2}
@@ -391,11 +420,16 @@ const makeStyles = (c: ThemeColors, type: TypeScale) => StyleSheet.create({
   // off the greeting. Unset is the fix; a bigger number is not (see `typeKm`).
   hello: { ...type.display, color: c.text },
   prompt: { ...type.body, color: c.textMuted },
+  // A neutral icon button, not a tinted one. It used to carry `accentSoft` with
+  // an `accent` glyph, back when `accent` was a second, deeper green than
+  // `primary`. There is one green now, so a green-tinted shuffle would sit at
+  // the same weight as the app's actual primary action — green appears only
+  // where something genuinely *is* the primary action.
   shuffle: {
     width: 44,
     height: 44,
     borderRadius: radius.pill,
-    backgroundColor: c.accentSoft,
+    backgroundColor: c.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },

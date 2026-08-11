@@ -54,7 +54,11 @@ export type SwipeTabsEventMap = {
   tabPress: { data: undefined; canPreventDefault: true }
 }
 
-type SwipeTabsNavigationProp = NavigationProp<
+/**
+ * Exported so a screen can reach `tabPress` — `useNavigation()` alone resolves
+ * to the generic prop, which doesn't know this navigator's event map.
+ */
+export type SwipeTabsNavigationProp = NavigationProp<
   ParamListBase,
   string,
   undefined,

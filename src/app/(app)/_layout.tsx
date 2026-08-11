@@ -57,6 +57,10 @@ export default function AppLayout() {
         name="recipe/new"
         options={{ title: t('nav.newRecipe'), presentation: 'modal' }}
       />
+      {/* Profile is a pushed screen rather than a tab: somewhere you go and come
+          back from, where the dock's two entries are the places you swipe
+          between. Reached from the initials avatar in either header. */}
+      <Stack.Screen name="profile" options={{ title: t('nav.profile') }} />
       <Stack.Screen name="recipe/[id]/index" options={{ headerShown: false }} />
       {/* headerBackTitle is explicit because iOS labels the back button with the previous
           screen's title, and the detail screen draws its own header (headerShown: false,

@@ -45,7 +45,7 @@ export default function TutorialScreen() {
   const [finishing, setFinishing] = useState(false)
 
   const onLastSlide = index === TUTORIAL_SLIDES.length - 1
-  // Reached from the profile tab rather than from onboarding. Same slides, but
+  // Reached from the profile screen rather than from onboarding. Same slides, but
   // it's a thing you're reading, not a step you're completing — so it has
   // nothing to commit and it goes back where you came from.
   const revisiting = onboarded

@@ -5,13 +5,13 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Switch,
   Text,
   TextInput,
   View,
 } from 'react-native'
-import Animated from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MAX_NAME_LENGTH, useAuth } from '@/context/AuthContext'
 import { getRecipes } from '@/lib/api'
@@ -19,17 +19,11 @@ import { resetSeenIntro } from '@/lib/onboarding'
 import ActionSheet from '@/components/ui/ActionSheet'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import PrimaryButton from '@/components/ui/PrimaryButton'
+import { initials } from '@/components/ui/ProfileButton'
 import { useLanguage, useT } from '@/i18n'
-import { useDockClearance } from '@/components/TabBar'
-import { useDockScrollHandler } from '@/components/dock/DockScroll'
 import { radius, sized, spacing, useTheme, useThemedStyles } from '@/theme'
 import type { ThemeColors, TypeScale } from '@/theme'
 import type { Recipe } from '@/types/recipe'
-
-function initials(name: string) {
-  const parts = name.trim().split(/\s+/).slice(0, 2)
-  return parts.map((p) => p[0]?.toUpperCase() ?? '').join('') || '?'
-}
 
 export default function ProfileScreen() {
   const { colors: c, isDark, setPreference } = useTheme()
@@ -40,9 +34,6 @@ export default function ProfileScreen() {
     useAuth()
   const insets = useSafeAreaInsets()
   const router = useRouter()
-  // The dock floats over this screen, so Log out has to clear it.
-  const dockClearance = useDockClearance()
-  const dockScrollHandler = useDockScrollHandler()
 
   const [recipes, setRecipes] = useState<Recipe[]>([])
   const [editing, setEditing] = useState(false)
@@ -131,17 +122,16 @@ export default function ProfileScreen() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <Animated.ScrollView
+      {/* A plain ScrollView, and no dock clearance: profile is pushed over the
+          tabs rather than being one, so nothing floats above its last row.
+          `insets.bottom` still applies — the Stack header covers the top. */}
+      <ScrollView
         contentContainerStyle={[
           styles.content,
-          { paddingTop: insets.top + spacing.lg, paddingBottom: dockClearance },
+          { paddingBottom: insets.bottom + spacing.xxl },
         ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
-        // Same dock hide/show as the dashboard, so the behaviour doesn't change
-        // when you swipe between tabs.
-        onScroll={dockScrollHandler}
-        scrollEventThrottle={16}
       >
         <View style={styles.identity}>
           <View style={styles.avatar}>
@@ -250,7 +240,12 @@ export default function ProfileScreen() {
             // Until this is touched the theme follows the phone; flipping it
             // pins an explicit choice that outlives the system setting.
             trackColor={{ false: c.borderStrong, true: c.primary }}
-            thumbColor={c.onPrimary}
+            // White in both themes and in both states. The thumb is a physical
+            // part sitting on two different track colours, so it can't take a
+            // token that tracks either one: `onPrimary` is ink now, which reads
+            // as a hole punched in the light grey off-track and all but
+            // disappears on the dark one.
+            thumbColor={c.white}
             ios_backgroundColor={c.borderStrong}
           />
         </View>
@@ -299,7 +294,7 @@ export default function ProfileScreen() {
           onPress={() => setConfirmLogout(true)}
           style={styles.logout}
         />
-      </Animated.ScrollView>
+      </ScrollView>
 
       <ConfirmDialog
         visible={confirmLogout}

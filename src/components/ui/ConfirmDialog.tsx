@@ -94,5 +94,11 @@ const makeStyles = (c: ThemeColors, type: TypeScale) => StyleSheet.create({
   confirm: { backgroundColor: c.primary },
   confirmLabel: { ...type.bodyStrong, color: c.onPrimary },
   confirmDestructive: { backgroundColor: c.danger },
-  confirmLabelDestructive: { ...type.bodyStrong, color: c.onPrimary },
+  // `textInverse`, not `onPrimary`: this label sits on `danger`, not on a
+  // primary fill. The two were interchangeable while `onPrimary` was white, and
+  // stopped being so when it became ink — ink on light's #DC2626 is 3.68:1.
+  // `textInverse` is the token that tracks the *fill* rather than the brand, so
+  // it lands correctly at both ends: white on light's deep red (4.85:1), and
+  // near-black on dark's lighter #F87171 (6.6:1), where white would be 2.8:1.
+  confirmLabelDestructive: { ...type.bodyStrong, color: c.textInverse },
 })

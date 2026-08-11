@@ -17,7 +17,7 @@
  * - `(auth)/intro.tsx`'s copy — that screen stays English permanently, because its
  *   editorial serif has no Khmer glyphs and its italic emphasis has no Khmer
  *   equivalent.
- * - `__DEV__`-only strings, such as the profile tab's "Start fresh" button. They
+ * - `__DEV__`-only strings, such as the profile screen's "Start fresh" button. They
  *   are stripped from release builds, so translating them is pure cost.
  *
  * ## Interpolation
@@ -79,6 +79,18 @@ export const en = {
   // in both languages, so one key covers it without an interpolation system.
   'picker.noMatch': 'Nothing matches',
   'picker.noMatchBody': 'Close this and type it into the ingredient row instead — anything is allowed.',
+
+  // --------------------------------------------------------------- tool picker
+  'toolPicker.title': 'Common tools',
+  'toolPicker.search': 'Search tools',
+  'toolPicker.noMatch': 'Nothing matches',
+  'toolPicker.noMatchBody': 'Close this and type it into the tools field instead — anything is allowed.',
+
+  // --------------------------------------------------------------- unit picker
+  'unitPicker.title': 'Unit',
+  'unitPicker.search': 'Search units, or type your own',
+  // The blank unit, which is a real choice: you don't measure onions in anything.
+  'unitPicker.none': 'No unit',
 
   // ------------------------------------------------------ onboarding: name
   'name.kicker': 'YOUR NAME',
@@ -200,6 +212,38 @@ export const en = {
   'nav.newRecipe': 'New Recipe',
   'nav.editRecipe': 'Edit Recipe',
   'nav.recipe': 'Recipe',
+  'nav.profile': 'Profile',
+
+  // ---------------------------------------------------------- meal planner
+  // The day strip's labels. Three letters in English because seven of them
+  // share a row 402pt wide; Khmer uses its own single-syllable day names, which
+  // are naturally short, so neither needs truncating.
+  'day.mon': 'Mon',
+  'day.tue': 'Tue',
+  'day.wed': 'Wed',
+  'day.thu': 'Thu',
+  'day.fri': 'Fri',
+  'day.sat': 'Sat',
+  'day.sun': 'Sun',
+  'planner.title': 'Meal planner',
+  // Two placeholders, which is one more than anything else here needs. The
+  // total isn't hardcoded because it's `days × mealtimes` — adding a mealtime
+  // would otherwise leave this string quietly lying about the denominator.
+  'planner.subtitle': '{n} of {total} meals planned this week',
+  'planner.thisWeek': 'This week',
+  'planner.previousWeek': 'Previous week',
+  'planner.nextWeek': 'Next week',
+  'planner.today': 'Today',
+  // Interpolated with the *translated* mealtime label, never the stored value.
+  'planner.addSlot': 'Add {meal}',
+  'planner.change': 'Change recipe',
+  'planner.clear': 'Clear this slot',
+  'planner.pickTitle': 'Plan {meal}',
+  'planner.pickSearch': 'Search your recipes',
+  'planner.emptyTitle': 'Nothing planned yet',
+  'planner.emptyBody': 'Tap a slot to choose something to cook.',
+  'planner.noRecipesTitle': 'No recipes to plan',
+  'planner.noRecipesBody': 'Add a recipe first, then come back to plan your week.',
 
   // -------------------------------------------------------------- tutorial
   'tutorial.startCooking': 'Start cooking',
@@ -209,10 +253,14 @@ export const en = {
   'select.search': 'Search',
   'select.none': 'None',
   'select.orTypeYourOwn': 'or type your own',
+  // Both rendered as: {key} “{typed text}” — same one-key-plus-template trick
+  // as `picker.noMatch`, and the same reason it works in both languages.
+  'select.use': 'Use',
+  'select.noMatch': 'Nothing matches',
   'search.placeholder': 'Search recipes',
   'search.clear': 'Clear search',
-  'tabs.home': 'Home',
-  'tabs.profile': 'Profile',
+  'tabs.recipes': 'Recipes',
+  'tabs.planner': 'Meal planner',
   'tabs.addRecipe': 'Add recipe',
 
   // ------------------------------------------------ operations that can fail
@@ -221,6 +269,8 @@ export const en = {
   'error.loadRecipe': 'Failed to load recipe',
   'error.deleteRecipe': 'Failed to delete recipe',
   'error.favourite': 'Could not update favourite',
+  'error.savePlan': 'Could not save that meal',
+  'error.clearPlan': 'Could not clear that slot',
 
   // ----------------------------------------------------------- recipe form
   // The form's submit button. Passed in as a *key* by each route, so the two
@@ -254,6 +304,8 @@ export const en = {
   'form.tools': 'Tools',
   'form.toolsPlaceholder': 'e.g. large pot, frying pan',
   'form.toolsHint': 'Separate with commas',
+  'form.pickTools': 'Pick from common tools',
+  'form.pickToolsHint': 'Frying pan, blender, baking tray…',
   'form.ingredientsHeading': 'What goes in?',
   'form.pickCommon': 'Pick from common ingredients',
   'form.pickCommonHint': 'Garlic, soy sauce, rice…',
@@ -333,14 +385,14 @@ export const km: Strings = {
   'profile.favourites': 'សំណព្វ',
   'profile.totalTime': 'រយៈពេលសរុប',
   'profile.memberSince': 'ជាសមាជិកតាំងពី',
-  'profile.darkMode': 'របៀបងងឹត',
+  'profile.darkMode': 'ងងឹត',
   'profile.howItWorks': 'របៀបប្រើប្រាស់',
   'profile.logOut': 'ចាកចេញ',
   'profile.logOutTitle': 'ចាកចេញមែនទេ?',
-  'profile.logOutMessage': 'អ្នកនឹងត្រូវចូលម្តងទៀត ដើម្បីមើលរូបមន្តរបស់អ្នក។',
-  'profile.yourName': 'ឈ្មោះរបស់អ្នក',
+  'profile.logOutMessage': 'អ្នកត្រូវចូលគណនីម្តងទៀត',
+  'profile.yourName': 'ឈ្មោះ',
   'profile.editName': 'កែឈ្មោះ',
-  'profile.nameEmpty': 'ឈ្មោះមិនអាចទទេបានទេ',
+  'profile.nameEmpty': 'ជួយបំពេញឈ្មោះ',
   'profile.nameSaveFailed': 'មិនអាចរក្សាទុកឈ្មោះបានទេ',
 
   // --------------------------------------------------------- ingredient picker
@@ -349,12 +401,23 @@ export const km: Strings = {
   'picker.noMatch': 'រកមិនឃើញ',
   'picker.noMatchBody': 'បិទផ្ទាំងនេះ ហើយវាយបញ្ចូលដោយផ្ទាល់ក្នុងជួរគ្រឿងផ្សំ — អ្វីក៏បានដែរ។',
 
+  // --------------------------------------------------------------- tool picker
+  'toolPicker.title': 'ឧបករណ៍ទូទៅ',
+  'toolPicker.search': 'ស្វែងរកឧបករណ៍',
+  'toolPicker.noMatch': 'រកមិនឃើញ',
+  'toolPicker.noMatchBody': 'បិទផ្ទាំងនេះ ហើយវាយបញ្ចូលដោយផ្ទាល់ក្នុងប្រអប់ឧបករណ៍ — អ្វីក៏បានដែរ។',
+
+  // --------------------------------------------------------------- unit picker
+  'unitPicker.title': 'ឯកតា',
+  'unitPicker.search': 'ស្វែងរកឯកតា ឬវាយបញ្ចូលដោយខ្លួនឯង',
+  'unitPicker.none': 'គ្មានឯកតា',
+
   // ------------------------------------------------------ onboarding: name
-  'name.kicker': 'ឈ្មោះរបស់អ្នក',
+  'name.kicker': 'ឈ្មោះ',
   'name.title': 'តើយើងគួរហៅអ្នកថាម៉េច?',
   'name.subtitle': 'នេះជាឈ្មោះដែលអ្នកនឹងឃើញនៅលើគណនីរបស់អ្នក។ អ្នកអាចប្តូរវាពេលក្រោយបាន។',
   'name.label': 'ឈ្មោះ',
-  'name.placeholder': 'ណាក់',
+  'name.placeholder': 'សុខា',
   'name.saveFailed': 'មិនអាចរក្សាទុកឈ្មោះរបស់អ្នកបានទេ',
 
   // --------------------------------------------------- onboarding: welcome
@@ -366,6 +429,7 @@ export const km: Strings = {
 
   // ----------------------------------------------------- onboarding: taste
   'taste.kicker': 'រសជាតិរបស់អ្នក',
+
   'taste.title': 'តើអ្នកចូលចិត្តចម្អិនអ្វី?',
   'taste.subtitle':
     'ជ្រើសរើសអ្វីដែលអ្នកចូលចិត្ត នោះយើងនឹងដាក់រូបមន្តមួយចំនួនក្នុងសៀវភៅរបស់អ្នកជាដំបូង។ អ្នកអាចកែ ឬលុបវាទាំងអស់បាន។',
@@ -450,13 +514,40 @@ export const km: Strings = {
   'detail.deleteRecipe': 'លុបរូបមន្ត',
   'detail.minutes': 'នាទី',
   'detail.servings': 'ចាន',
-  'detail.addFavourite': 'បន្ថែមទៅសំណព្វ',
+  'detail.addFavourite': 'បញ្ចូលទៅសំណព្វ',
   'detail.removeFavourite': 'ដកចេញពីសំណព្វ',
 
   // ------------------------------------------------------ navigation chrome
   'nav.newRecipe': 'រូបមន្តថ្មី',
   'nav.editRecipe': 'កែរូបមន្ត',
   'nav.recipe': 'រូបមន្ត',
+  'nav.profile': 'គណនី',
+
+  // ---------------------------------------------------------- meal planner
+  // The Khmer day names, in their conventional short form (ថ្ងៃ, "day", is
+  // dropped — it is understood in a strip of seven and would triple the width).
+  'day.mon': 'ច័ន្ទ',
+  'day.tue': 'អង្គារ',
+  'day.wed': 'ពុធ',
+  'day.thu': 'ព្រហ',
+  'day.fri': 'សុក្រ',
+  'day.sat': 'សៅរ៍',
+  'day.sun': 'អាទិត្យ',
+  'planner.title': 'កម្មវិធីគ្រោងអាហារ',
+  'planner.subtitle': 'បានគ្រោង {n} ក្នុងចំណោម {total} អាហារសប្តាហ៍នេះ',
+  'planner.thisWeek': 'សប្តាហ៍នេះ',
+  'planner.previousWeek': 'សប្តាហ៍មុន',
+  'planner.nextWeek': 'សប្តាហ៍ក្រោយ',
+  'planner.today': 'ថ្ងៃនេះ',
+  'planner.addSlot': 'បញ្ចូល{meal}',
+  'planner.change': 'ប្តូររូបមន្ត',
+  'planner.clear': 'សម្អាតប្រអប់នេះ',
+  'planner.pickTitle': 'គ្រោង{meal}',
+  'planner.pickSearch': 'ស្វែងរករូបមន្តរបស់អ្នក',
+  'planner.emptyTitle': 'មិនទាន់មានការគ្រោងទេ',
+  'planner.emptyBody': 'ចុចប្រអប់ណាមួយដើម្បីជ្រើសរើសម្ហូបចម្អិន។',
+  'planner.noRecipesTitle': 'គ្មានរូបមន្តសម្រាប់គ្រោង',
+  'planner.noRecipesBody': 'បញ្ចូលរូបមន្តជាមុនសិន រួចត្រឡប់មកគ្រោងសប្តាហ៍របស់អ្នក។',
 
   // -------------------------------------------------------------- tutorial
   'tutorial.startCooking': 'ចាប់ផ្តើមចម្អិន',
@@ -466,18 +557,22 @@ export const km: Strings = {
   'select.search': 'ស្វែងរក',
   'select.none': 'គ្មាន',
   'select.orTypeYourOwn': 'ឬវាយបញ្ចូលដោយខ្លួនឯង',
+  'select.use': 'ប្រើ',
+  'select.noMatch': 'រកមិនឃើញ',
   'search.placeholder': 'ស្វែងរករូបមន្ត',
   'search.clear': 'សម្អាតការស្វែងរក',
-  'tabs.home': 'ដើម',
-  'tabs.profile': 'គណនី',
+  'tabs.recipes': 'រូបមន្ត',
+  'tabs.planner': 'គ្រោងអាហារ',
   'tabs.addRecipe': 'បញ្ចូលរូបមន្ត',
 
   // ------------------------------------------------ operations that can fail
   'error.loadRecipes': 'មិនអាចទាញយករូបមន្តបានទេ',
-  'error.refreshRecipes': 'មិនអាចធ្វើឱ្យរូបមន្តថ្មីបានទេ',
+  'error.refreshRecipes': 'មិនអាចបញ្ចូលរូបមន្តថ្មីបានទេ',
   'error.loadRecipe': 'មិនអាចទាញយករូបមន្តបានទេ',
   'error.deleteRecipe': 'មិនអាចលុបរូបមន្តបានទេ',
   'error.favourite': 'មិនអាចធ្វើបច្ចុប្បន្នភាពសំណព្វបានទេ',
+  'error.savePlan': 'មិនអាចរក្សាទុកអាហារនោះបានទេ',
+  'error.clearPlan': 'មិនអាចសម្អាតប្រអប់នោះបានទេ',
 
   // ----------------------------------------------------------- recipe form
   'form.addRecipe': 'បញ្ចូលរូបមន្ត',
@@ -509,21 +604,23 @@ export const km: Strings = {
   'form.tools': 'ឧបករណ៍',
   'form.toolsPlaceholder': 'ឧ. ឆ្នាំងធំ, ខ្ទះ',
   'form.toolsHint': 'បំបែកដោយសញ្ញាក្បៀស',
-  'form.ingredientsHeading': 'ត្រូវប្រើអ្វីខ្លះ?',
+  'form.pickTools': 'ជ្រើសរើសពីឧបករណ៍ទូទៅ',
+  'form.pickToolsHint': 'ខ្ទះ, ម៉ាស៊ីនកិន, ថាសដុតនំ…',
+  'form.ingredientsHeading': 'គ្រឿងផ្សំ',
   'form.pickCommon': 'ជ្រើសរើសពីគ្រឿងផ្សំទូទៅ',
   'form.pickCommonHint': 'ខ្ទឹមស, ទឹកត្រី, អង្ករ…',
   'form.ingredientPlaceholder': 'គ្រឿងផ្សំ',
   'form.unitPlaceholder': 'ឯកតា',
   'form.addYourOwn': 'បញ្ចូលដោយខ្លួនឯង',
-  'form.noIngredients': 'មិនទាន់មានគ្រឿងផ្សំទេ — ជ្រើសរើសខាងលើ ឬបញ្ចូលដោយខ្លួនឯងខាងក្រោម។',
-  'form.stepsHeading': 'ធ្វើដូចម្តេច?',
+  'form.noIngredients': 'មិនទាន់មានគ្រឿងផ្សំទេ — ជ្រើសរើសខាងលើ ឬបញ្ចូលដោយខ្លួនឯងខាងក្រោម',
+  'form.stepsHeading': 'វិធីចំអិន',
   'form.stepPlaceholder': 'ឧ. ដាំទឹកឱ្យពុះ រួចដាក់មីចូល',
   'form.removeStep': 'លុបជំហាន',
   'form.removeIngredient': 'លុបគ្រឿងផ្សំ',
   'form.addStep': 'បន្ថែមជំហាន',
   'form.noSteps': 'មិនទាន់មានជំហានទេ — បន្ថែមជំហានដំបូងខាងក្រោម។',
-  'form.nutritionHeading': 'ក្នុងមួយចានមានអ្វីខ្លះ?',
-  'form.nutritionIntro': 'ទាំងអស់ជាជម្រើស និងគិតក្នុងមួយចាន។ អ្វីដែលមិនដឹង ទុកឱ្យទទេបាន។',
+  'form.nutritionHeading': 'ព័ត៌មានសារធាតុចិញ្ចឹម',
+  'form.nutritionIntro': 'ដាក់ក៏បាន មិនដាក់ក៏បាន',
   'form.calories': 'កាឡូរី (kcal)',
   'form.caloriesPlaceholder': 'ឧ. 520',
   'form.protein': 'ប្រូតេអ៊ីន (g)',
@@ -535,17 +632,17 @@ export const km: Strings = {
 
   // ------------------------------------------------------------ validation
   'validation.tooBig': 'រូបមន្តនេះមាន {n}KB — កំណត់ត្រឹម {max}KB។ សូមកាត់បន្ថយការពិពណ៌នា ឬលុបជំហានខ្លះ។',
-  'validation.wholeNumber': '{field} ត្រូវតែជាចំនួនគត់។',
-  'validation.mustBeNumber': '{field} ត្រូវតែជាលេខ។',
-  'validation.amountsNumbers': 'បរិមាណត្រូវតែជាលេខ។',
-  'validation.titleTooLong': 'ចំណងជើងវែងពេក (អតិបរមា {n} តួអក្សរ)។',
-  'validation.descriptionWords': 'ការពិពណ៌នាវែងពេក (អតិបរមា {n} ពាក្យ)។',
-  'validation.descriptionChars': 'ការពិពណ៌នាវែងពេក (អតិបរមា {n} តួអក្សរ)។',
+  'validation.wholeNumber': '{field} ត្រូវជាចំនួនគត់។',
+  'validation.mustBeNumber': '{field} ត្រូវដាក់ជាលេខ។',
+  'validation.amountsNumbers': 'បរិមាណត្រូវដាក់ជាលេខ។',
+  'validation.titleTooLong': 'ចំណងជើងវែងពេក',
+  'validation.descriptionWords': 'ការពិពណ៌នាវែងពេក',
+  'validation.descriptionChars': 'ការពិពណ៌នាវែងពេក',
   'validation.tooManyTools': 'ឧបករណ៍ច្រើនពេក (អតិបរមា {n})។',
   'validation.toolTooLong': 'បំបែកឧបករណ៍ដោយសញ្ញាក្បៀស — មានមួយវែងពេក។',
   'validation.tooManyIngredients': 'គ្រឿងផ្សំច្រើនពេក (អតិបរមា {n})។',
   'validation.tooManySteps': 'ជំហានច្រើនពេក (អតិបរមា {n})។',
-  'validation.stepTooLong': 'ជំហានមួយមិនអាចវែងជាង {n} តួអក្សរបានទេ។',
-  'validation.fillHighlighted': 'សូមបំពេញប្រអប់ដែលបានបន្លិច។',
-  'validation.checkHighlighted': 'សូមពិនិត្យប្រអប់ដែលបានបន្លិច។',
+  'validation.stepTooLong': 'ជំហានអក្សរច្រើនពេក',
+  'validation.fillHighlighted': 'សូមបំពេញប្រអប់ដែលខ្វះ',
+  'validation.checkHighlighted': 'សូមពិនិត្យប្រអប់ដែលខ្វះ',
 }

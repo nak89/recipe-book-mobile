@@ -2,64 +2,80 @@
  * Two palettes, one shape.
  *
  * Every colour is named by role rather than hue, which is what makes a second
- * palette possible at all: no screen asks for "warm white", it asks for `bg`.
- * It's also what made the switch from the original warm-stone scale to this
- * green one a change to two files rather than to thirty.
+ * palette possible at all: no screen asks for "fresh 500", it asks for
+ * `primary`. It's also what has made each palette change since — warm stone to
+ * near-neutral green, and now this — a change to two files rather than thirty.
  *
- * The palette is a **near-neutral green**: surfaces, lines and type are all cut
- * from one low-chroma green scale, so the app reads green everywhere without
- * any single element being green. Saturated colour is still rationed to two
- * roles — `accent` for the shuffle action, `favourite` for the heart — and
- * recipe photography supplies the rest. That rationing is the reason the tint
- * can be applied this widely without the app looking like a brand exercise.
+ * **One green: `#0FC44A`, and nothing deeper than it exists in the system.**
+ * A darker green beside it reads as a second brand, and the darker one always
+ * wins the eye. The ramp is three stops and stops there: the green itself,
+ * `primaryPressed` a step *lighter* (press has nowhere darker to go), and
+ * `accentSoft` for the rare soft fill.
+ *
+ * **Everything that isn't the green is neutral.** Surfaces, lines and type are
+ * near-grey with only a whisper of green in them, which is what lets the one
+ * saturated colour carry the whole brand. The previous palette tinted the
+ * surfaces green too, and that is precisely what made it read as green-on-green:
+ * once everything is slightly green, nothing is green.
  *
  * **There is no flat `colors` export.** Reading a palette directly would bake
  * one theme into a module-scope `StyleSheet.create`, which is exactly the bug
  * that made dark mode impossible before. Use `useThemedStyles` instead.
  */
 const light = {
-  // Surfaces. `bg` and `surface` are the same value, as they were when both
-  // were pure white — a card is defined by its border and shadow here, not by
-  // sitting on a different colour, and splitting them now would quietly change
-  // that relationship on every screen.
+  // Surfaces. `bg` and `surface` are the same value, as they have been through
+  // every palette this app has had — a card is defined by its border and shadow
+  // here, not by sitting on a different colour, and splitting them now would
+  // quietly change that relationship on every screen.
   bg: '#FCFDFC',
-  bgSubtle: '#F4F8F5',
+  bgSubtle: '#F7F8F8',
   surface: '#FCFDFC',
-  surfaceAlt: '#EDF3EF',
-  surfaceSunken: '#E3EBE6',
+  surfaceAlt: '#F1F3F2',
+  surfaceSunken: '#E9ECEA',
 
   // Lines
-  border: '#DCE7E0',
-  borderStrong: '#BFD1C6',
+  border: '#E2E6E4',
+  borderStrong: '#D0D5D2',
 
-  // Type. Not pure black-with-a-tint: the darkest token is a deep green whose
-  // hue matches the surfaces, which is what stops the type reading as a
-  // separate, colder palette laid over a green one.
-  text: '#10201A',
-  textMuted: '#5F7268',
-  // Placeholders must read as absent, never as a prefilled value. ~2.5:1 on
+  // Type. Near-grey rather than the deep green it used to be: the type is part
+  // of the neutral ground now, not part of the tint. 17.7:1 and 5.3:1 on `bg`.
+  text: '#15181A',
+  textMuted: '#636C67',
+  // Placeholders must read as absent, never as a prefilled value. ~2.9:1 on
   // `bg` — deliberately below the readability floor that `textMuted` clears.
-  textPlaceholder: '#93A69D',
+  textPlaceholder: '#8E9793',
   textInverse: '#FFFFFF',
   textOnPhoto: '#FFFFFF',
 
-  // Actions. `primary` is the far end of the same scale, exactly as it was when
-  // that end was near-black — deep enough to read as chrome rather than as a
-  // green button, at 14:1 against `onPrimary`.
-  primary: '#14311F',
-  primaryPressed: '#0A1D12',
-  onPrimary: '#FFFFFF',
+  // The one token here named by hue rather than role, mirroring the design
+  // system's own `--white` base token. It exists for physical control parts
+  // that are white in both themes because that is what the part *is* — the
+  // switch thumb, and nothing else so far. `textInverse` can't stand in (it
+  // follows the fill, so it goes near-black at night) and `textOnPhoto` is
+  // about photographs. Reach for a semantic token first; this is a last resort.
+  white: '#FFFFFF',
 
-  // Reserved for the shuffle action — the only saturated green in the app, and
-  // several steps up in chroma from the surfaces so the one button that is
-  // *meant* to be green doesn't dissolve into a green screen. It replaced an
-  // amber, and reads better than it did: 2.7:1 on `accentSoft` against 1.9:1.
-  accent: '#16A34A',
-  accentSoft: '#DCFCE7',
+  // Actions. The green at full strength, and the only place it appears at full
+  // strength. What sits *on* a primary fill is ink, not white: white on this
+  // green is 2.1:1 and ink is 7.8:1 — and the ink is also what keeps the button
+  // reading as bright paint rather than as a dark slab. Press moves *lighter*,
+  // since there is nothing darker in the ramp to move to.
+  primary: '#0FC44A',
+  primaryPressed: '#33D66F',
+  onPrimary: '#15181A',
+
+  // `accent` is an alias of `primary` and has no colour of its own. It was a
+  // second, deeper green for the shuffle action; an accent that is a *different
+  // green* from the primary action is the inconsistency, not the feature. The
+  // alias is kept so the two existing usages still resolve — the welcome mark's
+  // squircle, which is the brand mark on the first screen and is meant to be
+  // green, and the shuffle button, which is now a neutral icon button.
+  accent: '#0FC44A',
+  accentSoft: '#E8FCEF',
 
   // Favourites only. A filled heart has to read as red or it doesn't read as a
-  // heart, so this is the one place a second accent earns its keep — and the
-  // one token the green scale must not reach, since red against green is the
+  // heart, so this is the one place a second saturated colour earns its keep —
+  // and the one token the green must not reach, since red against green is the
   // strongest separation available and that is the entire point of it.
   favourite: '#EF4444',
   favouriteSoft: '#FEE2E2',
@@ -79,10 +95,16 @@ const light = {
   scrimSoft: 'rgba(0,0,0,0.35)',
   scrimNone: 'rgba(0,0,0,0)',
 
-  // The specular sweep across the welcome screen's primary button. It has to
-  // mirror rather than repeat: `primary` is deep green in light and near-white
-  // in dark, so a white sheen would be invisible at night — a passing highlight
-  // is a lightening of the surface in one theme and a darkening in the other.
+  // The specular sweep across the welcome screen's primary button.
+  //
+  // NOTE: this still inverts between themes, but the reason it used to has gone.
+  // `primary` was the far end of the neutral scale and swapped ends at night, so
+  // a white sheen would have been invisible on the near-white night button. The
+  // green is now the constant across themes, so the same button gets a white
+  // sweep by day and a dark one by night for no reason the palette can state.
+  // Transcribed as specified rather than quietly "fixed" — see the note in the
+  // handoff summary; it's a design call, not a transcription error.
+  //
   // `sheenNone` exists for the same reason `scrimNone` does: a gradient that
   // fades to a *differently* coloured transparent interpolates through grey and
   // leaves a fringe, so the end stops have to share the middle stop's rgb.
@@ -113,15 +135,11 @@ const light = {
   // faint: it sits *on* glass, so an opaque fill would punch a hole in the
   // material it's supposed to be part of. Built from `text`'s rgb rather than
   // pure black, so the capsule darkens toward the palette instead of away.
-  glassHighlight: 'rgba(16,32,26,0.07)',
+  glassHighlight: 'rgba(21,24,26,0.07)',
   // An unselected icon sitting on glass. Not `textPlaceholder`, which is far
   // too light here: the pill's colour moves with whatever scrolls under it, and
   // over a dark photo that pairing measures ~1:1 — invisible, not subtle.
-  // Held darker than the warm grey it replaced, and by more than the hue change
-  // alone needs: `glass` now carries `bg`'s tint instead of being pure white, so
-  // the pill itself sits a shade darker and the icon has to make that back.
-  // Measured at 3.2:1 against the darkest the pill gets, against the old 3.0.
-  onGlassMuted: '#304035',
+  onGlassMuted: '#4B5450',
 }
 
 /**
@@ -134,12 +152,12 @@ export type ThemeColors = Record<keyof typeof light, string>
 export const lightColors: ThemeColors = light
 
 /**
- * The same low-chroma green scale the light palette is built from, read
- * downward — which is what keeps the green cast at night instead of dropping to
- * a neutral grey that would look like a different app's dark theme. The green
- * has to be carried further here than a warm tint did: a cool hue at very low
- * lightness is easy to mistake for plain black, so the dark surfaces sit at
- * slightly higher chroma than their light counterparts.
+ * Dark swaps the neutral scale for its dark-read twin and **leaves the green
+ * alone**. That's the headline difference from every previous version of this
+ * file: the green is the constant across themes, not the thing that flips, and
+ * a saturated green at this lightness holds up on near-white and near-black
+ * alike. `primary` no longer inverts to the light end of the scale — the button
+ * is the brand, and the brand doesn't change colour at night.
  *
  * Two tokens deliberately break the mirror:
  *
@@ -151,41 +169,40 @@ export const lightColors: ThemeColors = light
  *   red-500 because the deeper red reads better as text on a light surface; on
  *   near-black both roles need the same brightness and the distinction stops
  *   paying off.
- *
- * `primary` inverting to near-white is the honest mirror of light, where
- * `primary` and `text` are also the same value — the button fill is simply
- * "the far end of the neutral scale".
  */
 export const darkColors: ThemeColors = {
   // Surfaces
-  bg: '#070D0A',
-  bgSubtle: '#101B15',
-  surface: '#101B15',
-  surfaceAlt: '#182720',
-  surfaceSunken: '#101B15',
+  bg: '#0C0E0F',
+  bgSubtle: '#141719',
+  surface: '#141719',
+  surfaceAlt: '#1D2123',
+  surfaceSunken: '#141719',
 
   // Lines
-  border: '#182720',
-  borderStrong: '#2E463A',
+  border: '#1D2123',
+  borderStrong: '#2E3437',
 
   // Type
-  text: '#F2F8F4',
-  textMuted: '#9BAFA4',
-  textPlaceholder: '#6B8177',
-  textInverse: '#070D0A',
+  text: '#F3F7F5',
+  textMuted: '#9DA6A2',
+  textPlaceholder: '#6E7975',
+  textInverse: '#0C0E0F',
   // Unchanged: white text on a photo is white text on a photo.
   textOnPhoto: '#FFFFFF',
+  // Unchanged, and that is the whole point of it — see light.
+  white: '#FFFFFF',
 
-  // Actions
-  primary: '#F2F8F4',
-  primaryPressed: '#FFFFFF',
-  onPrimary: '#070D0A',
+  // Actions. Identical to light, deliberately — see the note above.
+  primary: '#0FC44A',
+  primaryPressed: '#33D66F',
+  onPrimary: '#0C0E0F',
 
-  // Brighter and less saturated than light's, the same way the old amber
-  // stepped up at night: a mid-chroma green that carries on a light background
-  // goes muddy on near-black.
-  accent: '#4ADE80',
-  accentSoft: '#052E16',
+  // `accent` tracks `primary` here too. `accentSoft` is the one that has to
+  // move: a pale green tint is a bright rectangle on a near-black screen, so at
+  // night the soft fill is simply a raised neutral surface and the green comes
+  // from the glyph sitting on it.
+  accent: '#0FC44A',
+  accentSoft: '#1D2123',
 
   favourite: '#F87171',
   favouriteSoft: '#2A1517',
@@ -200,8 +217,8 @@ export const darkColors: ThemeColors = {
   scrimSoft: 'rgba(0,0,0,0.35)',
   scrimNone: 'rgba(0,0,0,0)',
 
-  // Inverted, unlike the scrims: this one sits on `primary`, which flips ends
-  // of the scale between themes, not on a photograph, which doesn't.
+  // Still inverted; see the note on light's `sheen` for why that no longer
+  // follows from the palette.
   sheen: 'rgba(0,0,0,0.18)',
   sheenNone: 'rgba(0,0,0,0)',
 
@@ -212,7 +229,7 @@ export const darkColors: ThemeColors = {
   // Slightly stronger than light's, and for the mirrored reason: a bright photo
   // scrolling under the pill at night drags it light, which is the more jarring
   // direction on a near-black screen.
-  glass: 'rgba(16,27,21,0.60)',
+  glass: 'rgba(20,23,25,0.60)',
   glassBorder: 'rgba(255,255,255,0.12)',
   // Lighter rather than darker: on a near-black pill the selected tab has to be
   // lifted out, and a darker capsule would read as a hole.
@@ -220,5 +237,5 @@ export const darkColors: ThemeColors = {
   // The exact mirror of light's, and it fixes the same bug in the other
   // direction: `textPlaceholder` on a dark pill sitting over a *bright* photo
   // measures ~1.3:1. Same invisibility, just harder to stumble into.
-  onGlassMuted: '#C9D8CF',
+  onGlassMuted: '#9DA6A2',
 }

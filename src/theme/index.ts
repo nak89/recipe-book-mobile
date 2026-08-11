@@ -80,9 +80,15 @@ export function useTypeScale(): TypeScale {
  *
  * Not theme-aware, and it doesn't need to be: a near-black shadow at 6% opacity
  * is invisible on a near-black background, and all four places this is used are
- * already legible in dark by other means — a photograph, a near-white circle,
+ * already legible in dark by other means — a photograph, a bright green circle,
  * and two sheets floating over a scrim. Elevation at night comes from surface
  * lightness instead.
+ *
+ * `#10201A` is a fixed value, not a derived one. It used to be hand-matched to
+ * the palette's darkest token; that stopped being true when the neutrals moved
+ * off the green scale, and the design system now pins the shadow at this rgb
+ * regardless of palette. Don't "correct" it to match `text` — a shadow is a
+ * shadow, and this one is specified.
  */
 export const shadow = {
   card: Platform.select({

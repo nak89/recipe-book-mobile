@@ -45,3 +45,30 @@ export function useDifficultyLabel() {
   const t = useT()
   return (value: Difficulty) => t(DIFFICULTY_KEYS[value])
 }
+
+/**
+ * Day-of-week labels for the planner's strip.
+ *
+ * Indexed by `Date.getDay()`, which is **Sunday-0** — so this array starts on
+ * Sunday even though the strip renders Monday-first. Reordering it to match the
+ * visual order is the obvious tidy-up and would shift every label by a day;
+ * `weekDays()` in `lib/week.ts` owns the Monday-first ordering instead.
+ *
+ * Not `toLocaleDateString`: that follows the *device* locale, which has nothing
+ * to do with the in-app language toggle, so a Khmer UI on an English phone would
+ * grow English day names in the middle of it.
+ */
+const DAY_KEYS: StringKey[] = [
+  'day.sun',
+  'day.mon',
+  'day.tue',
+  'day.wed',
+  'day.thu',
+  'day.fri',
+  'day.sat',
+]
+
+export function useDayLabel() {
+  const t = useT()
+  return (date: Date) => t(DAY_KEYS[date.getDay()])
+}

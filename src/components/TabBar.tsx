@@ -18,13 +18,27 @@ import type { SwipeTabBarProps } from '@/navigation/SwipeTabs'
 import { hairline, shadow, spacing, useTheme, useThemedStyles } from '@/theme'
 import type { ThemeColors } from '@/theme'
 import { useT } from '@/i18n'
+import type { StringKey } from '@/i18n/strings'
 
 const ICONS: Record<
   string,
   { active: keyof typeof Ionicons.glyphMap; inactive: keyof typeof Ionicons.glyphMap }
 > = {
-  index: { active: 'home', inactive: 'home-outline' },
-  profile: { active: 'person', inactive: 'person-outline' },
+  // `book` rather than `home` for the library: with a calendar sitting beside
+  // it, "home" describes where the tab sits in the app rather than what's on it,
+  // and the pair reads as one idea — a book of recipes and a week to cook them.
+  index: { active: 'book', inactive: 'book-outline' },
+  planner: { active: 'calendar', inactive: 'calendar-outline' },
+}
+
+/**
+ * Keyed by route name for the same reason `ICONS` is: the previous version was
+ * a ternary on `route.name === 'profile'`, which quietly labelled every tab that
+ * wasn't profile as "Home". A third destination would have inherited that.
+ */
+const LABEL_KEYS: Record<string, StringKey> = {
+  index: 'tabs.recipes',
+  planner: 'tabs.planner',
 }
 
 /** Height of the tab pill. */
@@ -198,7 +212,7 @@ export default function TabBar({
               return (
                 <DockButton
                   key={route.key}
-                  accessibilityLabel={route.name === 'profile' ? t('tabs.profile') : t('tabs.home')}
+                  accessibilityLabel={t(LABEL_KEYS[route.name] ?? 'tabs.recipes')}
                   selected={focused}
                   style={styles.tab}
                   onPress={() => {

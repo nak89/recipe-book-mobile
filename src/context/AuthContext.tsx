@@ -18,7 +18,7 @@ interface AuthContextType {
   logout: () => Promise<void>
   updateDisplayName: (name: string) => Promise<void>
   completeOnboarding: () => Promise<void>
-  /** Dev only — see the reset button in the profile tab. */
+  /** Dev only — see the reset button on the profile screen. */
   resetOnboarding: () => Promise<void>
 }
 
