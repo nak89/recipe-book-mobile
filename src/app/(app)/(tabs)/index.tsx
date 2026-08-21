@@ -1,71 +1,66 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Ionicons } from '@expo/vector-icons'
 import { useFocusEffect, useNavigation, useRouter } from 'expo-router'
-import {
-  FlatList,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { FlatList, RefreshControl, StyleSheet, View } from 'react-native'
+import { Text } from '@/components/ui/Text'
 import { useAuth } from '@/context/AuthContext'
-import { deleteRecipe, getRecipes, setFavourite } from '@/lib/api'
+import { deleteRecipe, getPlan, getRecipes, setFavourite } from '@/lib/api'
 import { useDebounce } from '@/hooks/useDebounce'
 import { favouriteFeedback, openMenuFeedback, refreshFeedback } from '@/lib/haptics'
 import { foldForCompare } from '@/lib/text'
-import { useT } from '@/i18n'
+import { toDateKey } from '@/lib/week'
+import { padded, useLanguage, useNum, useT } from '@/i18n'
 import type { StringKey } from '@/i18n'
 import { apiErrorKey } from '@/i18n/errors'
 import { useMealtimeLabel } from '@/i18n/labels'
-import Animated from 'react-native-reanimated'
-import RecipeCard from '@/components/RecipeCard'
-import RecipeCardSkeleton from '@/components/RecipeCardSkeleton'
-import { useDockClearance } from '@/components/TabBar'
-import { useDockScrollHandler } from '@/components/dock/DockScroll'
+import TodaysDish from '@/components/TodaysDish'
 import Chip from '@/components/ui/Chip'
 import SearchBar from '@/components/ui/SearchBar'
 import ActionSheet from '@/components/ui/ActionSheet'
+import AddRow from '@/components/ui/AddRow'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
+import LedgerRow from '@/components/ui/LedgerRow'
+import Masthead, { MastheadAction } from '@/components/ui/Masthead'
+import PrimaryButton from '@/components/ui/PrimaryButton'
 import ProfileButton from '@/components/ui/ProfileButton'
+import SectionHeader from '@/components/ui/SectionHeader'
+import Skeleton, { usePulse } from '@/components/ui/Skeleton'
+import TextLink from '@/components/ui/TextLink'
 import type { SwipeTabsNavigationProp } from '@/navigation/SwipeTabs'
-import { radius, spacing, useTheme, useThemedStyles } from '@/theme'
+import { radius, sized, spacing, useScreenTopPad, useTheme, useThemedStyles } from '@/theme'
 import type { ThemeColors, TypeScale } from '@/theme'
 import { MEALTIMES } from '@/types/recipe'
-import type { Mealtime, Recipe } from '@/types/recipe'
+import type { Mealtime, PlanSlot, Recipe } from '@/types/recipe'
 
 type Filter = 'All' | Mealtime
 
-// Six tiles: three rows, which fills a phone screen below the header without
-// running so far past the fold that the page scrolls to nothing.
+/**
+ * Which of today's slots becomes "today's dish", most-likely-first.
+ *
+ * A single mealtime would leave the block empty for anyone who plans lunches
+ * and not dinners; walking the list means the card fills whenever *anything* is
+ * planned. Dinner leads because it is the meal people plan ahead for.
+ */
+const TODAY_PRIORITY: Mealtime[] = ['Dinner', 'Lunch', 'Breakfast', 'Snack']
+
+/** Six rows fills a phone below the masthead without running far past the fold. */
 const SKELETON_KEYS = ['s0', 's1', 's2', 's3', 's4', 's5']
 
-export default function DashboardScreen() {
+export default function RecipesIndexScreen() {
   const { colors: c } = useTheme()
   const styles = useThemedStyles(makeStyles)
   const t = useT()
+  const n = useNum()
+  const { language } = useLanguage()
   const mealtimeLabel = useMealtimeLabel()
-  const { token, displayName } = useAuth()
+  const { token } = useAuth()
   const router = useRouter()
   const navigation = useNavigation<SwipeTabsNavigationProp>()
-  const insets = useSafeAreaInsets()
-  // The dock floats over the grid, so the last row has to be scrolled clear of it.
-  const dockClearance = useDockClearance()
-  const dockScrollHandler = useDockScrollHandler()
-  const listRef = useRef<FlatList<Recipe | null>>(null)
+  const listRef = useRef<FlatList<Recipe>>(null)
 
   const [recipes, setRecipes] = useState<Recipe[]>([])
+  const [todaySlots, setTodaySlots] = useState<PlanSlot[]>([])
   const [loading, setLoading] = useState(true)
-  // Separate from `loading`: this one drives the spinner at the top of the list
-  // while the cards you already have stay on screen. Reusing `loading` would
-  // swap the whole grid back to skeletons on every pull.
   const [refreshing, setRefreshing] = useState(false)
-  // The *key*, not the translated sentence. Storing translated text would
-  // freeze an on-screen error in whatever language it was raised in, and it
-  // would make `t` a dependency of the fetch effect — so switching language
-  // would refetch the whole grid.
   const [error, setError] = useState<StringKey | null>(null)
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<Filter>('All')
@@ -74,8 +69,6 @@ export default function DashboardScreen() {
 
   const debouncedQuery = useDebounce(query)
 
-  // One helper for both cards, so the tap that opens the menu and the buzz that
-  // confirms it can never drift apart.
   function openSheet(recipe: Recipe) {
     openMenuFeedback()
     setSheetFor(recipe)
@@ -87,15 +80,31 @@ export default function DashboardScreen() {
       if (!token) return
       let cancelled = false
       setError(null)
-      getRecipes(token)
-        .then((data) => {
+
+      // Today's key is built in **local** time. `toISOString().slice(0, 10)`
+      // converts to UTC first, which after 5pm in Phnom Penh asks the server for
+      // tomorrow — so "today's dish" would silently become tomorrow's every
+      // evening. `lib/week.ts` exists for exactly this.
+      const today = toDateKey(new Date())
+
+      Promise.all([
+        getRecipes(token),
+        // A failed plan read must not take the whole index down with it: the
+        // recipe list is the screen's reason for existing and the card above it
+        // is an extra. An empty array renders the "plan a dish" row, which is
+        // also what someone with no plan sees — the right thing in both cases.
+        getPlan(today, today, token).catch(() => [] as PlanSlot[]),
+      ])
+        .then(([data, slots]) => {
           if (cancelled) return
-          // Backing out of a recipe you didn't change brings back byte-identical
-          // data, and a fresh array is still a new identity — every card
-          // re-renders, and the view mutations that come with it land on the
-          // frames the back animation is still using. Returning `prev` bails out
-          // of the render entirely, so the common path costs one comparison.
+          // The same bail-out every refocus refetch in this app uses: a screen
+          // regains focus while its transition is still running, and an
+          // unconditional setState rebuilds the list on the frames the
+          // animation needs.
           setRecipes((prev) => (JSON.stringify(prev) === JSON.stringify(data) ? prev : data))
+          setTodaySlots((prev) =>
+            JSON.stringify(prev) === JSON.stringify(slots) ? prev : slots
+          )
         })
         .catch((err) => {
           if (!cancelled) setError(apiErrorKey(err))
@@ -110,18 +119,12 @@ export default function DashboardScreen() {
   )
 
   /**
-   * Tapping Recipes while you're already on it returns the grid to the top — the
-   * only alternative, after a few screens of recipes, is a long drag.
+   * Tapping Recipes while already on it returns the list to the top.
    *
-   * `TabBar` emits `tabPress` whether or not the tab is focused (it only gates
-   * the `navigate` call), so the `isFocused` guard is what makes this a re-tap
-   * and not a tab change: both scenes stay mounted in the pager, and without it
-   * pressing Recipes *from the planner* would animate-scroll this grid under the
-   * page transition.
-   *
-   * `animated` is load-bearing. The upward scroll frames are what bring the dock
-   * back — `TabBar`'s reveal effect watches `state.index`, which doesn't change
-   * on a re-tap, so a jump to 0 would leave the dock hidden.
+   * The `isFocused` guard is what makes this a re-tap rather than a tab change:
+   * `TabBar` emits `tabPress` either way, and both scenes stay mounted in the
+   * pager, so without it pressing Recipes *from the planner* would animate-
+   * scroll this list under the page transition.
    */
   useEffect(
     () =>
@@ -131,6 +134,19 @@ export default function DashboardScreen() {
       }),
     [navigation]
   )
+
+  const todaysDish = useMemo(() => {
+    for (const mealtime of TODAY_PRIORITY) {
+      const slot = todaySlots.find((s) => s.mealtime === mealtime)
+      if (slot?.recipe) {
+        // The plan carries a summary, not the whole recipe. Prefer the full row
+        // from the list so the card's meta line has tools and servings; fall
+        // back to the summary for a recipe that somehow isn't in the list.
+        return recipes.find((r) => r.id === slot.recipeId) ?? null
+      }
+    }
+    return null
+  }, [todaySlots, recipes])
 
   const visible = useMemo(() => {
     // Folded rather than lowercased: Khmer keyboards emit invisible zero-width
@@ -150,22 +166,21 @@ export default function DashboardScreen() {
     })
   }, [recipes, debouncedQuery, filter])
 
-  const favourites = useMemo(() => visible.filter((r) => r.isFavourite), [visible])
   const searching = debouncedQuery.trim().length > 0
-
-  // A two-column FlatList stretches a lone item across the whole row, which is
-  // why a single search result rendered as a double-width card. An invisible
-  // filler keeps every tile the same size.
-  const gridData = useMemo<(Recipe | null)[]>(
-    () => (visible.length % 2 === 1 ? [...visible, null] : visible),
-    [visible]
-  )
+  const favourites = useMemo(() => visible.filter((r) => r.isFavourite), [visible])
 
   /**
-   * Pull-to-refresh. The haptic fires here rather than on drag, because this
-   * runs the moment the gesture commits — buzzing while you're still pulling
-   * would fire on pulls you abandon.
+   * The index's range, `01–08`, and the reason it is a range rather than a
+   * count: the header names the rows *beneath it*, so while a filter or a
+   * search is narrowing the list it has to describe what survived, not what the
+   * book holds. `padded` keeps the two numbers the same width, which is what
+   * makes a column of them read as an index rather than as arithmetic.
    */
+  const indexRange =
+    visible.length === 0
+      ? undefined
+      : `${padded(1, 2, language)}–${padded(visible.length, 2, language)}`
+
   async function handleRefresh() {
     if (!token) return
     refreshFeedback()
@@ -183,8 +198,9 @@ export default function DashboardScreen() {
   async function handleToggleFavourite(recipe: Recipe) {
     if (!token) return
     const next = !recipe.isFavourite
+    // Beside the optimistic flip, not after the request: waiting on the server
+    // would put the buzz behind the thing it confirms.
     favouriteFeedback()
-    // Optimistic — the bookmark should flip under your finger, not after a round trip.
     setRecipes((prev) => prev.map((r) => (r.id === recipe.id ? { ...r, isFavourite: next } : r)))
     try {
       await setFavourite(recipe.id, next, token)
@@ -206,159 +222,165 @@ export default function DashboardScreen() {
     }
   }
 
-  function handleShuffle() {
-    if (recipes.length === 0) return
-    const pick = recipes[Math.floor(Math.random() * recipes.length)]
-    router.push(`/recipe/${pick.id}`)
-  }
+  const masthead = (
+    <Masthead
+      title={t('brand.wordmark')}
+      // No language toggle here. Language is a setting, and settings live in
+      // one place — the profile screen, reached from the avatar at the end of
+      // this same row. A control that changes the whole app's chrome does not
+      // belong beside "add a recipe" on the busiest screen in the product.
+      actions={
+        <>
+          <MastheadAction accessibilityLabel={t('tabs.addRecipe')} onPress={() => router.push('/recipe/new')}>
+            {/* Two rules rather than a typed "+": a glyph at this size carries
+                the text face's stroke contrast and lands heavier than the
+                1.2px circle around it. */}
+            <View style={styles.plusH} />
+            <View style={styles.plusV} />
+          </MastheadAction>
+          <ProfileButton />
+        </>
+      }
+    />
+  )
 
-  // Shared by the skeleton and the real list so the chrome doesn't move when
-  // data lands — the whole point of placeholders over a centred spinner.
   const header = (
     <View style={styles.header}>
-      <View style={styles.greetingRow}>
-        <View style={styles.greetingText}>
-          <Text style={styles.hello}>{`${t('dashboard.hello')} ${displayName} 👋`}</Text>
-          <Text style={styles.prompt}>{t('dashboard.prompt')}</Text>
+      {masthead}
+
+      <View style={styles.controls}>
+        <SearchBar value={query} onChangeText={setQuery} placeholder={t('dashboard.search')} />
+        {/* Wraps rather than scrolls. Five chips with Khmer labels overflow a
+            phone, and a horizontal scroller cut the last one — `អាហារពេលល្ងាច` —
+            through the middle of a cluster, which reads as a rendering fault
+            rather than as an affordance. The mockup's own chip rows are
+            `flex-wrap: wrap`, and the padding here already matches its 9×15, so
+            wrapping is the design's answer rather than a workaround for ours. */}
+        <View style={styles.chips}>
+          {(['All', ...MEALTIMES] as Filter[]).map((option) => (
+            <Chip
+              key={option}
+              label={mealtimeLabel(option)}
+              active={filter === option}
+              onPress={() => setFilter(option)}
+            />
+          ))}
         </View>
-        <Pressable
-          onPress={handleShuffle}
-          disabled={loading}
-          accessibilityRole="button"
-          accessibilityLabel={t('dashboard.shuffle')}
-          style={({ pressed }) => [styles.shuffle, pressed && styles.shufflePressed]}
-        >
-          <Ionicons name="shuffle" size={20} color={c.text} />
-        </Pressable>
-        <ProfileButton />
       </View>
-
-      <SearchBar value={query} onChangeText={setQuery} placeholder={t('dashboard.search')} />
-
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-        {(['All', ...MEALTIMES] as Filter[]).map((option) => (
-          <Chip
-            key={option}
-            label={mealtimeLabel(option)}
-            active={filter === option}
-            onPress={() => setFilter(option)}
-          />
-        ))}
-      </ScrollView>
 
       {error && <Text style={styles.error}>{t(error)}</Text>}
 
-      {/* Hidden while searching — a carousel of favourites is noise when
-          you're hunting for one specific recipe. */}
-      {favourites.length > 0 && !searching && (
+      {/* Hidden while searching or filtering: the card is about today, not
+          about the query, and leaving it up makes the results look like they
+          begin with an unrelated photograph. */}
+      {!searching && filter === 'All' && (
+        <TodaysDish
+          recipe={todaysDish}
+          onPress={() => todaysDish && router.push(`/recipe/${todaysDish.id}`)}
+          onPlan={() => navigation.navigate('planner')}
+        />
+      )}
+
+      {/* The favourites rail was a horizontal carousel of photo cards. It is a
+          ruled section of ledger rows now — same feature, Chronicle's shape. A
+          carousel is a shop window, and this is an index. */}
+      {!searching && favourites.length > 0 && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t('dashboard.favourites')}</Text>
-          <FlatList
-            horizontal
-            data={favourites}
-            keyExtractor={(item) => item.id}
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.carousel}
-            renderItem={({ item }) => (
-              <RecipeCard
-                recipe={item}
-                variant="featured"
-                onPress={() => router.push(`/recipe/${item.id}`)}
-                onLongPress={() => openSheet(item)}
-                onToggleFavourite={() => handleToggleFavourite(item)}
-              />
-            )}
-          />
+          <SectionHeader label={t('dashboard.favourites')} count={n(favourites.length)} />
+          {favourites.map((recipe, index) => (
+            <LedgerRow
+              key={recipe.id}
+              title={recipe.title}
+              photoUrl={recipe.photoUrl}
+              value={`${n(recipe.totalMinutes)} ${t('detail.minutes')}`}
+              last={index === favourites.length - 1}
+              onPress={() => router.push(`/recipe/${recipe.id}`)}
+            />
+          ))}
         </View>
       )}
 
-      {/* Shown during loading too, so the heading doesn't pop in above the
-          skeletons and shove them down. */}
-      {(loading || visible.length > 0) && (
-        <Text style={[styles.sectionTitle, styles.gridTitle]}>
-          {searching ? t('dashboard.results') : t('dashboard.allRecipes')}
-        </Text>
+      {visible.length > 0 && (
+        <SectionHeader
+          label={t(searching ? 'dashboard.results' : 'index.index')}
+          count={indexRange}
+          style={styles.indexHeader}
+        />
       )}
     </View>
   )
 
+  const footer =
+    visible.length > 0 ? (
+      <AddRow
+        label={t('index.addRecipe')}
+        onPress={() => router.push('/recipe/new')}
+        style={styles.addRow}
+      />
+    ) : null
+
+  // Pads the *content*, not the scroller — padding the container is what put a
+  // hard horizontal line an inch down the page, because the list began below
+  // the status bar and a photograph scrolling up was cut off against `bg`
+  // rather than passing underneath it.
+  const topPad = useScreenTopPad()
+
   if (loading) {
     return (
-      <View style={[styles.container, { paddingTop: Math.max(insets.top, spacing.lg) }]}>
-        <FlatList
-          data={SKELETON_KEYS}
-          keyExtractor={(key) => key}
-          numColumns={2}
-          columnWrapperStyle={styles.column}
-          contentContainerStyle={[styles.list, { paddingBottom: dockClearance }]}
-          showsVerticalScrollIndicator={false}
-          // There's nothing to reach by scrolling and nothing to refresh yet.
-          scrollEnabled={false}
-          ListHeaderComponent={header}
-          renderItem={() => <RecipeCardSkeleton />}
-        />
+      <View style={styles.container}>
+        <View style={{ paddingTop: topPad }}>
+          {masthead}
+          <IndexSkeleton />
+        </View>
       </View>
     )
   }
 
   return (
-    // insets.top clears the notch/Dynamic Island and the status bar icons; the
-    // Math.max floor is for web and older Androids that report 0.
-    <View style={[styles.container, { paddingTop: Math.max(insets.top, spacing.lg) }]}>
-      <Animated.FlatList
+    <View style={styles.container}>
+      <FlatList
         ref={listRef}
-        data={gridData}
-        keyExtractor={(item, index) => item?.id ?? `filler-${index}`}
-        numColumns={2}
-        columnWrapperStyle={styles.column}
-        contentContainerStyle={[styles.list, { paddingBottom: dockClearance }]}
+        data={visible}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={[styles.list, { paddingTop: topPad }]}
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
-        // Drives the dock out of the way on the way down and back on the way
-        // up. Entirely on the UI thread — this fires every frame of every
-        // scroll, which is the last place a React render belongs.
-        onScroll={dockScrollHandler}
-        scrollEventThrottle={16}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            // Defaults are iOS grey and Android blue; the app's chrome is neither.
+            // The spinner belongs to the content, and the content starts under
+            // the status bar — without this it spins behind the clock.
+            progressViewOffset={topPad}
             tintColor={c.primary}
             colors={[c.primary]}
           />
         }
         ListHeaderComponent={header}
-        renderItem={({ item }) =>
-          item ? (
-            <RecipeCard
-              recipe={item}
-              onPress={() => router.push(`/recipe/${item.id}`)}
-              onLongPress={() => openSheet(item)}
-              onToggleFavourite={() => handleToggleFavourite(item)}
-            />
-          ) : (
-            <View style={styles.filler} />
-          )
-        }
+        ListFooterComponent={footer}
+        renderItem={({ item, index }) => (
+          <LedgerRow
+            style={styles.row}
+            title={item.title}
+            photoUrl={item.photoUrl}
+            value={`${n(item.totalMinutes)} ${t('detail.minutes')}`}
+            last={index === visible.length - 1}
+            onPress={() => router.push(`/recipe/${item.id}`)}
+            onLongPress={() => openSheet(item)}
+          />
+        )}
         ListEmptyComponent={
-          <View style={styles.empty}>
-            <Ionicons name="restaurant-outline" size={40} color={c.textPlaceholder} />
-            <Text style={styles.emptyTitle}>
-              {recipes.length === 0 ? t('dashboard.emptyTitle') : t('dashboard.noMatchTitle')}
-            </Text>
-            <Text style={styles.emptyBody}>
-              {recipes.length === 0
-                ? t('dashboard.emptyBody')
-                : t('dashboard.noMatchBody')}
-            </Text>
-          </View>
+          <Empty
+            searching={searching || filter !== 'All'}
+            onWrite={() => router.push('/recipe/new')}
+            onClassics={() => navigation.navigate('explore')}
+          />
         }
       />
 
-      {/* Long-press a card for edit/delete — keeps three tap targets off a
-          160pt photo tile without hiding the actions on the detail screen. */}
+      {/* Long-press a row for edit/delete. Three tap targets in a 52pt row is
+          what makes a ruled index look like a toolbar. */}
       <ActionSheet
         visible={sheetFor !== null}
         title={sheetFor?.title}
@@ -386,8 +408,8 @@ export default function DashboardScreen() {
       <ConfirmDialog
         visible={confirmFor !== null}
         title={t('dashboard.deleteTitle')}
-        // The recipe's own title is content and stays exactly as typed; only the
-        // sentence around it is translated.
+        // The recipe's own title is content and stays exactly as typed; only
+        // the sentence around it is translated.
         message={confirmFor ? `“${confirmFor.title}” — ${t('dashboard.deleteMessage')}` : undefined}
         onCancel={() => setConfirmFor(null)}
         onConfirm={() => {
@@ -400,47 +422,130 @@ export default function DashboardScreen() {
   )
 }
 
-const makeStyles = (c: ThemeColors, type: TypeScale) => StyleSheet.create({
-  container: { flex: 1, backgroundColor: c.bg },
-  list: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl, gap: spacing.md },
-  column: { gap: spacing.md },
-  filler: { flex: 1 },
-  // Breathing room under the status bar — the greeting shouldn't sit tight
-  // against the clock and battery icons.
-  header: { gap: spacing.lg, paddingTop: spacing.lg },
-  greetingRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  // minWidth: 0 so a long display name wraps instead of shoving the shuffle
-  // button off the right edge.
-  greetingText: { flex: 1, minWidth: 0, gap: 2 },
-  // No hand-set `lineHeight`, and this is the bug that started the whole
-  // typography pass. It was 34 — a hair over Latin's natural ~33.6 at 28pt, so
-  // it read as harmless — but both platforms shrink the line box from the *top*
-  // when lineHeight falls under the font's ascent, and a Khmer cluster's ascent
-  // includes the vowel signs stacked above the base consonant. 34 shaved them
-  // off the greeting. Unset is the fix; a bigger number is not (see `typeKm`).
-  hello: { ...type.display, color: c.text },
-  prompt: { ...type.body, color: c.textMuted },
-  // A neutral icon button, not a tinted one. It used to carry `accentSoft` with
-  // an `accent` glyph, back when `accent` was a second, deeper green than
-  // `primary`. There is one green now, so a green-tinted shuffle would sit at
-  // the same weight as the app's actual primary action — green appears only
-  // where something genuinely *is* the primary action.
-  shuffle: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.pill,
-    backgroundColor: c.surfaceAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  shufflePressed: { opacity: 0.7 },
-  chips: { gap: spacing.xs, paddingRight: spacing.lg },
-  section: { gap: spacing.md },
-  sectionTitle: { ...type.section, color: c.text },
-  gridTitle: { marginBottom: -spacing.xs },
-  carousel: { gap: spacing.md, paddingRight: spacing.lg },
-  error: { ...type.body, color: c.danger },
-  empty: { alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.xxl },
-  emptyTitle: { ...type.section, color: c.text },
-  emptyBody: { ...type.body, color: c.textMuted, textAlign: 'center' },
-})
+/**
+ * SCREENS.md § 19 — the empty book, and § 12's no-results, which differ only in
+ * what they say. Both are the ruled page with nothing written on it: the chrome
+ * stays put so you still know where you are, one primary action, one quieter
+ * alternative.
+ *
+ * The ghosted `០` is set in Moul at `accentGhost` and is the reason that token
+ * exists. It is a **numeral**, so it follows the language like every other one —
+ * an English `0` under a Khmer heading would break the rule in the one place
+ * with nothing else on screen to distract from it.
+ */
+function Empty({
+  searching,
+  onWrite,
+  onClassics,
+}: {
+  searching: boolean
+  onWrite: () => void
+  onClassics: () => void
+}) {
+  const styles = useThemedStyles(makeStyles)
+  const t = useT()
+  const n = useNum()
+
+  return (
+    <View style={styles.empty}>
+      {/* 62 for the empty book, 46 for a search that missed — the mockup sets
+          the no-results mark a step smaller because it sits above a shorter
+          heading. Both at 1.45. */}
+      <Text style={[styles.ghost, searching && styles.ghostSmall]}>{searching ? '?' : n(0)}</Text>
+      <Text style={styles.emptyTitle}>
+        {t(searching ? 'empty.noMatchTitle' : 'empty.recipesTitle')}
+      </Text>
+      <Text style={styles.emptyBody}>
+        {t(searching ? 'empty.noMatchBody' : 'empty.recipesBody')}
+      </Text>
+      <PrimaryButton
+        label={t(searching ? 'empty.writeItYourself' : 'empty.recipesPrimary')}
+        variant={searching ? 'outline' : 'solid'}
+        onPress={onWrite}
+        style={styles.emptyButton}
+      />
+      {/* Only on a genuinely empty book — offering the classics to someone whose
+          search missed would be answering a question they didn't ask.
+
+          It goes to **Explore**, which is what "begin with eight classics" has
+          meant since the shared library shipped. It used to call `onWrite`,
+          which made the alt link a second copy of the primary button. */}
+      {!searching && <TextLink label={t('empty.recipesAlt')} onPress={onClassics} />}
+    </View>
+  )
+}
+
+/**
+ * Placeholder rows that **copy the real row's measurements** — the 46pt
+ * thumbnail, the 12pt vertical padding, the hairline — so content lands where
+ * the placeholder was instead of the page jumping when data arrives.
+ *
+ * `usePulse()` is called once and the value shared, never per block: independent
+ * animations drift out of phase within seconds, and a page of separately
+ * blinking boxes reads as broken rather than as loading.
+ */
+function IndexSkeleton() {
+  const styles = useThemedStyles(makeStyles)
+  const pulse = usePulse()
+  return (
+    <View style={styles.skeleton}>
+      {SKELETON_KEYS.map((key) => (
+        <View key={key} style={styles.skeletonRow}>
+          <Skeleton pulse={pulse} style={styles.skeletonThumb} />
+          <View style={styles.skeletonText}>
+            <Skeleton pulse={pulse} style={styles.skeletonTitle} />
+          </View>
+          <Skeleton pulse={pulse} style={styles.skeletonValue} />
+        </View>
+      ))}
+    </View>
+  )
+}
+
+const makeStyles = (c: ThemeColors, type: TypeScale) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: c.bg },
+    // No horizontal padding on the list: `TodaysDish` runs full-bleed and every
+    // other child insets itself. Padding here would box the photograph in.
+    list: { paddingBottom: spacing.xxl },
+    header: { gap: spacing.sectionSpacing },
+    controls: { paddingHorizontal: spacing.gutter, gap: spacing.md },
+    chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+    section: { paddingHorizontal: spacing.gutter },
+    indexHeader: { paddingHorizontal: spacing.gutter, marginTop: spacing.sm },
+    row: { marginHorizontal: spacing.gutter },
+    addRow: { marginHorizontal: spacing.gutter, marginTop: spacing.sectionSpacing },
+    error: { ...type.body, color: c.danger, paddingHorizontal: spacing.gutter },
+
+    plusH: { position: 'absolute', width: 11, height: 1.2, backgroundColor: c.text },
+    plusV: { position: 'absolute', width: 1.2, height: 11, backgroundColor: c.text },
+
+    empty: {
+      alignItems: 'center',
+      gap: spacing.md,
+      paddingTop: spacing.xxl,
+      paddingHorizontal: spacing.gutter,
+    },
+    // Moul 62/1.45, the mockup's own. It used to be set from `stepNumeral` —
+    // 96/100 — which is cook mode's numeral and appears nowhere else: RN crops
+    // to the line box, so a 96pt Moul glyph in a 100pt box lost its middle and
+    // left two grey slivers on the page.
+    ghost: { ...type.ghostGlyph, color: c.accentGhost },
+    // `sized`, so the 1.45 comes down with the size rather than leaving a 46pt
+    // glyph in a 90pt line box.
+    ghostSmall: sized(type.ghostGlyph, 46),
+    // `emptyTitle`, not `screenTitle`. See the note on the token.
+    emptyTitle: { ...type.emptyTitle, color: c.text, textAlign: 'center' },
+    emptyBody: { ...type.bodyRead, color: c.textMuted, textAlign: 'center' },
+    emptyButton: { alignSelf: 'stretch', marginTop: spacing.sm },
+
+    skeleton: { paddingHorizontal: spacing.gutter, paddingTop: spacing.xxl, gap: spacing.lg },
+    skeletonRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+    // The real row's measurements, copied — that is the whole point of a
+    // skeleton. Content lands where the placeholder was instead of the page
+    // jumping the moment data arrives.
+    skeletonThumb: { width: 46, height: 46, borderRadius: radius.thumb },
+    skeletonText: { flex: 1 },
+    skeletonTitle: { width: '70%', height: 15 },
+    skeletonValue: { width: 44, height: 11 },
+  })

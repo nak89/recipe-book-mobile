@@ -76,6 +76,12 @@ export const KHMER_INGREDIENTS: CommonIngredient<KhmerIngredientCategory>[] = [
   { name: 'ផ្កាចេក', emoji: '🌸', unit: '', category: 'បន្លែ' },
   { name: 'ត្រាវ', emoji: '🥔', unit: 'g', category: 'បន្លែ' },
   { name: 'ឆៃថាវ', emoji: '🥕', unit: 'g', category: 'បន្លែ' },
+  // Lettuce — not a Cambodian staple on its own, but lok lak is served on a
+  // bed of it, so the library needs a word for it.
+  { name: 'សាឡាដ់', emoji: '🥬', unit: 'g', category: 'បន្លែ' },
+  { name: 'ប៊ីតរូត', emoji: '🟣', unit: '', category: 'បន្លែ' },
+  // Pickled scallion heads — meang nem is built on them.
+  { name: 'ខ្ទឹមប្រៃ', emoji: '🧅', unit: 'g', category: 'បន្លែ' },
 
   // -------------------------------------------------------------- ផ្លែឈើ
   { name: 'ចេក', emoji: '🍌', unit: '', category: 'ផ្លែឈើ' },
@@ -90,6 +96,9 @@ export const KHMER_INGREDIENTS: CommonIngredient<KhmerIngredientCategory>[] = [
   { name: 'អំពិល', emoji: '🟤', unit: 'g', category: 'ផ្លែឈើ' },
   { name: 'ធូរេន', emoji: '🍈', unit: '', category: 'ផ្លែឈើ' },
   { name: 'មៀន', emoji: '🍈', unit: '', category: 'ផ្លែឈើ' },
+  // Bitter orange. Its zest and juice are both meang nem ingredients, and
+  // neither is the ក្រូចឆ្មារ or the ក្រូចសើច already listed.
+  { name: 'ក្រូចឃ្វិច', emoji: '🍊', unit: '', category: 'ផ្លែឈើ' },
 
   // --------------------------------------------------------- សាច់ និងត្រី
   { name: 'សាច់មាន់', emoji: '🍗', unit: 'g', category: 'សាច់ និងត្រី' },
@@ -101,6 +110,8 @@ export const KHMER_INGREDIENTS: CommonIngredient<KhmerIngredientCategory>[] = [
   { name: 'សាច់ក្រក', emoji: '🌭', unit: 'g', category: 'សាច់ និងត្រី' },
   { name: 'ត្រី', emoji: '🐟', unit: 'g', category: 'សាច់ និងត្រី' },
   { name: 'ត្រីងៀត', emoji: '🐟', unit: 'g', category: 'សាច់ និងត្រី' },
+  // Snakehead — the fish amok and ភ្លាមាត់ទឹក are both made from.
+  { name: 'ត្រីរ៉ស់', emoji: '🐟', unit: 'g', category: 'សាច់ និងត្រី' },
   { name: 'បង្គា', emoji: '🍤', unit: 'g', category: 'សាច់ និងត្រី' },
   { name: 'ក្តាម', emoji: '🦀', unit: '', category: 'សាច់ និងត្រី' },
   { name: 'ខ្យង', emoji: '🐚', unit: 'g', category: 'សាច់ និងត្រី' },
@@ -118,6 +129,8 @@ export const KHMER_INGREDIENTS: CommonIngredient<KhmerIngredientCategory>[] = [
   { name: 'ជីវ៉ាន់ស៊ុយ', emoji: '🌿', unit: 'g', category: 'គ្រឿងទេស' },
   { name: 'ជីអង្កាម', emoji: '🌿', unit: 'g', category: 'គ្រឿងទេស' },
   { name: 'ស្លឹកម្រះ', emoji: '🌿', unit: 'g', category: 'គ្រឿងទេស' },
+  { name: 'ជីរនាងវង', emoji: '🌿', unit: 'g', category: 'គ្រឿងទេស' },
+  { name: 'ស្លឹកតើយ', emoji: '🌿', unit: 'សន្លឹក', category: 'គ្រឿងទេស' },
   // Kampot pepper is the one Cambodian ingredient with a protected origin.
   { name: 'ម្រេច', emoji: '⚫', unit: 'tsp', category: 'គ្រឿងទេស' },
   { name: 'ម្រេចខ្ចី', emoji: '🟢', unit: 'ដើម', category: 'គ្រឿងទេស' },
@@ -130,6 +143,10 @@ export const KHMER_INGREDIENTS: CommonIngredient<KhmerIngredientCategory>[] = [
   { name: 'ទឹកត្រី', emoji: '🐟', unit: 'tbsp', category: 'ទឹកជ្រលក់ និងប្រេង' },
   // Prahok — fermented fish paste. Nothing on the English list stands in for it.
   { name: 'ប្រហុក', emoji: '🐟', unit: 'tbsp', category: 'ទឹកជ្រលក់ និងប្រេង' },
+  // Kapi — shrimp paste. Distinct from ប្រហុក above, which is fish, and the
+  // two are not interchangeable in a recipe.
+  { name: 'កាពិ', emoji: '🦐', unit: 'tbsp', category: 'ទឹកជ្រលក់ និងប្រេង' },
+  { name: 'ស្រាឆា', emoji: '🍶', unit: 'tbsp', category: 'ទឹកជ្រលក់ និងប្រេង' },
   { name: 'ទឹកស៊ីអ៊ីវ', emoji: '🍶', unit: 'tbsp', category: 'ទឹកជ្រលក់ និងប្រេង' },
   { name: 'ទឹកខ្យង', emoji: '🦪', unit: 'tbsp', category: 'ទឹកជ្រលក់ និងប្រេង' },
   { name: 'ប្រេងឆា', emoji: '🛢️', unit: 'tbsp', category: 'ទឹកជ្រលក់ និងប្រេង' },
@@ -167,6 +184,7 @@ export const KHMER_INGREDIENTS: CommonIngredient<KhmerIngredientCategory>[] = [
   // Palm sugar, not cane — it's the default sweetener in Cambodian cooking.
   { name: 'ស្ករត្នោត', emoji: '🟤', unit: 'g', category: 'គ្រឿងផ្អែម' },
   { name: 'ស្ករស', emoji: '🍬', unit: 'g', category: 'គ្រឿងផ្អែម' },
+  { name: 'ស្ករក្រហម', emoji: '🟤', unit: 'g', category: 'គ្រឿងផ្អែម' },
   { name: 'ទឹកឃ្មុំ', emoji: '🍯', unit: 'tbsp', category: 'គ្រឿងផ្អែម' },
   { name: 'ម្សៅ', emoji: '🌾', unit: 'g', category: 'គ្រឿងផ្អែម' },
   { name: 'ម្សៅដំណើប', emoji: '🌾', unit: 'g', category: 'គ្រឿងផ្អែម' },

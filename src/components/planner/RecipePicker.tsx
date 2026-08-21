@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react'
 import { Image } from 'expo-image'
-import { FlatList, Modal, Pressable, StyleSheet, Text, View } from 'react-native'
+import { FlatList, Modal, Pressable, StyleSheet, View } from 'react-native'
+import { Text } from '@/components/ui/Text'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import SearchBar from '@/components/ui/SearchBar'
 import { useT } from '@/i18n'
 import { useDebounce } from '@/hooks/useDebounce'
 import { foldForCompare } from '@/lib/text'
-import { radius, shadow, spacing, useThemedStyles } from '@/theme'
+import { contentType, radius, shadow, spacing, useThemedStyles } from '@/theme'
 import type { ThemeColors, TypeScale } from '@/theme'
 import type { Recipe } from '@/types/recipe'
 
@@ -101,7 +102,12 @@ export default function RecipePicker({
                   <View style={styles.thumb} />
                 )}
                 <View style={styles.rowText}>
-                  <Text style={styles.rowTitle} numberOfLines={1}>
+                  {/* Content, so the face follows the title's script rather
+                      than the interface language. */}
+                  <Text
+                    style={[styles.rowTitle, contentType('bodyStrong', item.title)]}
+                    numberOfLines={1}
+                  >
                     {item.title}
                   </Text>
                   <Text style={styles.rowMeta} numberOfLines={1}>
@@ -152,7 +158,7 @@ const makeStyles = (c: ThemeColors, type: TypeScale) =>
     rowPressed: { backgroundColor: c.surfaceAlt },
     thumb: { width: 48, height: 48, borderRadius: radius.sm, backgroundColor: c.surfaceSunken },
     rowText: { flex: 1, minWidth: 0, gap: 2 },
-    rowTitle: { ...type.bodyStrong, color: c.text },
+    rowTitle: { color: c.text },
     rowMeta: { ...type.caption, color: c.textMuted },
     empty: { alignItems: 'center', gap: spacing.xs, padding: spacing.xxl },
     emptyTitle: { ...type.section, color: c.text },

@@ -1,349 +1,198 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Ionicons } from '@expo/vector-icons'
-import { useRouter } from 'expo-router'
-import { Pressable, StyleSheet } from 'react-native'
-import { Gesture, GestureDetector } from 'react-native-gesture-handler'
-import Animated, {
-  runOnJS,
-  scrollTo,
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-  withTiming,
-} from 'react-native-reanimated'
+import { Pressable, StyleSheet, View } from 'react-native'
+import { Text } from '@/components/ui/Text'
+import type { ReactNode } from 'react'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useDockHidden } from '@/components/dock/DockScroll'
-import GlassSurface from '@/components/ui/GlassSurface'
+import { BasketIcon, BookIcon, CalendarIcon, MagnifierIcon } from '@/components/ui/icons'
+import { useGroceryOutstanding } from '@/lib/groceryBadge'
 import type { SwipeTabBarProps } from '@/navigation/SwipeTabs'
-import { hairline, shadow, spacing, useTheme, useThemedStyles } from '@/theme'
-import type { ThemeColors } from '@/theme'
-import { useT } from '@/i18n'
+import { radius, spacing, useTheme, useThemedStyles } from '@/theme'
+import type { ThemeColors, TypeScale } from '@/theme'
+import { useNum, useT } from '@/i18n'
 import type { StringKey } from '@/i18n/strings'
 
-const ICONS: Record<
-  string,
-  { active: keyof typeof Ionicons.glyphMap; inactive: keyof typeof Ionicons.glyphMap }
-> = {
-  // `book` rather than `home` for the library: with a calendar sitting beside
-  // it, "home" describes where the tab sits in the app rather than what's on it,
-  // and the pair reads as one idea — a book of recipes and a week to cook them.
-  index: { active: 'book', inactive: 'book-outline' },
-  planner: { active: 'calendar', inactive: 'calendar-outline' },
+/**
+ * Chronicle's own hairline constructions, at 1.4px — see `ui/icons.tsx`.
+ *
+ * There is no filled variant to switch to on selection, and that is by design
+ * rather than a limitation. The old bar used filled-vs-outline as one of three
+ * "selected" cues alongside a sliding capsule and a colour change; Chronicle
+ * states two, the tamarind pill and tamarind ink. A solid glyph would also be
+ * the heaviest mark on a page whose entire visual system is 1–1.5px rules.
+ */
+const ICONS: Record<string, (props: { color: string }) => ReactNode> = {
+  // A magnifier rather than a compass or a globe: Explore's own surface leads
+  // with a search field, and the glyph should name what the tab does rather
+  // than gesture at the idea of discovery.
+  explore: MagnifierIcon,
+  index: BookIcon,
+  planner: CalendarIcon,
+  grocery: BasketIcon,
 }
 
 /**
- * Keyed by route name for the same reason `ICONS` is: the previous version was
- * a ternary on `route.name === 'profile'`, which quietly labelled every tab that
+ * Keyed by route name for the same reason `ICONS` is: an earlier version was a
+ * ternary on `route.name === 'profile'`, which quietly labelled every tab that
  * wasn't profile as "Home". A third destination would have inherited that.
  */
 const LABEL_KEYS: Record<string, StringKey> = {
+  explore: 'tabs.explore',
   index: 'tabs.recipes',
   planner: 'tabs.planner',
-}
-
-/** Height of the tab pill. */
-export const DOCK_HEIGHT = 58
-
-/** The add button, sized independently — it shares no edge with the pill. */
-const ADD_SIZE = 56
-
-/** Padding between the pill's edge and the sliding capsule inside it. */
-const CAPSULE_INSET = 5
-
-/**
- * Concentric radii. The capsule's corners are the pill's corners minus the gap
- * between them, which is what makes the two curves parallel instead of merely
- * both-round — the same rule hardware uses for a screen inside a bezel. Getting
- * this wrong is subtle and reads as "slightly cheap" without being nameable.
- */
-const PILL_RADIUS = DOCK_HEIGHT / 2
-const CAPSULE_RADIUS = PILL_RADIUS - CAPSULE_INSET
-
-const PRESS_IN = { duration: 90 }
-const PRESS_OUT = { damping: 9, stiffness: 380, mass: 0.4 }
-const REVEAL = { damping: 18, stiffness: 260, mass: 0.5 }
-
-function clamp(value: number, min: number, max: number) {
-  'worklet'
-  return Math.min(Math.max(value, min), max)
+  grocery: 'tabs.grocery',
 }
 
 /**
- * Two separate floating things: a glass pill holding the destinations, and the
- * add button riding above its right end.
+ * The bar's own height, before the home-indicator inset.
  *
- * The add button is **not a tab** and never was — it opens a modal rather than
- * going anywhere, and a tab bar is only honest if every tab is a place you can
- * be. It doesn't share a row, a baseline or a height with the pill: sitting
- * *above* it rather than beside it is what stops the two reading as one control
- * with an odd gap.
- *
- * Everything that moves here runs on the UI thread — the capsule follows the
- * pager, the dock follows the scroll position, and the icons follow a press —
- * so none of it can be stalled by whatever React is doing at the time.
+ * Chronicle specifies 88px `box-sizing: border-box` at a 390×844 frame that
+ * draws no home indicator. On a modern iPhone the bottom inset is ~34, so 54 of
+ * content plus that inset lands on 88 exactly; on hardware with no inset the
+ * bar holds 54 plus the `spacing.md` floor. Treating the 88 as content *plus*
+ * inset would have produced a 122pt bar.
  */
-export default function TabBar({
-  state,
-  navigation,
-  scrollX,
-  pageWidth,
-  pagerRef,
-}: SwipeTabBarProps) {
+const BAR_CONTENT_HEIGHT = 54
+
+/**
+ * The bottom navigation: three destinations on solid paper, under a single ink
+ * rule.
+ *
+ * This replaced a floating frosted-glass pill that hid on scroll, carried a
+ * capsule sliding under your finger, and had a green "+" riding above its right
+ * end. All of that went with the direction rather than being simplified away —
+ * Chronicle is a printed page, its motion section allows four transitions in the
+ * entire product ("the paper does not bounce"), and a bar that floats is a bar
+ * pretending to be glass over something that is pretending to be paper.
+ *
+ * What survives is the **swipe between tabs**, which lives in `SwipeTabs` rather
+ * than here. That is a way of moving around the app, not decoration, and it is
+ * also what keeps each tab a real address so `/planner` still resolves in a
+ * browser. What went with the capsule is the *bar's own drag* — it existed to
+ * push the capsule, and there is no longer a capsule to push.
+ *
+ * The bar is a normal sibling of the pager in a column, so it **reserves its own
+ * space**. Screens no longer pad around it, which is why `useDockClearance` is
+ * gone: it existed only because the old dock floated over content.
+ *
+ * **It holds destinations and nothing else.** A transitional "+" rode above its
+ * right end while the mastheads were being built; both mastheads now carry
+ * their own actions ("+" on the Recipes index, share and "+" on Market), so it
+ * is gone. A tab bar is only honest if every item in it is a place you can be,
+ * and a button that opens a modal is not a place.
+ *
+ * All **four** of Chronicle's destinations are here — Explore · Recipes · Week ·
+ * Market — in that order, and Explore lands first because it is the first child
+ * (`SwipeTabs` sets no `initialRouteName`, so `TabRouter` takes the first one).
+ * Read left to right they are the journey a recipe takes: find it, keep it, plan
+ * it, shop for it.
+ */
+export default function TabBar({ state, navigation }: SwipeTabBarProps) {
   const { colors: c } = useTheme()
   const styles = useThemedStyles(makeStyles)
   const t = useT()
+  const n = useNum()
   const insets = useSafeAreaInsets()
-  const router = useRouter()
-  const hidden = useDockHidden()
-
-  const count = state.routes.length
-  const [pillWidth, setPillWidth] = useState(0)
-  const tabWidth = pillWidth === 0 ? 0 : (pillWidth - CAPSULE_INSET * 2) / count
-  const maxScrollX = pageWidth * (count - 1)
-  const bottomInset = Math.max(insets.bottom, spacing.md)
-
-  // Arriving somewhere new always shows the dock. Otherwise you scroll down on
-  // the dashboard, swipe to the profile, and land on a screen with no visible
-  // way off it until you happen to scroll up.
-  useEffect(() => {
-    hidden.value = withSpring(0, REVEAL)
-  }, [state.index, hidden])
-
-  // The capsule is a scaled-down picture of the pager: one tab-width of travel
-  // for every page-width the pages move. Reading the live offset rather than
-  // `state.index` is what makes it track a finger mid-swipe instead of snapping
-  // when the gesture ends.
-  const capsuleStyle = useAnimatedStyle(() => {
-    const page = pageWidth > 0 ? scrollX.value / pageWidth : 0
-    return { transform: [{ translateX: clamp(page, 0, count - 1) * tabWidth }] }
-  })
-
-  // Slides the whole dock out of the way, shrinking slightly as it goes so it
-  // reads as receding rather than as a panel being cut off by the screen edge.
-  const travel = ADD_SIZE + spacing.md + DOCK_HEIGHT + bottomInset
-  const dockStyle = useAnimatedStyle(() => ({
-    opacity: 1 - hidden.value * 0.35,
-    transform: [{ translateY: hidden.value * travel }, { scale: 1 - hidden.value * 0.06 }],
-  }))
-
-  // Where the pager sat when the drag began, and the router's index kept where
-  // a worklet can see it — `state.index` is a JS value the UI thread can't read.
-  const dragOrigin = useSharedValue(0)
-  const currentIndex = useSharedValue(state.index)
-  useEffect(() => {
-    currentIndex.value = state.index
-  }, [state.index, currentIndex])
-
-  function commit(index: number) {
-    const route = state.routes[index]
-    if (route && index !== state.index) navigation.navigate(route.name)
-  }
-
-  const pan = useMemo(
-    () =>
-      Gesture.Pan()
-        // Claimed only after real sideways travel, so a tap still reaches the
-        // button underneath and a vertical swipe is left to the list below.
-        .activeOffsetX([-6, 6])
-        .failOffsetY([-14, 14])
-        .onBegin(() => {
-          dragOrigin.value = currentIndex.value * pageWidth
-        })
-        .onUpdate((event) => {
-          if (tabWidth === 0) return
-          const offset = dragOrigin.value + (event.translationX / tabWidth) * pageWidth
-          // Drives the pages from the UI thread. The capsule is driven by the
-          // pager's own offset, so it follows for free and the two can't drift.
-          scrollTo(pagerRef, clamp(offset, 0, maxScrollX), 0, false)
-        })
-        .onEnd((event) => {
-          if (tabWidth === 0) return
-          const offset = dragOrigin.value + (event.translationX / tabWidth) * pageWidth
-          const landed = clamp(
-            Math.round(clamp(offset, 0, maxScrollX) / Math.max(pageWidth, 1)),
-            0,
-            count - 1
-          )
-          // Animate home first, then tell the router: the state change
-          // re-renders both scenes, and doing that first would drop the work on
-          // the animation's opening frames.
-          scrollTo(pagerRef, landed * pageWidth, 0, true)
-          runOnJS(commit)(landed)
-        }),
-    // `commit` closes over `state`, so the gesture is rebuilt when it changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [count, currentIndex, dragOrigin, maxScrollX, pageWidth, pagerRef, tabWidth, state, navigation]
-  )
+  const outstanding = useGroceryOutstanding()
 
   return (
-    <Animated.View
-      // box-none, so the gap between the pill and the button isn't a dead strip
-      // laid over the content scrolling underneath.
-      pointerEvents="box-none"
-      style={[styles.dock, { paddingBottom: bottomInset }, dockStyle]}
-    >
-      <DockButton
-        accessibilityLabel={t('tabs.addRecipe')}
-        style={styles.add}
-        onPress={() => router.push('/recipe/new')}
-      >
-        <Ionicons name="add" size={28} color={c.onPrimary} />
-      </DockButton>
-
-      <GestureDetector gesture={pan}>
-        <Animated.View style={styles.pillWrap}>
-          <GlassSurface
-            style={styles.pill}
-            onLayout={(event) => setPillWidth(event.nativeEvent.layout.width)}
+    <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
+      {state.routes.map((route, index) => {
+        const focused = state.index === index
+        return (
+          <Pressable
+            key={route.key}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: focused }}
+            accessibilityLabel={
+              route.name === 'grocery' && outstanding > 0
+                ? // Spoken aloud, so it follows the numeral rule like anything
+                  // else on screen — a screen reader is not an exception to it.
+                  `${t('tabs.grocery')}, ${t('grocery.stillToBuy').replace('{n}', n(outstanding))}`
+                : t(LABEL_KEYS[route.name] ?? 'tabs.recipes')
+            }
+            style={styles.tab}
+            onPress={() => {
+              const event = navigation.emit({
+                type: 'tabPress',
+                target: route.key,
+                canPreventDefault: true,
+              })
+              if (!focused && !event.defaultPrevented) navigation.navigate(route.name)
+            }}
           >
-            {tabWidth > 0 && (
-              <Animated.View
-                // Decoration — it must never intercept a tap meant for the tab
-                // it is sitting on.
-                pointerEvents="none"
-                style={[styles.capsule, { width: tabWidth }, capsuleStyle]}
-              />
-            )}
-
-            {state.routes.map((route, index) => {
-              const focused = state.index === index
-              const icons = ICONS[route.name] ?? ICONS.index
-
-              return (
-                <DockButton
-                  key={route.key}
-                  accessibilityLabel={t(LABEL_KEYS[route.name] ?? 'tabs.recipes')}
-                  selected={focused}
-                  style={styles.tab}
-                  onPress={() => {
-                    const event = navigation.emit({
-                      type: 'tabPress',
-                      target: route.key,
-                      canPreventDefault: true,
-                    })
-                    if (!focused && !event.defaultPrevented) navigation.navigate(route.name)
-                  }}
-                >
-                  <Ionicons
-                    name={focused ? icons.active : icons.inactive}
-                    size={24}
-                    // The unselected icon can't use `textPlaceholder` here the
-                    // way it would on a solid surface: the pill takes its
-                    // colour from whatever scrolls under it, so the contrast
-                    // isn't fixed. See `onGlassMuted`.
-                    color={focused ? c.text : c.onGlassMuted}
-                  />
-                </DockButton>
-              )
-            })}
-          </GlassSurface>
-        </Animated.View>
-      </GestureDetector>
-    </Animated.View>
+            <View style={[styles.pill, focused && styles.pillActive]}>
+              <View style={styles.glyph}>
+                {(ICONS[route.name] ?? ICONS.index)({
+                  color: focused ? c.primary : c.inactive,
+                })}
+                {/* A "still to buy" dot, drawn rather than counted — a number at
+                    this size is unreadable, and the count is already spoken in
+                    the tab's accessible name above. */}
+                {route.name === 'grocery' && outstanding > 0 && <View style={styles.badge} />}
+              </View>
+              {/* A tighter clamp than the app-wide one, and the dock is the
+                  case that earns an override: it is four fixed columns of a
+                  fixed-height bar, so a label has nowhere to grow and its only
+                  failure is the ellipsis. `Text`'s size-aware default would
+                  give a 9.5pt label the full 1.35× (34/9.5 is way past the
+                  cap), which overruns a 320pt phone's ~64pt column. 1.15 is
+                  what "PLANNER" and គ្រោងអាហារ both still fit at. The tab's
+                  accessible name is unaffected — a screen reader reads the
+                  string, not the box. */}
+              <Text
+                style={[styles.label, focused && styles.labelActive]}
+                numberOfLines={1}
+                maxFontSizeMultiplier={1.15}
+              >
+                {t(LABEL_KEYS[route.name] ?? 'tabs.recipes')}
+              </Text>
+            </View>
+          </Pressable>
+        )
+      })}
+    </View>
   )
 }
 
-/**
- * A pressable that dips under the finger and springs back.
- *
- * Its own component because each one needs its own shared value — a single
- * value shared across the dock would scale every icon at once. The scale sits
- * on an inner view rather than the Pressable so the touch target keeps its full
- * size while the thing you can see shrinks.
- */
-function DockButton({
-  children,
-  onPress,
-  style,
-  selected,
-  accessibilityLabel,
-}: {
-  children: React.ReactNode
-  onPress: () => void
-  style?: object
-  selected?: boolean
-  accessibilityLabel: string
-}) {
-  const scale = useSharedValue(1)
-  const animatedStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }))
-
-  return (
-    <Pressable
-      onPress={onPress}
-      onPressIn={() => {
-        scale.value = withTiming(0.88, PRESS_IN)
-      }}
-      onPressOut={() => {
-        scale.value = withSpring(1, PRESS_OUT)
-      }}
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
-      accessibilityState={selected === undefined ? undefined : { selected }}
-      style={style}
-    >
-      <Animated.View style={animatedStyle}>{children}</Animated.View>
-    </Pressable>
-  )
-}
-
-const makeStyles = (c: ThemeColors) => StyleSheet.create({
-  // A column, not a row: the button stacks above the pill rather than sharing
-  // its line.
-  dock: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    gap: spacing.md,
-    paddingHorizontal: spacing.lg,
-  },
-  pillWrap: { alignSelf: 'stretch' },
-  pill: {
-    height: DOCK_HEIGHT,
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: CAPSULE_INSET,
-    borderRadius: PILL_RADIUS,
-    // Clips the blur to the pill. Without it the blur stays a rectangle and the
-    // rounded corners frame a hard square of frosted background.
-    overflow: 'hidden',
-    borderWidth: hairline,
-    borderColor: c.glassBorder,
-    ...shadow.floating,
-  },
-  tab: { flex: 1, alignItems: 'center', justifyContent: 'center', height: '100%' },
-  // The sliding selection. Absolute and inset by the pill's own padding, so its
-  // travel is exactly `tabWidth` per page and its ends line up with the pill's.
-  capsule: {
-    position: 'absolute',
-    left: CAPSULE_INSET,
-    top: CAPSULE_INSET,
-    bottom: CAPSULE_INSET,
-    borderRadius: CAPSULE_RADIUS,
-    backgroundColor: c.glassHighlight,
-  },
-  // Solid rather than glass. This is the app's primary action, and glass on
-  // glass would make it one more piece of chrome instead of the thing you came
-  // to press. `alignSelf` is what puts it on the right without a spacer.
-  add: {
-    alignSelf: 'flex-end',
-    width: ADD_SIZE,
-    height: ADD_SIZE,
-    borderRadius: ADD_SIZE / 2,
-    backgroundColor: c.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...shadow.floating,
-  },
-})
-
-/**
- * How much room a scrolling screen has to leave at the bottom so its last row
- * doesn't finish underneath the dock. The dock floats over the content on
- * purpose — that's what gives the glass something to refract — so nothing
- * reserves this space automatically the way a docked tab bar used to.
- */
-export function useDockClearance() {
-  const insets = useSafeAreaInsets()
-  return DOCK_HEIGHT + Math.max(insets.bottom, spacing.md) + spacing.md
-}
+const makeStyles = (c: ThemeColors, type: TypeScale) =>
+  StyleSheet.create({
+    bar: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      backgroundColor: c.bg,
+      // A single 1.5px ink rule, full width — the same weight as a masthead's,
+      // so the two pieces of chrome read as the same material. Not a hairline:
+      // the design states 1.5 and it is the strongest rule in the system.
+      borderTopWidth: 1.5,
+      borderTopColor: c.text,
+      paddingTop: 9,
+    },
+    tab: { flex: 1, minHeight: BAR_CONTENT_HEIGHT },
+    pill: {
+      alignItems: 'center',
+      // The design's own `gap: 7`, which is off the spacing scale and stays a
+      // literal for that reason — it is a measurement of this control, not a
+      // step someone should pick from.
+      gap: 7,
+      paddingVertical: 6,
+      paddingHorizontal: spacing.sm,
+      borderRadius: radius.card,
+    },
+    pillActive: { backgroundColor: c.accentPill },
+    // The three icons have different natural heights (15, 16, 20), so they are
+    // centred in a common box — otherwise the labels sit at three different
+    // baselines across the bar.
+    glyph: { height: 20, alignItems: 'center', justifyContent: 'center' },
+    label: { ...type.tabLabel, color: c.inactive, textTransform: 'uppercase' },
+    // Tamarind, and paired with the pill rather than carrying "selected" alone.
+    // Chronicle names both cues; the colour on its own would be doing too much.
+    labelActive: { color: c.primary },
+    badge: {
+      position: 'absolute',
+      top: -1,
+      right: -3,
+      width: 7,
+      height: 7,
+      borderRadius: '50%',
+      backgroundColor: c.primary,
+    },
+  })

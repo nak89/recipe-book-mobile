@@ -9,12 +9,13 @@ export default function SignupScreen() {
   return (
     <AuthForm
       heading={t('auth.signup.heading')}
-      subheading={t('auth.signup.heading')}
+      subheading={t('auth.signup.subheading')}
       submitLabel={t('auth.signup.submit')}
       onSubmit={signup}
       footerText={t('auth.signup.footer')}
       footerLinkText={t('auth.login.submit')}
       footerHref="/login"
+      collectName
     />
   )
 }

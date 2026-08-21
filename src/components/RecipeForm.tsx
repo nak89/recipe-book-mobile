@@ -5,19 +5,8 @@ import { useHeaderHeight } from '@react-navigation/elements'
 import { useNavigation } from 'expo-router'
 import * as ImagePicker from 'expo-image-picker'
 import { Image } from 'expo-image'
-import {
-  ActivityIndicator,
-  Dimensions,
-  Keyboard,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native'
+import { ActivityIndicator, Dimensions, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { Text, TextInput } from '@/components/ui/Text'
 import type {
   LayoutChangeEvent,
   NativeScrollEvent,
@@ -39,24 +28,38 @@ import {
   usedSteps,
   validateStep,
 } from '@/lib/recipeValidation'
-import type { FieldErrors } from '@/lib/recipeValidation'
+import type { FieldErrors, Localiser } from '@/lib/recipeValidation'
 import { foldForCompare } from '@/lib/text'
-import { useT } from '@/i18n'
+import { formatDuration } from '@/lib/timer'
+import { parseNumeric, parseWholeNumber, useNum, useT } from '@/i18n'
 import type { StringKey } from '@/i18n'
 import { apiErrorKey } from '@/i18n/errors'
 import { useDifficultyLabel, useMealtimeLabel } from '@/i18n/labels'
 import Chip from '@/components/ui/Chip'
 import Field from '@/components/ui/Field'
+import FieldTrigger from '@/components/ui/FieldTrigger'
 import PrimaryButton from '@/components/ui/PrimaryButton'
+import Reorderable from '@/components/ui/Reorderable'
 import Select from '@/components/ui/Select'
 import IngredientPicker from '@/components/IngredientPicker'
 import ToolPicker from '@/components/ToolPicker'
+import TimerPicker from '@/components/TimerPicker'
 import UnitPicker from '@/components/UnitPicker'
 import { emojiForIngredient } from '@/data/ingredients'
 import type { CommonIngredient } from '@/data/ingredients'
 import { emojiForCuisine } from '@/data/cuisines'
 import { useCuisines } from '@/data/usePantry'
-import { radius, spacing, useTheme, useThemedStyles } from '@/theme'
+import { move } from '@/lib/reorder'
+import {
+  inputType,
+  minHeights,
+  radius,
+  sizes,
+  spacing,
+  useTheme,
+  useThemedStyles,
+  useTypeScale,
+} from '@/theme'
 import type { ThemeColors, TypeScale } from '@/theme'
 import { DIFFICULTIES, MEALTIMES } from '@/types/recipe'
 import type {
@@ -94,8 +97,14 @@ const TOTAL_MINUTE_PRESETS = [5, 10, 15, 30, 45, 60, 75, 90, 120]
  */
 const Page = forwardRef<
   ScrollView,
-  { width: number; contentStyle: StyleProp<ViewStyle>; children: ReactNode }
->(function Page({ width, contentStyle, children }, ref) {
+  {
+    width: number
+    contentStyle: StyleProp<ViewStyle>
+    children: ReactNode
+    /** False while a row is being dragged — see `Reorderable`. */
+    scrollEnabled?: boolean
+  }
+>(function Page({ width, contentStyle, children, scrollEnabled = true }, ref) {
   return (
     <ScrollView
       ref={ref}
@@ -104,6 +113,9 @@ const Page = forwardRef<
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="interactive"
       showsVerticalScrollIndicator={false}
+      // A drag is a vertical gesture inside a vertical scroller, so one of them
+      // has to stand down. One re-render at each end of the gesture.
+      scrollEnabled={scrollEnabled}
     >
       {children}
     </ScrollView>
@@ -116,11 +128,12 @@ const Page = forwardRef<
  * untouched, so clearing a value would appear to work and then undo itself on
  * the next load.
  */
+// `parseNumeric` already returns null for blank and for anything unparseable,
+// and folds Khmer digits on the way — `Number('៥០០')` is NaN, which used to
+// reach the API as a JSON `null` and silently clear the column instead of
+// failing. The wrapper stays for the name, which is what the call sites read.
 function toNullableNumber(raw: string): number | null {
-  const value = raw.trim()
-  if (!value) return null
-  const parsed = Number(value.replace(',', '.'))
-  return Number.isFinite(parsed) ? parsed : null
+  return parseNumeric(raw)
 }
 
 /** `!= null` on purpose: a stored 0 is a real value and must seed as "0". */
@@ -152,11 +165,18 @@ function toFormIngredients(recipe?: Recipe): FormIngredient[] {
 
 function toFormSteps(recipe?: Recipe): FormStep[] {
   if (!recipe || recipe.steps.length === 0) {
-    return [{ id: genId(), instruction: '' }]
+    return [{ id: genId(), instruction: '', durationSeconds: null }]
   }
   return [...recipe.steps]
     .sort((a, b) => a.stepNumber - b.stepNumber)
-    .map((s) => ({ id: s.id ?? genId(), instruction: s.instruction }))
+    .map((s) => ({
+      id: s.id ?? genId(),
+      instruction: s.instruction,
+      // `?? null`, not `?? undefined`: the form's shape is `number | null` so
+      // there is one way to say "no timer", and an older recipe saved before
+      // the column existed comes back with the field absent.
+      durationSeconds: s.durationSeconds ?? null,
+    }))
 }
 
 /**
@@ -181,15 +201,22 @@ export default function RecipeForm({
   // from both call sites and shipped an untranslated button.
   submitLabel: StringKey
 }) {
-  const { colors: c, isDark } = useTheme()
+  const { colors: c } = useTheme()
   const styles = useThemedStyles(makeStyles)
   const t = useT()
+  const n = useNum()
+  // The validators take both halves of the language together — see `Localiser`.
+  // Memoised so `validateStep` isn't handed a new object on every keystroke.
+  const loc = useMemo<Localiser>(() => ({ t, n }), [t, n])
   const mealtimeLabel = useMealtimeLabel()
   const difficultyLabel = useDifficultyLabel()
   const { token } = useAuth()
   const insets = useSafeAreaInsets()
   const headerHeight = useHeaderHeight()
   const navigation = useNavigation()
+  // The one place a factory can't be used: react-navigation takes a plain
+  // style object for the header title, so the scale is read rather than passed.
+  const typeScale = useTypeScale()
   const isEditing = initial !== undefined
 
   // The horizontal pager, plus one vertical scroller per page. A field's offset
@@ -236,11 +263,18 @@ export default function RecipeForm({
   const [submitting, setSubmitting] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [toolPickerOpen, setToolPickerOpen] = useState(false)
+  // Which step's timer is being set, by row id — one picker for the whole form,
+  // exactly like `unitPickerFor`.
+  const [timerFor, setTimerFor] = useState<string | null>(null)
   // The id of the ingredient row whose unit is being picked, or null. One picker
   // instance serves every row — mounting one per row would put a Modal behind
   // each of up to a hundred ingredients.
   const [unitPickerFor, setUnitPickerFor] = useState<string | null>(null)
   const [takenTitles, setTakenTitles] = useState<Set<string>>(new Set())
+  // True only while a row is being dragged. React state rather than a shared
+  // value because it drives a prop on the scroller — two re-renders per drag,
+  // at the two moments the user is not looking at anything else.
+  const [dragging, setDragging] = useState(false)
 
   const cuisines = useCuisines()
   const cuisineOptions = useMemo(
@@ -257,6 +291,13 @@ export default function RecipeForm({
     () => tools.split(',').map((s) => s.trim()).filter(Boolean),
     [tools]
   )
+  // What the trigger shows: the first tool, then how many others there are.
+  // Counted through `n()`, like every other number the interface prints.
+  const toolSummary = useMemo(() => {
+    if (selectedTools.length === 0) return undefined
+    const [first, ...rest] = selectedTools
+    return rest.length === 0 ? first : `${first} +${n(rest.length)}`
+  }, [selectedTools, n])
 
   // The other recipes' titles, so a duplicate is caught on this screen instead
   // of coming back as a 409 after Save. The server still enforces it — this is
@@ -278,6 +319,53 @@ export default function RecipeForm({
       cancelled = true
     }
   }, [token, initial?.id])
+
+  /**
+   * The header, per SCREENS.md § 14: a bare `‹`, the title centred in mono, and
+   * a tamarind SAVE — on every page, not just the last one.
+   *
+   * SAVE is always live. It runs the same `handleSubmit` the footer button
+   * does, which re-validates all four steps and pages to the first one that
+   * fails, so pressing it on a half-filled recipe is answered with the problem
+   * rather than with a disabled control. That is also why it isn't greyed out:
+   * a dead button on page 1 can't tell you what page 3 is missing.
+   *
+   * `handleSubmit` is read through a ref rather than named as a dependency.
+   * It closes over every piece of form state and so is a new function on every
+   * keystroke; in the dependency array it would re-run `setOptions` — and
+   * therefore re-render the screen — on each one.
+   */
+  const submitRef = useRef(handleSubmit)
+  submitRef.current = handleSubmit
+
+  useEffect(() => {
+    navigation.setOptions({
+      // The title itself stays with the Stack, which owns it and re-renders on
+      // a language change — this only says how it is set.
+      headerTitleAlign: 'center',
+      // The strip of tabs sits directly under the title in the mockup, with
+      // nothing drawn between them.
+      headerShadowVisible: false,
+      headerTitleStyle: { ...typeScale.sectionLabel, color: c.text, textTransform: 'uppercase' },
+      // iOS labels the back button with the previous screen's title; § 14 draws
+      // a chevron alone.
+      headerBackButtonDisplayMode: 'minimal',
+      headerRight: () => (
+        <Pressable
+          onPress={() => submitRef.current()}
+          hitSlop={12}
+          disabled={submitting || uploading}
+          accessibilityRole="button"
+          accessibilityLabel={t('common.save')}
+          style={({ pressed }) => [
+            (pressed || submitting || uploading) && styles.pressedSoft,
+          ]}
+        >
+          <Text style={styles.headerAction}>{t('common.save')}</Text>
+        </Pressable>
+      ),
+    })
+  }, [navigation, t, typeScale, c.text, styles, submitting, uploading])
 
   /**
    * iOS's swipe-from-the-left-edge would pop the whole screen when the user is
@@ -319,12 +407,27 @@ export default function RecipeForm({
   // to hunt for the red text.
   const fieldOffsets = useRef<Record<string, number>>({})
 
+  // Both draggable lists sit inside a wrapper of their own, so a row's own
+  // `onLayout` reports a `y` relative to that wrapper rather than to the page.
+  // These hold where each wrapper starts, and `registerNested` adds the two
+  // together — without which an invalid ingredient scrolls the page to roughly
+  // the top of the list instead of to the row that is actually wrong.
+  const ingredientsTop = useRef(0)
+  const stepsTop = useRef(0)
+
   // Variadic because side-by-side fields share one wrapper: measuring them
   // separately would record a y relative to the row rather than to the scroll
   // content, so both names point at the row they're actually in.
   function registerField(...names: string[]) {
     return (event: LayoutChangeEvent) => {
       for (const name of names) fieldOffsets.current[name] = event.nativeEvent.layout.y
+    }
+  }
+
+  /** `registerField` for a row inside one of the reorderable lists. */
+  function registerNested(base: { current: number }, name: string) {
+    return (event: LayoutChangeEvent) => {
+      fieldOffsets.current[name] = base.current + event.nativeEvent.layout.y
     }
   }
 
@@ -421,6 +524,20 @@ export default function RecipeForm({
   }
 
   /**
+   * Both lists are ordered, and both orders are saved: a step's index becomes
+   * `stepNumber`, an ingredient's becomes `Ingredient.position`. So this is a
+   * content edit like any other — it clears no errors, because moving a row
+   * doesn't fix or break one.
+   */
+  function reorderIngredients(from: number, to: number) {
+    setIngredients((prev) => move(prev, from, to))
+  }
+
+  function reorderSteps(from: number, to: number) {
+    setSteps((prev) => move(prev, from, to))
+  }
+
+  /**
    * Picked from the pantry list. Fills the first empty row rather than always
    * appending, so tapping "Garlic" on a fresh form doesn't leave a blank row
    * hanging above it.
@@ -475,7 +592,7 @@ export default function RecipeForm({
   }
 
   function addStep() {
-    setSteps((prev) => [...prev, { id: genId(), instruction: '' }])
+    setSteps((prev) => [...prev, { id: genId(), instruction: '', durationSeconds: null }])
     clearError('steps')
     scrollToBottom()
   }
@@ -483,6 +600,12 @@ export default function RecipeForm({
   function removeStep(id: string) {
     setSteps((prev) => prev.filter((s) => s.id !== id))
     clearError(stepKey(id))
+  }
+
+  /** Sets or clears one step's countdown. `null` clears it. */
+  function setStepTimer(id: string, durationSeconds: number | null) {
+    setSteps((prev) => prev.map((s) => (s.id === id ? { ...s, durationSeconds } : s)))
+    setTimerFor(null)
   }
 
   function currentValues() {
@@ -549,7 +672,7 @@ export default function RecipeForm({
    * the Steps screen, where the field isn't even visible.
    */
   function handleNext() {
-    const stepErrors = validateStep(step, currentValues(), t)
+    const stepErrors = validateStep(step, currentValues(), loc)
     if (Object.keys(stepErrors).length > 0) {
       showErrors(stepErrors, step)
       return
@@ -569,7 +692,7 @@ export default function RecipeForm({
     const all: FieldErrors = {}
     let firstBadStep = -1
     for (let i = 0; i < STEP_KEYS.length; i++) {
-      const stepErrors = validateStep(i, currentValues(), t)
+      const stepErrors = validateStep(i, currentValues(), loc)
       if (Object.keys(stepErrors).length > 0 && firstBadStep === -1) firstBadStep = i
       Object.assign(all, stepErrors)
     }
@@ -588,8 +711,12 @@ export default function RecipeForm({
       difficulty,
       mealtime,
       cuisine: cuisine.trim() || undefined,
-      totalMinutes: Number(totalMinutes.trim()),
-      servings: Number(servings.trim()),
+      // `?? 0` is unreachable — `validateStep` has already rejected anything
+      // these can't parse — but it keeps a NaN off the wire if that ever stops
+      // being true, since `JSON.stringify(NaN)` is `null` and the server would
+      // read a required field as absent rather than as wrong.
+      totalMinutes: parseWholeNumber(totalMinutes) ?? 0,
+      servings: parseWholeNumber(servings) ?? 0,
       // All four every time, null included — see `toNullableNumber`.
       calories: toNullableNumber(calories),
       protein: toNullableNumber(protein),
@@ -601,18 +728,22 @@ export default function RecipeForm({
         .filter(Boolean),
       ingredients: submittedIngredients.map((i) => ({
         name: i.name.trim(),
-        quantity: Number(i.quantity.trim().replace(',', '.')) || 0,
+        quantity: parseNumeric(i.quantity) ?? 0,
         unit: i.unit.trim(),
       })),
       steps: submittedSteps.map((s, index) => ({
         stepNumber: index + 1,
         instruction: s.instruction.trim(),
+        // Always sent, explicitly null when unset — the same rule the nutrition
+        // fields follow, and for the same reason: an omitted key reads as "no
+        // change" rather than as "clear it".
+        durationSeconds: s.durationSeconds,
       })),
     }
 
     // Size is a property of the whole recipe, so there's no field to outline —
     // this one is the footer line's job.
-    const tooLarge = recipeSizeError(data, t)
+    const tooLarge = recipeSizeError(data, loc)
     if (tooLarge) {
       setErrors({})
       setSubmitError(tooLarge)
@@ -672,7 +803,7 @@ export default function RecipeForm({
   // the whole message.
   const invalid = (field: string) => field in errors
   const stepsWithErrors = new Set(Object.keys(errors).map(stepForField))
-  const footerMessage = submitError ?? summarise(errors, t)
+  const footerMessage = submitError ?? summarise(errors, loc)
 
   // The bar has three states, brightest first: the page you're on, a step that
   // passes validation, a step that doesn't. Position has to be the loudest of
@@ -686,7 +817,7 @@ export default function RecipeForm({
   const stepValues = currentValues()
   const completeSteps = new Set(
     STEP_KEYS.map((_, index) => index).filter(
-      (index) => Object.keys(validateStep(index, stepValues, t)).length === 0
+      (index) => Object.keys(validateStep(index, stepValues, loc)).length === 0
     )
   )
 
@@ -722,6 +853,12 @@ export default function RecipeForm({
                   // fits on a small phone. One clean ellipsis beats a label
                   // wrapping to a second line and shunting the row taller.
                   numberOfLines={1}
+                  // That ellipsis is a *designed* budget, so it must not absorb
+                  // OS font scaling on top of the width squeeze — at the
+                  // app-wide default an 11pt label takes the full 1.35× and
+                  // Khmer's "សារធាតុចិញ្ចឹម" loses most of itself. Same 1.15 as
+                  // the dock, for the same reason: fixed columns, no room.
+                  maxFontSizeMultiplier={1.15}
                   style={[
                     styles.indicatorLabel,
                     index === step && styles.indicatorLabelActive,
@@ -776,15 +913,23 @@ export default function RecipeForm({
                       </View>
                     </>
                   ) : (
-                    <>
-                      <Ionicons
-                        name="camera-outline"
-                        size={26}
-                        color={invalid('photoUrl') ? c.danger : c.textPlaceholder}
-                      />
+                    /* One line: a circled + and the label, per § 15. The
+                       "Required" hint that used to sit under it is gone — the
+                       box turns danger-red at the edge the moment you try to
+                       leave without a photo, and the footer line names what is
+                       missing, so the resting state doesn't have to nag. */
+                    <View style={styles.photoPickerRow}>
+                      <View
+                        style={[styles.plus, invalid('photoUrl') && styles.plusInvalid]}
+                      >
+                        <Ionicons
+                          name="add"
+                          size={15}
+                          color={invalid('photoUrl') ? c.danger : c.primary}
+                        />
+                      </View>
                       <Text style={styles.photoPickerText}>{t('form.addPhoto')}</Text>
-                      <Text style={styles.photoPickerHint}>{t('form.required')}</Text>
-                    </>
+                    </View>
                   )}
                 </Pressable>
               </View>
@@ -830,24 +975,22 @@ export default function RecipeForm({
                 </View>
               </View>
 
+              {/* Three equal chips (§ 15), sharing the mealtime row's control
+                  rather than a second one that merely looks like it. Equal
+                  thirds rather than content-sized: the mockup draws them that
+                  way, and it stops "Intermediate" being visibly the widest
+                  option on a row where width means nothing. */}
               <View style={styles.group}>
                 <Text style={styles.label}>{t('form.difficulty')}</Text>
                 <View style={styles.segmented}>
                   {DIFFICULTIES.map((option) => (
-                    <Pressable
+                    <Chip
                       key={option}
-                      style={[styles.segment, difficulty === option && styles.segmentActive]}
+                      label={difficultyLabel(option)}
+                      active={difficulty === option}
                       onPress={() => setDifficulty(option)}
-                    >
-                      <Text
-                        style={[
-                          styles.segmentText,
-                          difficulty === option && styles.segmentTextActive,
-                        ]}
-                      >
-                        {difficultyLabel(option)}
-                      </Text>
-                    </Pressable>
+                      style={styles.segment}
+                    />
                   ))}
                 </View>
               </View>
@@ -891,62 +1034,71 @@ export default function RecipeForm({
                 />
               </View>
 
-              <Select
-                label={t('form.cuisine')}
-                value={cuisine || undefined}
-                onChange={(value) => {
-                  setCuisine(value ?? '')
-                  clearError('cuisine')
-                }}
-                options={cuisineOptions}
-                placeholder={t('form.cuisinePlaceholder')}
-                title={t('form.cuisine')}
-                searchPlaceholder={t('form.cuisineSearch')}
-                emojiFor={emojiForCuisine}
-                // The column is free text, so the list is a shortcut, not a limit.
-                allowCustom
-              />
-              {/* The label heads the whole block rather than the input, because
-                  the browse row belongs to it too — same bargain as the
-                  ingredients step: tap the common ones, type the rest below.
-                  `Recipe.tools` is free text, so the list can't be a closed set
-                  and the field has to stay. */}
-              <View onLayout={registerField('tools')} style={styles.group}>
-                <Text style={styles.label}>{t('form.tools')}</Text>
-                <Pressable
-                  onPress={() => setToolPickerOpen(true)}
-                  style={({ pressed }) => [styles.browse, pressed && styles.browsePressed]}
-                  accessibilityRole="button"
-                >
-                  <Text style={styles.browseEmoji}>🍳</Text>
-                  <View style={styles.browseText}>
-                    <Text style={styles.browseTitle}>{t('form.pickTools')}</Text>
-                    <Text style={styles.browseHint}>{t('form.pickToolsHint')}</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color={c.textMuted} />
-                </Pressable>
-                <Field
-                  value={tools}
-                  onChangeText={(v) => {
-                    setTools(v)
-                    clearError('tools')
+              {/* CUISINE and TOOLS as one 50/50 row of triggers (§ 15). Tools
+                  used to be a full-width block — a browse row plus a free-text
+                  field — which is two controls and a whole extra screenful for
+                  a value most recipes state in two words. The field's job was
+                  to reach a tool the picker had never heard of; the picker now
+                  offers whatever you type as its own option, so nothing has
+                  become unreachable by dropping it. */}
+              {/* Both halves register against the row, like MINUTES/SERVINGS
+                  above: they share a wrapper, so measuring them separately
+                  would record a `y` relative to the row rather than the page. */}
+              <View onLayout={registerField('cuisine', 'tools')} style={styles.row}>
+                <Select
+                  label={t('form.cuisine')}
+                  value={cuisine || undefined}
+                  onChange={(value) => {
+                    setCuisine(value ?? '')
+                    clearError('cuisine')
                   }}
+                  options={cuisineOptions}
+                  placeholder={t('form.cuisinePlaceholder')}
+                  title={t('form.cuisine')}
+                  searchPlaceholder={t('form.cuisineSearch')}
+                  emojiFor={emojiForCuisine}
+                  // The column is free text, so the list is a shortcut, not a limit.
+                  allowCustom
+                  containerStyle={styles.rowItem}
+                />
+                {/* "Steamer +1": the first tool, then a count of the rest. The
+                    column holds a list and the trigger holds one line, so the
+                    first name plus how many more is the most of it that fits
+                    without lying about what is stored. */}
+                <FieldTrigger
+                  label={t('form.tools')}
+                  value={toolSummary}
                   placeholder={t('form.toolsPlaceholder')}
-                  hint={t('form.toolsHint')}
+                  emoji="🍳"
                   invalid={invalid('tools')}
+                  onPress={() => setToolPickerOpen(true)}
+                  containerStyle={styles.rowItem}
+                  accessibilityLabel={`${t('form.tools')}: ${selectedTools.join(', ') || t('form.toolsPlaceholder')}`}
                 />
               </View>
             </Page>
 
-            <Page ref={pageRefs[1]} width={pageWidth} contentStyle={styles.content}>
+            <Page
+              ref={pageRefs[1]}
+              width={pageWidth}
+              contentStyle={styles.content}
+              scrollEnabled={!dragging}
+            >
               <Text style={styles.stepHeading}>{t('form.ingredientsHeading')}</Text>
 
+              {/* § 16's pantry row: a bordered row with a swatch, a title and
+                  its examples in mono caps. The examples are hand-written per
+                  language rather than sampled from the list, because the Khmer
+                  pantry is different content and not a translation — see
+                  `data/usePantry.ts`. */}
               <Pressable
                 onPress={() => setPickerOpen(true)}
                 style={({ pressed }) => [styles.browse, pressed && styles.browsePressed]}
                 accessibilityRole="button"
               >
-                <Text style={styles.browseEmoji}>🧄</Text>
+                <View style={styles.swatch}>
+                  <Text style={styles.browseEmoji}>🧄</Text>
+                </View>
                 <View style={styles.browseText}>
                   <Text style={styles.browseTitle}>{t('form.pickCommon')}</Text>
                   <Text style={styles.browseHint}>{t('form.pickCommonHint')}</Text>
@@ -954,71 +1106,104 @@ export default function RecipeForm({
                 <Ionicons name="chevron-forward" size={18} color={c.textMuted} />
               </Pressable>
 
-              {/* One bordered row holding two borderless inputs and the unit's
-                  tap target, rather than three separate Fields — fixed widths
-                  and a single container are what keep the unit on the same line
-                  as the name on a phone. */}
-              {ingredients.map((ingredient) => (
-                <View
-                  key={ingredient.id}
-                  onLayout={registerField(ingredientKey(ingredient.id))}
-                  style={[
-                    styles.ingredientRow,
-                    invalid(ingredientKey(ingredient.id)) && styles.rowInvalid,
-                  ]}
-                >
-                  <Text style={styles.ingredientEmoji}>{emojiForIngredient(ingredient.name)}</Text>
-                  <TextInput
-                    style={styles.ingredientName}
-                    value={ingredient.name}
-                    onChangeText={(v) => updateIngredient(ingredient.id, 'name', v)}
-                    placeholder={t('form.ingredientPlaceholder')}
-                    placeholderTextColor={c.textPlaceholder}
-                    keyboardAppearance={isDark ? 'dark' : 'light'}
-                  />
-                  <View style={styles.ingredientDivider} />
-                  <TextInput
-                    style={styles.ingredientQuantity}
-                    value={ingredient.quantity}
-                    onChangeText={(v) => updateIngredient(ingredient.id, 'quantity', v)}
-                    placeholder="0"
-                    placeholderTextColor={c.textPlaceholder}
-                    keyboardAppearance={isDark ? 'dark' : 'light'}
-                    keyboardType="numeric"
-                  />
-                  {/* Tap to pick, rather than type. No chevron and no border:
-                      the 46pt is the row's whole remaining budget, and spending
-                      any of it on an affordance is what makes the row wrap. The
-                      picker keeps a free-text row, so nothing is unreachable. */}
-                  <Pressable
-                    onPress={() => setUnitPickerFor(ingredient.id)}
-                    style={({ pressed }) => [
-                      styles.ingredientUnit,
-                      pressed && styles.ingredientUnitPressed,
-                    ]}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${t('unitPicker.title')}: ${ingredient.unit || t('unitPicker.none')}`}
-                  >
-                    <Text
-                      style={[
-                        styles.ingredientUnitText,
-                        !ingredient.unit && styles.ingredientUnitPlaceholder,
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {ingredient.unit || t('form.unitPlaceholder')}
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => removeIngredient(ingredient.id)}
-                    hitSlop={10}
-                    style={styles.ingredientRemove}
-                    accessibilityLabel={`${t('common.delete')} ${ingredient.name || t('form.ingredientPlaceholder')}`}
-                  >
-                    <Ionicons name="close" size={16} color={c.textMuted} />
-                  </Pressable>
+              {/* `ADDED · 7`, with the count in the interface's own numerals.
+                  Hidden at zero: a heading counting nothing, directly above the
+                  line that says the list is empty, says it twice. */}
+              {ingredients.length > 0 && (
+                <View style={styles.listHeading}>
+                  <Text style={styles.listHeadingText}>
+                    {`${t('form.added')} · ${n(ingredients.length)}`}
+                  </Text>
+                  <View style={styles.listHeadingRule} />
                 </View>
-              ))}
+              )}
+
+              <View
+                onLayout={(event) => {
+                  ingredientsTop.current = event.nativeEvent.layout.y
+                }}
+              >
+                <Reorderable
+                  ids={ingredients.map((i) => i.id)}
+                  onReorder={reorderIngredients}
+                  onDragChange={setDragging}
+                  renderItem={(id, index, handle) => {
+                    const ingredient = ingredients[index]
+                    if (!ingredient) return null
+                    return (
+                      <View
+                        onLayout={registerNested(ingredientsTop, ingredientKey(ingredient.id))}
+                        style={[
+                          styles.ingredientRow,
+                          invalid(ingredientKey(ingredient.id)) && styles.rowInvalid,
+                        ]}
+                      >
+                        {handle}
+                        <Text style={styles.ingredientEmoji}>
+                          {emojiForIngredient(ingredient.name)}
+                        </Text>
+                        <TextInput
+                          style={styles.ingredientName}
+                          value={ingredient.name}
+                          onChangeText={(v) => updateIngredient(ingredient.id, 'name', v)}
+                          placeholder={t('form.ingredientPlaceholder')}
+                          placeholderTextColor={c.textPlaceholder}
+                          keyboardAppearance="light"
+                        />
+                        {/* Amount and unit, on **two rules rather than one**.
+                            § 16 draws them under a single rule so they read as
+                            the one value they spell — "500 g" — and that is
+                            true of the value and false of the controls: the
+                            number is typed and the unit opens a picker, so one
+                            rule invited a tap on the half that doesn't take
+                            one. Two rules with an even gap say there are two
+                            things here before you touch either. Both are fixed
+                            widths, so every quantity in the list sits in one
+                            column and every unit in the next. */}
+                        <View style={styles.amount}>
+                          <TextInput
+                            style={styles.ingredientQuantity}
+                            value={ingredient.quantity}
+                            onChangeText={(v) => updateIngredient(ingredient.id, 'quantity', v)}
+                            placeholder="0"
+                            placeholderTextColor={c.textPlaceholder}
+                            keyboardAppearance="light"
+                            keyboardType="numeric"
+                          />
+                          <Pressable
+                            onPress={() => setUnitPickerFor(ingredient.id)}
+                            style={({ pressed }) => [
+                              styles.ingredientUnit,
+                              pressed && styles.pressedSoft,
+                            ]}
+                            accessibilityRole="button"
+                            accessibilityLabel={`${t('unitPicker.title')}: ${ingredient.unit || t('unitPicker.none')}`}
+                          >
+                            <Text
+                              style={[
+                                styles.ingredientUnitText,
+                                !ingredient.unit && styles.ingredientUnitPlaceholder,
+                              ]}
+                              numberOfLines={1}
+                            >
+                              {ingredient.unit || t('form.unitPlaceholder')}
+                            </Text>
+                          </Pressable>
+                        </View>
+                        <Pressable
+                          onPress={() => removeIngredient(ingredient.id)}
+                          hitSlop={10}
+                          style={styles.ingredientRemove}
+                          accessibilityLabel={`${t('common.delete')} ${ingredient.name || t('form.ingredientPlaceholder')}`}
+                        >
+                          <Ionicons name="close" size={16} color={c.primary} />
+                        </Pressable>
+                      </View>
+                    )
+                  }}
+                />
+              </View>
+
               {/* With no rows there's no box to outline, so the hint that's
                   already here turns red rather than a second line appearing. */}
               {ingredients.length === 0 && (
@@ -1029,38 +1214,102 @@ export default function RecipeForm({
                   {t('form.noIngredients')}
                 </Text>
               )}
-              <Pressable onPress={addIngredient} style={styles.addRow}>
-                <Ionicons name="add-circle-outline" size={18} color={c.text} />
+              <Pressable
+                onPress={addIngredient}
+                style={({ pressed }) => [styles.addRow, pressed && styles.pressedSoft]}
+              >
+                <View style={styles.plus}>
+                  <Ionicons name="add" size={15} color={c.primary} />
+                </View>
                 <Text style={styles.addRowText}>{t('form.addYourOwn')}</Text>
               </Pressable>
             </Page>
 
-            <Page ref={pageRefs[2]} width={pageWidth} contentStyle={styles.content}>
+            <Page
+              ref={pageRefs[2]}
+              width={pageWidth}
+              contentStyle={styles.content}
+              scrollEnabled={!dragging}
+            >
               <Text style={styles.stepHeading}>{t('form.stepsHeading')}</Text>
 
-              {steps.map((s, index) => (
-                <View key={s.id} onLayout={registerField(stepKey(s.id))} style={styles.stepRow}>
-                  <View style={styles.stepNumber}>
-                    <Text style={styles.stepNumberText}>{index + 1}</Text>
-                  </View>
-                  <Field
-                    value={s.instruction}
-                    onChangeText={(v) => updateStep(s.id, v)}
-                    placeholder={t('form.stepPlaceholder')}
-                    multiline
-                    containerStyle={styles.stepInput}
-                    invalid={invalid(stepKey(s.id))}
-                  />
-                  <Pressable
-                    onPress={() => removeStep(s.id)}
-                    hitSlop={8}
-                    style={[styles.remove, styles.removeStep]}
-                    accessibilityLabel={t('form.removeStep')}
-                  >
-                    <Ionicons name="close" size={18} color={c.danger} />
-                  </Pressable>
-                </View>
-              ))}
+              <View
+                onLayout={(event) => {
+                  stepsTop.current = event.nativeEvent.layout.y
+                }}
+              >
+                {/* § 17's card: a .8px border at radius 18, a bare tamarind
+                    numeral, the instruction as prose, the timer chip under it,
+                    ✕ top-right and the handle bottom-right. The instruction is
+                    a borderless input rather than a `Field` — the card is
+                    already its frame, and a rule inside one is a second box
+                    around the same control. */}
+                <Reorderable
+                  ids={steps.map((step) => step.id)}
+                  onReorder={reorderSteps}
+                  onDragChange={setDragging}
+                  gap={spacing.md}
+                  renderItem={(id, index, handle) => {
+                    const item = steps[index]
+                    if (!item) return null
+                    return (
+                      <View
+                        onLayout={registerNested(stepsTop, stepKey(item.id))}
+                        style={[
+                          styles.stepCard,
+                          invalid(stepKey(item.id)) && styles.stepCardInvalid,
+                        ]}
+                      >
+                        <View style={styles.stepTop}>
+                          <Text style={styles.stepNumberText}>{n(index + 1)}</Text>
+                          <TextInput
+                            style={styles.stepInput}
+                            value={item.instruction}
+                            onChangeText={(v) => updateStep(item.id, v)}
+                            placeholder={t('form.stepPlaceholder')}
+                            placeholderTextColor={c.textPlaceholder}
+                            keyboardAppearance="light"
+                            multiline
+                          />
+                          <Pressable
+                            onPress={() => removeStep(item.id)}
+                            hitSlop={10}
+                            style={styles.stepRemove}
+                            accessibilityLabel={t('form.removeStep')}
+                          >
+                            <Ionicons name="close" size={16} color={c.primary} />
+                          </Pressable>
+                        </View>
+                        <View style={styles.stepFoot}>
+                          <Pressable
+                            onPress={() => setTimerFor(item.id)}
+                            accessibilityRole="button"
+                            accessibilityLabel={t('form.stepTimer')}
+                            style={({ pressed }) => [
+                              styles.timerChip,
+                              item.durationSeconds == null && styles.timerChipUnset,
+                              pressed && styles.pressedSoft,
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.timerChipText,
+                                item.durationSeconds == null && styles.timerChipTextUnset,
+                              ]}
+                            >
+                              {item.durationSeconds == null
+                                ? `⏱ ${t('form.addTimer')}`
+                                : `⏱ ${n(formatDuration(item.durationSeconds))}`}
+                            </Text>
+                          </Pressable>
+                          {handle}
+                        </View>
+                      </View>
+                    )
+                  }}
+                />
+              </View>
+
               {steps.length === 0 && (
                 <Text
                   style={[styles.emptyHint, invalid('steps') && styles.emptyHintInvalid]}
@@ -1069,21 +1318,26 @@ export default function RecipeForm({
                   {t('form.noSteps')}
                 </Text>
               )}
-              <Pressable onPress={addStep} style={styles.addRow}>
-                <Ionicons name="add-circle-outline" size={18} color={c.text} />
+              <Pressable
+                onPress={addStep}
+                style={({ pressed }) => [styles.addRow, pressed && styles.pressedSoft]}
+              >
+                <View style={styles.plus}>
+                  <Ionicons name="add" size={15} color={c.primary} />
+                </View>
                 <Text style={styles.addRowText}>{t('form.addStep')}</Text>
               </Pressable>
             </Page>
 
             <Page ref={pageRefs[3]} width={pageWidth} contentStyle={styles.content}>
-              {/* Every field here is optional, so this step never blocks Save. The
-                  numbers are per serving — say so, because nothing else can: the
-                  columns are bare floats and a reader has no way to tell whether
-                  520 kcal is one plate or the whole tray. */}
+              {/* Every field here is optional, so this step never blocks Save.
+                  The numbers are per serving, and the heading is the only place
+                  that now says so — the line that used to sit under it is gone,
+                  which is why the Khmer heading was reworded rather than left
+                  saying "nutrition information". The columns are bare floats
+                  and a reader has no way to tell whether 520 kcal is one plate
+                  or the whole tray. */}
               <Text style={styles.stepHeading}>{t('form.nutritionHeading')}</Text>
-              <Text style={styles.stepIntro}>
-                {t('form.nutritionIntro')}
-              </Text>
 
               <View onLayout={registerField('calories', 'protein')} style={styles.row}>
                 <Field
@@ -1094,7 +1348,8 @@ export default function RecipeForm({
                     clearError('calories')
                   }}
                   keyboardType="decimal-pad"
-                  placeholder={t('form.caloriesPlaceholder')}
+                  placeholder="—"
+                  suffix="kcal"
                   containerStyle={styles.rowItem}
                   invalid={invalid('calories')}
                 />
@@ -1106,7 +1361,8 @@ export default function RecipeForm({
                     clearError('protein')
                   }}
                   keyboardType="decimal-pad"
-                  placeholder={t('form.proteinPlaceholder')}
+                  placeholder="—"
+                  suffix="g"
                   containerStyle={styles.rowItem}
                   invalid={invalid('protein')}
                 />
@@ -1121,7 +1377,8 @@ export default function RecipeForm({
                     clearError('carbs')
                   }}
                   keyboardType="decimal-pad"
-                  placeholder={t('form.carbsPlaceholder')}
+                  placeholder="—"
+                  suffix="g"
                   containerStyle={styles.rowItem}
                   invalid={invalid('carbs')}
                 />
@@ -1133,7 +1390,8 @@ export default function RecipeForm({
                     clearError('fat')
                   }}
                   keyboardType="decimal-pad"
-                  placeholder={t('form.fatPlaceholder')}
+                  placeholder="—"
+                  suffix="g"
                   containerStyle={styles.rowItem}
                   invalid={invalid('fat')}
                 />
@@ -1152,16 +1410,15 @@ export default function RecipeForm({
             <Text style={styles.error}>{footerMessage}</Text>
           </View>
         )}
+        {/* One button, always. Back used to sit beside it from page 2 on, which
+            was a control for a journey the pager already makes with a finger —
+            you swipe right, or tap the step in the strip above, and both of
+            those are reachable from every page rather than only from the ones
+            after the first. Two buttons also halved the width of the one that
+            names where it goes, which is the only thing the footer has to
+            say. */}
         <View style={styles.footerButtons}>
-          {step > 0 && !isEditing && (
-            <PrimaryButton
-              label={t('common.back')}
-              variant="outline"
-              onPress={() => goTo(step - 1)}
-              style={styles.footerButton}
-            />
-          )}
-          {isEditing || onLastStep ? (
+          {onLastStep ? (
             <PrimaryButton
               label={t(submitLabel)}
               onPress={handleSubmit}
@@ -1170,7 +1427,20 @@ export default function RecipeForm({
               style={styles.footerButton}
             />
           ) : (
-            <PrimaryButton label={t('common.next')} onPress={handleNext} style={styles.footerButton} />
+            /* "NEXT · INGREDIENTS" — the button names where it goes, in the
+               same words the tab above uses for that page. Built from
+               `STEP_KEYS` rather than from strings of its own, so the two can
+               never disagree about what a page is called.
+
+               Editing now gets the same footer as creating. It used to show
+               Save on every page, which was the only way to save an edit from
+               page 1; the header's SAVE covers that from anywhere in both
+               modes, which leaves the footer free to do one job. */
+            <PrimaryButton
+              label={`${t('common.next')} · ${t(STEP_KEYS[step + 1])}`}
+              onPress={handleNext}
+              style={styles.footerButton}
+            />
           )}
         </View>
       </View>
@@ -1191,6 +1461,16 @@ export default function RecipeForm({
         onClose={() => setToolPickerOpen(false)}
       />
 
+      {/* One instance for the whole form, like the unit picker — `timerFor`
+          says which step it is editing, and reopening it shows that step's
+          current value rather than the last one picked. */}
+      <TimerPicker
+        visible={timerFor !== null}
+        value={steps.find((s) => s.id === timerFor)?.durationSeconds ?? null}
+        onPick={(seconds) => timerFor && setStepTimer(timerFor, seconds)}
+        onClose={() => setTimerFor(null)}
+      />
+
       {/* One instance for the whole form; `unitPickerFor` says which row it's
           editing. `value` reads back out of state, so reopening it shows the
           unit currently on that row rather than the one last picked. */}
@@ -1206,7 +1486,21 @@ export default function RecipeForm({
 
 const makeStyles = (c: ThemeColors, type: TypeScale) => StyleSheet.create({
   container: { flex: 1, backgroundColor: c.bg },
-  indicator: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingTop: spacing.md },
+  // The header's SAVE (§ 14). Mono and tracked like the title beside it, and
+  // tamarind because it is the screen's primary action — the only coloured
+  // text in the chrome.
+  headerAction: {
+    ...type.sectionLabel,
+    color: c.primary,
+    textTransform: 'uppercase',
+    paddingHorizontal: spacing.xs,
+  },
+  indicator: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.gutter,
+    paddingTop: spacing.md,
+  },
   indicatorItem: { flex: 1, gap: spacing.sm },
   indicatorBar: { height: 3, borderRadius: radius.pill, backgroundColor: c.border },
   // Passes validation, but you're somewhere else — a step further down the
@@ -1216,33 +1510,76 @@ const makeStyles = (c: ThemeColors, type: TypeScale) => StyleSheet.create({
   indicatorBarCurrent: { backgroundColor: c.primary },
   indicatorBarError: { backgroundColor: c.danger },
   indicatorLabelRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  indicatorLabel: { ...type.caption, color: c.textPlaceholder },
+  indicatorLabel: { ...type.metadataSmall, color: c.textPlaceholder, textTransform: 'uppercase' },
   // Weight, not just colour: on the current step the bar goes red when that
   // step has errors, so position has to stay readable without it.
-  indicatorLabelActive: { color: c.text, fontWeight: '700' },
+  //
+  // The weight comes from a **face**, not from `fontWeight: '700'`. A synthetic
+  // weight stacked on a family that already names one double-bolds on Android
+  // and web. `sectionLabel` is the medium member of whichever scale is active —
+  // `IBMPlexMono_500Medium` in Latin, `KantumruyPro_500Medium` in Khmer — so
+  // naming a family literally here would put a Khmer-less mono on Khmer text.
+  indicatorLabelActive: { color: c.text, fontFamily: type.sectionLabel.fontFamily },
   indicatorLabelError: { color: c.danger },
   // Holds the pager and supplies the width each page measures itself against.
   pagerWrap: { flex: 1 },
-  content: { padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing.xxl },
-  stepHeading: { ...type.title, color: c.text, marginBottom: spacing.xs },
-  // Pulled up against the heading: the content gap is `lg`, which reads as two
-  // unrelated lines rather than a heading and its subtitle.
-  stepIntro: { ...type.body, color: c.textMuted, marginTop: -spacing.md },
+  content: {
+    paddingHorizontal: spacing.gutter,
+    paddingTop: spacing.lg,
+    // `sectionSpacing`, not `xl`. One group to the next is the same beat as one
+    // section to the next everywhere else in the product, and the design states
+    // that as 16–22 — `xl` (24) sat outside its own range, which is most of why
+    // a page of four short groups read as mostly air.
+    gap: spacing.sectionSpacing,
+    paddingBottom: spacing.xxl,
+  },
+  stepHeading: { ...type.screenTitle, color: c.text, marginBottom: spacing.xs },
+  /**
+   * A dashed edge and no fill, per SCREENS.md § 15 — but tall enough to be a
+   * preview slot as well as a drop target.
+   *
+   * § 15 draws it at 76, and 76 was right while it was only ever a place to
+   * *drop* a photo: the old 180pt oat panel took a third of the first page for
+   * something most people fill in seconds. It is also where the chosen
+   * photograph is shown, though, and a 76pt letterbox of a plate is not a
+   * preview of anything — on a photo-first app whose every card layout leads
+   * with the picture, the one screen that makes the picture can't be the screen
+   * that hides it. 160 gives a landscape shot roughly 5:2 at gutter width,
+   * which is a photograph rather than a strip, and still less than half of what
+   * the panel it replaced was costing.
+   */
   photoPicker: {
-    height: 180,
-    borderRadius: radius.lg,
-    backgroundColor: c.surfaceAlt,
+    height: 160,
+    borderRadius: radius.notice,
     borderWidth: 1,
-    borderColor: c.border,
+    borderColor: c.borderFaint,
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.xs,
     overflow: 'hidden',
   },
-  photoPickerInvalid: { borderColor: c.danger, backgroundColor: c.dangerSoft },
-  photoPickerText: { ...type.bodyStrong, color: c.textMuted },
-  photoPickerHint: { ...type.caption, color: c.textPlaceholder },
+  // No `dangerSoft` fill: there is no alert red in this palette, so an invalid
+  // photo box is marked by its edge alone, like an invalid `Field`'s rule.
+  photoPickerInvalid: { borderColor: c.danger },
+  photoPickerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  photoPickerText: { ...type.metadataSmall, color: c.textMuted, textTransform: 'uppercase' },
+  /**
+   * The circled `+` the mockup puts on all three dashed affordances — the photo
+   * drop, ADD YOUR OWN, ADD STEP. A ring rather than a filled disc: these are
+   * offers, and a filled tamarind circle would outrank the page's actual
+   * primary action at the bottom of the screen.
+   */
+  plus: {
+    width: 28,
+    height: 28,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: c.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  plusInvalid: { borderColor: c.danger },
   photoChange: {
     position: 'absolute',
     right: spacing.md,
@@ -1261,103 +1598,222 @@ const makeStyles = (c: ThemeColors, type: TypeScale) => StyleSheet.create({
   // and ink on a 55%-black scrim is unreadable.
   photoChangeText: { ...type.caption, color: c.textOnPhoto },
   group: { gap: spacing.sm },
-  label: { ...type.label, color: c.text },
+  label: { ...type.sectionLabel, color: c.textMuted, textTransform: 'uppercase' },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   segmented: { flexDirection: 'row', gap: spacing.sm },
-  segment: {
-    flex: 1,
-    paddingVertical: spacing.md,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: c.border,
-    backgroundColor: c.surfaceAlt,
-    alignItems: 'center',
-  },
-  segmentActive: { backgroundColor: c.primary, borderColor: c.primary },
-  segmentText: { ...type.caption, color: c.textMuted },
-  segmentTextActive: { color: c.onPrimary },
+  // Equal thirds. `Chip` is content-sized by default, which is right in the
+  // mealtime row (four options of very different lengths) and wrong here,
+  // where the three are one choice and the mockup draws them as one bar.
+  segment: { flex: 1, alignItems: 'center' },
   row: { flexDirection: 'row', gap: spacing.md },
   rowItem: { flex: 1 },
   browse: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    padding: spacing.md,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: c.border,
-    backgroundColor: c.bgSubtle,
+    padding: spacing.lg,
+    borderRadius: radius.card,
+    borderWidth: 1.2,
+    borderColor: c.text,
   },
-  browsePressed: { backgroundColor: c.surfaceAlt },
-  browseEmoji: { fontSize: 22 },
+  browsePressed: { opacity: 0.6 },
+  // § 16's 26px swatch. The mockup draws a plain disc — a placeholder for
+  // "something identifying the pantry" — and the app already has the honest
+  // version of that: the emoji it puts beside every ingredient.
+  swatch: {
+    width: 26,
+    height: 26,
+    borderRadius: radius.pill,
+    backgroundColor: c.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  browseEmoji: { fontSize: 15 },
   browseText: { flex: 1, minWidth: 0, gap: 2 },
-  browseTitle: { ...type.bodyStrong, color: c.text },
-  browseHint: { ...type.caption, color: c.textMuted },
+  browseTitle: { ...type.rowTitle, color: c.text },
+  browseHint: { ...type.metadataSmall, color: c.textMuted, textTransform: 'uppercase' },
+  // `ADDED · 7`, with a rule running off to the right — the same ruled
+  // section head the rest of the product uses.
+  listHeading: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  listHeadingText: { ...type.sectionLabel, color: c.textMuted, textTransform: 'uppercase' },
+  listHeadingRule: { flex: 1, height: 0.8, backgroundColor: c.border },
   // Everything but the name is a fixed width, and the name flexes into what's
   // left — so the row can never wrap, however narrow the phone.
+  /**
+   * A ruled row, not a card (§ 16). The bordered, filled container this used
+   * to be turned seven ingredients into seven outlined boxes, which is the
+   * shape the *method* cards are supposed to be the exception to — and every
+   * other list in this product is a ledger.
+   *
+   * The hairline is on the bottom, so the last row's line closes the list
+   * against ADD YOUR OWN below it.
+   */
   ingredientRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    height: 52,
-    paddingHorizontal: spacing.md,
-    borderWidth: 1,
-    borderColor: c.border,
-    backgroundColor: c.surfaceAlt,
-    borderRadius: radius.md,
+    gap: spacing.xs,
+    minHeight: minHeights.row,
+    paddingVertical: 10,
+    borderBottomWidth: 0.8,
+    borderBottomColor: c.border,
   },
-  ingredientEmoji: { fontSize: 18, width: 22, textAlign: 'center' },
+  ingredientEmoji: { fontSize: 16, width: 20, textAlign: 'center' },
+  /**
+   * Amount and unit, each on its own rule.
+   *
+   * The wrapper carried the rule when there was one, spanning both controls.
+   * Now it only holds them apart: `spacing.sm` between the two, which is wide
+   * enough to read as a gap rather than as a break in one line, and
+   * `flex-end` so the two rules land on the same baseline however tall either
+   * control grows.
+   */
+  amount: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'flex-end',
+    gap: spacing.sm,
+  },
   ingredientName: {
     flex: 1,
     minWidth: 0,
-    ...type.bodyLarge,
+    // `inputType`, not the bare token: a pinned line box on a one-line input
+    // clips its descenders, and `paddingVertical: 0` leaves nowhere to overshoot.
+    ...inputType(type.bodyLarge),
     color: c.text,
     paddingVertical: 0,
   },
-  ingredientDivider: { width: 1, height: 20, backgroundColor: c.borderStrong },
+  // Centred under its own rule rather than right-aligned against a shared one:
+  // the rule is the column now, and a number hugging its right-hand end reads
+  // as leaning towards the unit it was just separated from. The width is fixed,
+  // which is what puts every quantity in the list on one column.
   ingredientQuantity: {
     width: 40,
-    textAlign: 'right',
-    ...type.bodyLarge,
+    minHeight: 30,
+    textAlign: 'center',
+    ...inputType(type.bodyLarge),
     color: c.text,
     paddingVertical: 0,
+    paddingBottom: 2,
+    borderBottomWidth: 0.8,
+    borderBottomColor: c.borderStrong,
   },
   // A tap target rather than an input, but the same 46pt as when it was one.
   // The three fixed widths are what stop this row wrapping onto a second line,
   // so nothing here is free to grow — which is also why the unit is a step
   // below the name and quantity, and why it carries no chevron.
+  // `minHeight`, never a fixed `height`: the Khmer scale pins no `lineHeight`,
+  // so a cluster carrying a subscript reports a taller line box than 34 and a
+  // hard height either clips it or shoves the ink off the row's centre line.
+  // Same rule the rest of the app follows for Khmer in fixed-height containers.
   ingredientUnit: {
-    width: 46,
-    height: 34,
+    width: 50,
+    minHeight: 30,
     justifyContent: 'center',
-    borderRadius: radius.sm,
+    alignItems: 'center',
+    paddingBottom: 2,
+    borderBottomWidth: 0.8,
+    borderBottomColor: c.borderStrong,
   },
-  ingredientUnitPressed: { backgroundColor: c.surfaceSunken },
   // Text now, not the input itself, so `numberOfLines` can truncate a long
   // custom unit instead of the row growing to fit it.
-  ingredientUnitText: { ...type.body, color: c.textMuted },
+  // Mono, like the quantity beside it: this half of the value is a unit, and
+  // § 16 sets the pair in one face.
+  ingredientUnitText: { ...type.metadata, color: c.textMuted, textAlign: 'center' },
   ingredientUnitPlaceholder: { color: c.textPlaceholder },
-  ingredientRemove: { width: 20, alignItems: 'center', justifyContent: 'center' },
-  stepRow: { flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start' },
+  ingredientRemove: { width: 22, alignItems: 'center', justifyContent: 'center' },
+  /**
+   * § 17's step card: a .8px border at radius 18, holding the numeral, the
+   * instruction, the timer chip and the two controls.
+   *
+   * A box, on a screen whose other page is deliberately box-free — and that
+   * contrast is the point. An ingredient is one line and belongs in a ledger;
+   * a step is a paragraph, and three of them running together with only a
+   * hairline between would be a wall of prose with numbers in it.
+   */
+  stepCard: {
+    borderWidth: 0.8,
+    borderColor: c.border,
+    borderRadius: 18,
+    padding: spacing.lg,
+    gap: spacing.sm,
+  },
+  // The card's own edge carries the error, like the photo drop's does.
+  stepCardInvalid: { borderColor: c.danger },
+  stepTop: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md },
+  // The timer chip and the drag handle share the card's bottom line, at
+  // opposite ends — the chip is the thing you might want, the handle the thing
+  // you occasionally need.
+  stepFoot: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  stepRemove: { width: 22, alignItems: 'center', justifyContent: 'center' },
+  // § 17's set state: a filled tamarind pill at .1, tamarind mono label.
+  timerChip: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+    backgroundColor: c.accentSoft,
+  },
+  // And its unset state: a dashed outline at half strength. Dashed is the app's
+  // "not filled in yet" idiom — the same edge `AddRow` uses for an empty slot —
+  // so an untimed step reads as an offer rather than as a blank field.
+  timerChipUnset: {
+    backgroundColor: 'transparent',
+    borderWidth: 0.8,
+    borderStyle: 'dashed',
+    borderColor: c.borderFaint,
+  },
+  timerChipText: { ...type.metadataSmall, color: c.primary },
+  timerChipTextUnset: { color: c.textMuted },
+  pressedSoft: { opacity: 0.6 },
   stepNumber: {
-    width: 26,
-    height: 26,
+    width: sizes.stepNumber,
+    height: sizes.stepNumber,
     borderRadius: radius.pill,
     backgroundColor: c.primary,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: spacing.md,
   },
-  stepNumberText: { ...type.caption, color: c.onPrimary },
-  stepInput: { flex: 1, minWidth: 0 },
-  remove: { width: 30, height: 50, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  // Steps use a multiline input, so nudge the ✕ to line up with its first row.
-  removeStep: { marginTop: spacing.xs },
-  rowInvalid: { borderColor: c.danger, backgroundColor: c.dangerSoft },
+  /**
+   * A bare tamarind numeral, not a filled disc. The disc was a hangover from
+   * the old palette; § 17 sets the number itself in tamarind and lets the card
+   * do the containing. Mono, so 1 and 10 occupy the same column and the
+   * instructions beside them start on one line.
+   *
+   * A fixed width rather than a margin, for that alignment — and `n()` at the
+   * call site, so a Khmer reader counts in Khmer numerals.
+   */
+  stepNumberText: { ...type.metadata, color: c.primary, width: 18 },
+  // Borderless: the card is the frame. `textAlignVertical` keeps the first
+  // line level with the numeral on Android, where a multiline input otherwise
+  // centres its text in whatever height it has grown to.
+  stepInput: {
+    flex: 1,
+    minWidth: 0,
+    ...inputType(type.bodyLarge),
+    color: c.text,
+    paddingVertical: 0,
+    textAlignVertical: 'top',
+  },
+  // Edge only, no fill — the rule this product follows everywhere an input is
+  // wrong (the photo drop, a `Field`, a step card). The tinted band this used
+  // to draw belonged to the boxed row it was written for; on a ledger row it
+  // would paint a stripe across the page.
+  rowInvalid: { borderBottomWidth: 1.2, borderBottomColor: c.danger },
   emptyHint: { ...type.body, color: c.textMuted, paddingVertical: spacing.sm },
   emptyHintInvalid: { color: c.danger },
-  addRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.sm },
-  addRowText: { ...type.bodyStrong, color: c.text },
+  addRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.lg,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: c.borderFaint,
+    borderRadius: radius.notice,
+  },
+  addRowText: { ...type.sectionLabel, color: c.primary, textTransform: 'uppercase' },
   footer: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,

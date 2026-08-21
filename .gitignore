@@ -47,3 +47,6 @@ example
 # loads are extracted into assets/onboarding/. Git never forgets a blob, so the
 # archives stay out.
 *.zip
+
+# Layout screenshots from tools/shoot.mjs
+tools/shots/

@@ -1,6 +1,8 @@
 import { useT } from './LanguageContext'
 import type { StringKey } from './strings'
+import type { Aisle } from '@/data/aisles'
 import type { Difficulty, Mealtime } from '@/types/recipe'
+import type { LibrarySubject } from '@/lib/api'
 
 /**
  * Display labels for the two enums that live in the **database**.
@@ -28,10 +30,39 @@ const MEALTIME_KEYS: Record<Mealtime, StringKey> = {
   Snack: 'mealtime.snack',
 }
 
+/**
+ * Aisles are stored English keys too, for the same reason mealtimes are: the
+ * grouping is derived from the *stored* ingredient name, so it has to be stable
+ * across a language switch. Keyed by the value, so adding an aisle is a compile
+ * error here rather than a blank heading.
+ */
+const AISLE_KEYS: Record<Aisle, StringKey> = {
+  Produce: 'grocery.aisleProduce',
+  Protein: 'grocery.aisleProtein',
+  Pantry: 'grocery.aislePantry',
+  Other: 'grocery.aisleOther',
+}
+
 const DIFFICULTY_KEYS: Record<Difficulty, StringKey> = {
   Beginner: 'difficulty.beginner',
   Intermediate: 'difficulty.intermediate',
   Advanced: 'difficulty.advanced',
+}
+
+/**
+ * Explore's BY SUBJECT chips. Same arrangement as the mealtimes above, for the
+ * same reason: `subject` is a stored English value on the server's library, so a
+ * chip reading "បង្អែម" still filters on `'Sweets'`.
+ *
+ * Four rather than SCREENS.md §11's five — `Noodles` was dropped because every
+ * noodle recipe on the source site is a video with no transcript, so the chip
+ * would have rendered and matched nothing.
+ */
+const SUBJECT_KEYS: Record<LibrarySubject, StringKey> = {
+  Soups: 'subject.soups',
+  Grilled: 'subject.grilled',
+  Sweets: 'subject.sweets',
+  Festival: 'subject.festival',
 }
 
 /** Labels a mealtime, or the dashboard's `'All'` pseudo-filter. */
@@ -39,6 +70,13 @@ export function useMealtimeLabel() {
   const t = useT()
   return (value: Mealtime | 'All') =>
     value === 'All' ? t('filter.all') : t(MEALTIME_KEYS[value])
+}
+
+/** Labels a subject, or Explore's own `'All'` pseudo-filter. */
+export function useSubjectLabel() {
+  const t = useT()
+  return (value: LibrarySubject | 'All') =>
+    value === 'All' ? t('explore.subjectAll') : t(SUBJECT_KEYS[value])
 }
 
 export function useDifficultyLabel() {
@@ -71,4 +109,30 @@ const DAY_KEYS: StringKey[] = [
 export function useDayLabel() {
   const t = useT()
   return (date: Date) => t(DAY_KEYS[date.getDay()])
+}
+
+/**
+ * The month name, from the app's language rather than the phone's.
+ *
+ * `toLocaleDateString(undefined, { month: 'long' })` reads the **device**
+ * locale, which the toggle has no say over — so a Khmer UI on an English phone
+ * printed `AUGUST ១៥`: Khmer numerals against an English month, in one line, on
+ * the app's most-seen screen. Passing `km-KH` explicitly is not a fix either,
+ * because Hermes ships a reduced ICU and can fall back to English without
+ * saying so.
+ *
+ * Indexed from `getMonth() + 1`, i.e. the human month number, so the key
+ * `month.8` is August and nobody has to remember which end is zero-based. That
+ * is the opposite arrangement from `DAY_KEYS`, which is indexed by `getDay()`
+ * and therefore starts on Sunday.
+ */
+export function useMonthLabel() {
+  const t = useT()
+  return (date: Date) => t(`month.${date.getMonth() + 1}` as StringKey)
+}
+
+/** Labels a grocery aisle. */
+export function useAisleLabel() {
+  const t = useT()
+  return (value: Aisle) => t(AISLE_KEYS[value])
 }

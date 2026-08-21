@@ -62,3 +62,25 @@ export function selectionFeedback() {
   if (Platform.OS === 'web') return
   Haptics.selectionAsync().catch(() => {})
 }
+
+/**
+ * Picking a row up to reorder it, and putting it back down.
+ *
+ * A drag has two moments worth marking and they are not the same moment. The
+ * pickup is the one that needs to be felt: the gesture activates after a few
+ * pixels of travel, with no press-and-hold to tell you it took, so without a
+ * buzz the row simply starts moving and you learn you have it by watching. The
+ * drop is a confirmation of something you can already see land, so it is the
+ * lighter of the two — `selectionAsync`, the same feedback the carousel uses
+ * for moving between options, because that is what a drop is.
+ */
+export function grabFeedback() {
+  if (Platform.OS === 'web') return
+  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {})
+}
+
+/** The other half of `grabFeedback` — see the note there. */
+export function dropFeedback() {
+  if (Platform.OS === 'web') return
+  Haptics.selectionAsync().catch(() => {})
+}

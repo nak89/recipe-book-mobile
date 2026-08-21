@@ -1,26 +1,59 @@
-import {
-  InstrumentSerif_400Regular,
-  InstrumentSerif_400Regular_Italic,
-  useFonts,
-} from '@expo-google-fonts/instrument-serif'
+import { IBMPlexMono_400Regular, IBMPlexMono_500Medium } from '@expo-google-fonts/ibm-plex-mono'
+import { KantumruyPro_400Regular, KantumruyPro_500Medium } from '@expo-google-fonts/kantumruy-pro'
+import { Moul_400Regular } from '@expo-google-fonts/moul'
+import { Newsreader_400Regular, Newsreader_500Medium } from '@expo-google-fonts/newsreader'
+import { useFonts } from 'expo-font'
 import { Stack } from 'expo-router'
+import * as SplashScreen from 'expo-splash-screen'
 import { StatusBar } from 'expo-status-bar'
+import { useEffect } from 'react'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { AuthProvider } from '@/context/AuthContext'
 import { LanguageProvider } from '@/i18n'
 import { ThemeProvider, useTheme } from '@/theme'
 
+// Module scope, so the splash is pinned before the first render rather than one
+// effect too late. It rejects if the splash has already gone (a fast reload),
+// which is not a condition worth surfacing.
+void SplashScreen.preventAutoHideAsync().catch(() => {})
+
 export default function RootLayout() {
-  // Instrument Serif is used by exactly one screen — the intro carousel — but a
-  // font can only be registered at the root, so it loads here.
+  // Chronicle sets the whole product in four bundled faces, so unlike the old
+  // arrangement — one serif on one onboarding screen, deliberately ungated —
+  // every screen now depends on these being ready.
   //
-  // Nothing is gated on the result. The handoff asks to hold the splash until
-  // the face is ready, but that trades a wrong-font headline on one screen for
-  // a blank app on every screen, including for returning users who will never
-  // see the carousel again. The headline falls back to the system serif for the
-  // frame or two it takes.
-  useFonts({ InstrumentSerif_400Regular, InstrumentSerif_400Regular_Italic })
+  // That is why the splash holds. Ungated, the app would draw once in the OS
+  // fallbacks and again in the real faces, and the reflow would be the whole
+  // page rather than one headline. It is worse in Khmer than the shuffle
+  // suggests: the Khmer scale pins line-heights measured against Kantumruy's
+  // ascent, and for those frames they would be applied to whatever Khmer face
+  // the OS supplies — a shorter ascent clips the line box **from the top**,
+  // which is where a Khmer cluster carries its vowel signs. Khmer would appear
+  // decapitated on every cold start and then repair itself.
+  const [fontsLoaded, fontError] = useFonts({
+    Newsreader_400Regular,
+    Newsreader_500Medium,
+    KantumruyPro_400Regular,
+    KantumruyPro_500Medium,
+    Moul_400Regular,
+    IBMPlexMono_400Regular,
+    IBMPlexMono_500Medium,
+  })
+
+  // `fontError` is part of the condition, not just logged. Gating on
+  // `fontsLoaded` alone means a single unreadable font file holds the splash
+  // forever and the app never starts — a worse failure than the wrong typeface.
+  // Falling through renders in the OS fallbacks, which is survivable.
+  const ready = fontsLoaded || fontError != null
+
+  useEffect(() => {
+    if (ready) void SplashScreen.hideAsync().catch(() => {})
+  }, [ready])
+
+  // Null rather than a spinner: the splash is still up, and drawing a second
+  // loading state behind it would show through the moment it hides.
+  if (!ready) return null
 
   return (
     // Required by react-native-gesture-handler, and required *at the root*.
@@ -49,12 +82,14 @@ export default function RootLayout() {
  * `useTheme()` in RootLayout would run above its own provider.
  */
 function RootStack() {
-  const { colors: c, isDark } = useTheme()
+  const { colors: c } = useTheme()
   return (
     <>
-      {/* Inverted, not fixed: on a dark background the bar's content has to be
-          light or the clock and battery icons vanish into the header. */}
-      <StatusBar style={isDark ? 'light' : 'dark'} />
+      {/* Fixed now, where it used to invert with the theme: the ground is cream
+          in every state the app has, so the clock and battery are always dark
+          content on a light bar. Cook mode is the one screen that will need to
+          override this locally rather than derive it. */}
+      <StatusBar style="dark" />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: c.bg } }} />
     </>
   )

@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Ionicons } from '@expo/vector-icons'
-import { FlatList, Modal, Pressable, StyleSheet, Text, View } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { FlatList, Modal, Pressable, StyleSheet, View } from 'react-native'
+import { Text } from '@/components/ui/Text'
 import SearchBar from '@/components/ui/SearchBar'
 import { useUnits } from '@/data/usePantry'
 import { foldForCompare } from '@/lib/text'
 import { useT } from '@/i18n'
-import { radius, spacing, useTheme, useThemedStyles } from '@/theme'
+import { minHeights, radius, spacing, useScreenTopPad, useTheme, useThemedStyles } from '@/theme'
 import type { ThemeColors, TypeScale } from '@/theme'
 
 type Row =
@@ -40,7 +40,7 @@ export default function UnitPicker({
 }) {
   const { colors: c } = useTheme()
   const styles = useThemedStyles(makeStyles)
-  const insets = useSafeAreaInsets()
+  const topPad = useScreenTopPad()
   const t = useT()
   // Follows the language toggle: the Khmer list keeps Latin measurements and
   // swaps the count words — see `data/units.km.ts`.
@@ -85,7 +85,7 @@ export default function UnitPicker({
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose} transparent={false}>
-      <View style={[styles.container, { paddingTop: insets.top }]}>
+      <View style={[styles.container, { paddingTop: topPad }]}>
         <View style={styles.header}>
           <View style={styles.headerRow}>
             <Text style={styles.title}>{t('unitPicker.title')}</Text>
@@ -202,7 +202,8 @@ const makeStyles = (c: ThemeColors, type: TypeScale) => StyleSheet.create({
     alignItems: 'center',
     gap: spacing.md,
     paddingHorizontal: spacing.md,
-    height: 52,
+    minHeight: minHeights.row,
+    paddingVertical: 12,
     borderRadius: radius.md,
   },
   rowSelected: { backgroundColor: c.surfaceAlt },

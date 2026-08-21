@@ -1,39 +1,35 @@
 import { useCallback, useState } from 'react'
 import { Ionicons } from '@expo/vector-icons'
-import { useFocusEffect, useRouter } from 'expo-router'
-import {
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  TextInput,
-  View,
-} from 'react-native'
+import { useFocusEffect } from 'expo-router'
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { Text, TextInput } from '@/components/ui/Text'
+import type { StyleProp, TextStyle } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MAX_NAME_LENGTH, useAuth } from '@/context/AuthContext'
 import { getRecipes } from '@/lib/api'
 import { resetSeenIntro } from '@/lib/onboarding'
-import ActionSheet from '@/components/ui/ActionSheet'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
+import LedgerRow from '@/components/ui/LedgerRow'
 import PrimaryButton from '@/components/ui/PrimaryButton'
+import SectionHeader from '@/components/ui/SectionHeader'
+import SettingRow from '@/components/ui/SettingRow'
+import StatTile from '@/components/ui/StatTile'
 import { initials } from '@/components/ui/ProfileButton'
-import { useLanguage, useT } from '@/i18n'
-import { radius, sized, spacing, useTheme, useThemedStyles } from '@/theme'
+import { useLanguage, useNum, useT } from '@/i18n'
+import { contentType, inputType, minHeights, radius, sized, sizes, spacing, useTheme, useThemedStyles } from '@/theme'
 import type { ThemeColors, TypeScale } from '@/theme'
 import type { Recipe } from '@/types/recipe'
 
 export default function ProfileScreen() {
-  const { colors: c, isDark, setPreference } = useTheme()
+  const { colors: c } = useTheme()
   const styles = useThemedStyles(makeStyles)
   const t = useT()
+  const n = useNum()
   const { language, setLanguage } = useLanguage()
   const { token, displayName, email, memberSince, logout, updateDisplayName, resetOnboarding } =
     useAuth()
   const insets = useSafeAreaInsets()
-  const router = useRouter()
+  const mark = initials(displayName)
 
   const [recipes, setRecipes] = useState<Recipe[]>([])
   const [editing, setEditing] = useState(false)
@@ -42,7 +38,6 @@ export default function ProfileScreen() {
   const [error, setError] = useState<string | null>(null)
   const [confirmLogout, setConfirmLogout] = useState(false)
   const [resetting, setResetting] = useState(false)
-  const [languageSheet, setLanguageSheet] = useState(false)
 
   useFocusEffect(
     useCallback(() => {
@@ -135,7 +130,13 @@ export default function ProfileScreen() {
       >
         <View style={styles.identity}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{initials(displayName)}</Text>
+            {/* Face from the initial, not from the interface language — see
+                `ui/ProfileButton.tsx`. In Khmer the language-keyed scale puts
+                `screenTitle` in **Moul**, so a Latin initial was being set in a
+                heavy Khmer display face the moment you switched. */}
+            <Text style={[styles.avatarText, sized(contentType('screenTitle', mark), 20)]}>
+              {mark}
+            </Text>
           </View>
 
           {editing ? (
@@ -146,7 +147,7 @@ export default function ProfileScreen() {
                 onChangeText={setDraftName}
                 placeholder={t('profile.yourName')}
                 placeholderTextColor={c.textPlaceholder}
-                keyboardAppearance={isDark ? 'dark' : 'light'}
+                keyboardAppearance="light"
                 autoFocus
                 returnKeyType="done"
                 onSubmitEditing={handleSaveName}
@@ -181,86 +182,95 @@ export default function ProfileScreen() {
               accessibilityRole="button"
               accessibilityLabel={t('profile.editName')}
             >
-              <Text style={styles.name}>{displayName}</Text>
+              {/* Same rule, and the same bug: a name is content, so it keeps
+                  the script it was written in whichever way the toggle is set. */}
+              <Text style={[styles.name, contentType('screenTitle', displayName)]}>
+                {displayName}
+              </Text>
               <Ionicons name="pencil" size={15} color={c.textMuted} />
             </Pressable>
           )}
 
-          {email && <Text style={styles.email}>{email}</Text>}
+          {/* One mono line under the name, per the design: the address and the
+              size of the book. Uppercased unconditionally — Khmer has no letter
+              case, so the transform is a no-op there rather than a branch. */}
+          <Text style={styles.identityMeta}>
+            {[email?.toUpperCase(), `${n(recipes.length)} ${t('settings.recipeCount')}`]
+              .filter(Boolean)
+              .join(' · ')}
+          </Text>
           {error && <Text style={styles.error}>{error}</Text>}
         </View>
 
         <View style={styles.stats}>
-          <Stat label={t('profile.recipes')} value={String(recipes.length)} />
-          <Stat label={t('profile.favourites')} value={String(favouriteCount)} />
-          <Stat
+          <StatTile label={t('profile.recipes')} value={n(recipes.length)} />
+          <StatTile label={t('profile.favourites')} value={n(favouriteCount)} />
+          <StatTile
             label={t('profile.totalTime')}
-            value={totalMinutes >= 60 ? `${Math.round(totalMinutes / 60)}h` : `${totalMinutes}m`}
+            value={n(totalMinutes >= 60 ? `${Math.round(totalMinutes / 60)}h` : `${totalMinutes}m`)}
+          />
+        </View>
+
+        {/**
+          * **The two language rows are the switch, not a link to one.**
+          *
+          * This was a chevron opening an ActionSheet. Chronicle puts both
+          * options on the page with a `◆` marking the active one, and the
+          * change is not cosmetic: a sheet names the current language in the
+          * current language, so someone who has landed in the wrong one has to
+          * read the wrong one to escape it. Two rows, each in its own script,
+          * are legible whichever way round you are — the same reasoning that
+          * makes the masthead's toggle the one place both scripts appear.
+          */}
+        <View style={styles.section}>
+          <SectionHeader label={t('settings.language')} />
+          <LanguageRow
+            label="ខ្មែរ"
+            labelStyle={styles.optionKm}
+            active={language === 'km'}
+            onPress={() => setLanguage('km')}
+          />
+          <LanguageRow
+            label="English"
+            labelStyle={styles.optionEn}
+            active={language === 'en'}
+            onPress={() => setLanguage('en')}
+            last
           />
         </View>
 
         {memberSince && (
-          <View style={styles.card}>
-            <Ionicons name="calendar-outline" size={18} color={c.textMuted} />
-            <Text style={styles.cardLabel}>{t('profile.memberSince')}</Text>
-            {/* `undefined` locale on purpose — the date follows the phone rather
-                than the in-app language. Hermes ships a reduced ICU, so forcing
-                'km-KH' risks a silent fall back to English anyway, and a wrong
-                month name is worse than a phone-native one. */}
-            <Text style={styles.cardValue}>
-              {memberSince.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
-            </Text>
+          <View style={styles.section}>
+            <SectionHeader label={t('settings.about')} />
+            <LedgerRow
+              title={t('profile.memberSince')}
+              /* `undefined` locale on purpose — the month follows the *phone*
+                 rather than the in-app language. Hermes ships a reduced ICU, so
+                 forcing 'km-KH' risks a silent fall back to English anyway, and
+                 a phone-native month name beats a wrong one.
+
+                 Wrapped in `n` so the *year* still follows the app. The two
+                 rules don't collide: `n` only touches digits, and the README
+                 lists dates among the things whose numerals switch. */
+              value={n(
+                memberSince.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+              )}
+              last
+            />
           </View>
         )}
 
-        {/* A row opening the shared ActionSheet, not a Switch. A two-state switch
-            can't say which language is which until you flip it, and it would
-            hard-code the assumption that there will only ever be two. */}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t('language.label')}
-          onPress={() => setLanguageSheet(true)}
-          style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-        >
-          <Ionicons name="language-outline" size={18} color={c.textMuted} />
-          <Text style={styles.cardLabel}>{t('language.label')}</Text>
-          <Text style={styles.cardValue}>
-            {t(language === 'km' ? 'language.km' : 'language.en')}
-          </Text>
-          <Ionicons name="chevron-forward" size={16} color={c.textPlaceholder} />
-        </Pressable>
+        {/* The dark-mode switch stood here. It went with the palette it
+            controlled — Chronicle is a printed page, and there is no second
+            palette to switch to. `profile.darkMode` is now an unused string. */}
 
-        <View style={[styles.card, styles.themeCard]}>
-          <Ionicons name={isDark ? 'moon' : 'moon-outline'} size={18} color={c.textMuted} />
-          <Text style={styles.cardLabel}>{t('profile.darkMode')}</Text>
-          <Switch
-            value={isDark}
-            onValueChange={(on) => setPreference(on ? 'dark' : 'light')}
-            accessibilityLabel={t('profile.darkMode')}
-            // Until this is touched the theme follows the phone; flipping it
-            // pins an explicit choice that outlives the system setting.
-            trackColor={{ false: c.borderStrong, true: c.primary }}
-            // White in both themes and in both states. The thumb is a physical
-            // part sitting on two different track colours, so it can't take a
-            // token that tracks either one: `onPrimary` is ink now, which reads
-            // as a hole punched in the light grey off-track and all but
-            // disappears on the dark one.
-            thumbColor={c.white}
-            ios_backgroundColor={c.borderStrong}
-          />
-        </View>
-
-        {/* The tutorial is the one onboarding screen worth seeing twice, and
-            without this the only way back to it would be a new account. */}
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.push('/tutorial')}
-          style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-        >
-          <Ionicons name="help-circle-outline" size={18} color={c.textMuted} />
-          <Text style={styles.cardLabel}>{t('profile.howItWorks')}</Text>
-          <Ionicons name="chevron-forward" size={16} color={c.textPlaceholder} />
-        </Pressable>
+        {/* "How it works" pointed at the tutorial, which is gone. Chronicle
+            explains the app on the pre-auth "what it does" screen instead, and
+            that one is not replayable — it sits before sign-in, so linking back
+            to it from a signed-in screen would mean routing out of `(app)` into
+            `(auth)`, which the three guards are built to make impossible.
+            `profile.howItWorks` is now an unused string, like `profile.darkMode`
+            above it. */}
 
         {/* Development only — `__DEV__` is false in any release build, so this
             never ships. It's here because the flow it replays is otherwise
@@ -269,23 +279,13 @@ export default function ProfileScreen() {
             back. No confirm, deliberately: it's a button you press dozens of
             times an afternoon, and everything it clears is onboarding state. */}
         {__DEV__ && (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Reset onboarding and log out"
+          <SettingRow
+            icon="construct-outline"
+            label={resetting ? 'Starting fresh…' : 'Start fresh (dev only)'}
+            hint="Clears this account’s onboarding, logs out, replays the intro"
+            dashed
             onPress={handleDevReset}
-            disabled={resetting}
-            style={({ pressed }) => [styles.devCard, pressed && styles.cardPressed]}
-          >
-            <Ionicons name="construct-outline" size={18} color={c.textMuted} />
-            <View style={styles.devText}>
-              <Text style={styles.cardLabel}>
-                {resetting ? 'Starting fresh…' : 'Start fresh (dev only)'}
-              </Text>
-              <Text style={styles.devHint}>
-                Clears this account’s onboarding, logs out, replays the intro
-              </Text>
-            </View>
-          </Pressable>
+          />
         )}
 
         <PrimaryButton
@@ -308,56 +308,101 @@ export default function ProfileScreen() {
         }}
       />
 
-      <ActionSheet
-        visible={languageSheet}
-        title={t('language.label')}
-        onClose={() => setLanguageSheet(false)}
-        // A checkmark on the current one turns the sheet into a radio group,
-        // which is what a language choice actually is.
-        actions={[
-          {
-            label: t('language.en'),
-            icon: language === 'en' ? 'checkmark-circle' : 'ellipse-outline',
-            onPress: () => setLanguage('en'),
-          },
-          {
-            label: t('language.km'),
-            icon: language === 'km' ? 'checkmark-circle' : 'ellipse-outline',
-            onPress: () => setLanguage('km'),
-          },
-        ]}
-      />
     </KeyboardAvoidingView>
   )
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+/**
+ * One of the two language rows: the name in its own script, and a `◆` on the
+ * right that is tamarind when active and `inactive` when not.
+ *
+ * The label is **not** translated and **not** set from the active type scale —
+ * both would defeat the point. `ខ្មែរ` written in Newsreader is a Khmer word in
+ * a face with no Khmer glyphs, which is the silent-substitution failure the
+ * README warns about; `English` set in Kantumruy is the same mistake pointed the
+ * other way.
+ */
+function LanguageRow({
+  label,
+  labelStyle,
+  active,
+  onPress,
+  last,
+}: {
+  label: string
+  labelStyle: StyleProp<TextStyle>
+  active: boolean
+  onPress: () => void
+  last?: boolean
+}) {
   const styles = useThemedStyles(makeStyles)
   return (
-    <View style={styles.stat}>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-    </View>
+    <Pressable
+      accessibilityRole="radio"
+      accessibilityState={{ selected: active }}
+      accessibilityLabel={label}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.languageRow,
+        !last && styles.languageRuled,
+        pressed && styles.languagePressed,
+      ]}
+    >
+      <Text style={[labelStyle, styles.languageLabel]}>{label}</Text>
+      <Text style={[styles.diamond, active ? styles.diamondOn : styles.diamondOff]}>
+        {active ? '◆' : '◇'}
+      </Text>
+    </Pressable>
   )
 }
 
 const makeStyles = (c: ThemeColors, type: TypeScale) => StyleSheet.create({
   container: { flex: 1, backgroundColor: c.bg },
-  content: { padding: spacing.lg, paddingBottom: spacing.xxl, gap: spacing.xl },
-  identity: { alignItems: 'center', gap: spacing.sm },
+  content: {
+    paddingHorizontal: spacing.gutter,
+    paddingBottom: spacing.xxl,
+    gap: spacing.sectionSpacing,
+  },
+  identity: { alignItems: 'center', gap: spacing.sm, paddingTop: spacing.lg },
+  // 56, per the design, and **outlined rather than filled**. A tamarind disc at
+  // 88 was the single heaviest mark in the product, on a screen that is
+  // otherwise nothing but rules — the monogram reads perfectly well in ink.
   avatar: {
-    width: 88,
-    height: 88,
-    borderRadius: radius.pill,
-    backgroundColor: c.primary,
+    width: sizes.mark,
+    height: sizes.mark,
+    borderRadius: '50%',
+    borderWidth: 1.2,
+    borderColor: c.text,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.sm,
   },
-  avatarText: { ...sized(type.display, 32), color: c.onPrimary },
+  // Colour only; `contentType` supplies every type property at the call site.
+  avatarText: { color: c.text },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  name: { ...type.title, color: c.text },
-  email: { ...type.body, color: c.textMuted },
+  name: { color: c.text },
+  identityMeta: { ...type.metadataSmall, color: c.textMuted, textAlign: 'center' },
+
+  section: {},
+  languageRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    minHeight: sizes.hitMin,
+    paddingVertical: spacing.rowY,
+  },
+  languageRuled: { borderBottomWidth: 0.5, borderBottomColor: c.border },
+  languagePressed: { opacity: 0.6 },
+  languageLabel: { color: c.text, flex: 1, minWidth: 0 },
+  // Kantumruy 20 / Newsreader 21, the design's own pair — Khmer is set a point
+  // *smaller* than the Latin here rather than larger, because at this size
+  // Kantumruy's larger x-height already matches Newsreader's optical weight.
+  optionKm: { fontFamily: 'KantumruyPro_500Medium', fontSize: 20, lineHeight: 34 },
+  optionEn: { fontFamily: 'Newsreader_400Regular', fontSize: 21, lineHeight: 28 },
+  diamond: { fontSize: 13 },
+  diamondOn: { color: c.primary },
+  diamondOff: { color: c.inactive },
   error: { ...type.body, color: c.danger },
   nameEditor: { width: '100%', gap: spacing.sm },
   nameInput: {
@@ -365,36 +410,33 @@ const makeStyles = (c: ThemeColors, type: TypeScale) => StyleSheet.create({
     borderColor: c.borderStrong,
     borderRadius: radius.md,
     paddingHorizontal: spacing.lg,
-    height: 52,
-    ...type.body,
-    fontSize: 16,
+    // A floor plus padding, never a fixed `height` — the rule `minHeights`
+    // states. At 52 flat this box clipped its own text the moment the line grew:
+    // Khmer's `body` line box is 26pt before any OS scaling, and a phone with
+    // Larger Text on took it past the wall. `sized`, not a bare `fontSize`
+    // override, so the line box comes down with the size instead of leaving
+    // 16pt text spaced for a 26pt line.
+    minHeight: minHeights.field,
+    paddingVertical: spacing.sm,
+    // `inputType` drops the line box on the way in — one line, so the pin can
+    // only clip the descenders, and `minHeights.field` already holds the height.
+    ...inputType(sized(type.body, 16)),
     color: c.text,
     textAlign: 'center',
   },
   nameActions: { flexDirection: 'row', gap: spacing.sm },
   nameButton: { flex: 1 },
-  stats: { flexDirection: 'row', gap: spacing.sm },
-  stat: {
-    flex: 1,
-    backgroundColor: c.surfaceAlt,
-    borderRadius: radius.md,
-    paddingVertical: spacing.lg,
-    alignItems: 'center',
-    gap: 2,
-  },
-  statValue: { ...type.title, color: c.text },
-  statLabel: { ...type.caption, color: c.textMuted },
-  card: {
+  // Ruled top and bottom, so the three read as one band of the page rather
+  // than as three floating panels.
+  stats: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    backgroundColor: c.surfaceAlt,
-    borderRadius: radius.md,
-    padding: spacing.lg,
+    borderTopWidth: 0.5,
+    borderBottomWidth: 0.5,
+    borderColor: c.border,
   },
-  cardLabel: { ...type.body, color: c.text, flex: 1 },
-  cardValue: { ...type.bodyStrong, color: c.textMuted },
-  cardPressed: { opacity: 0.7 },
+  // The hand-built stat tile, settings card and email line that used to live
+  // here are gone: `StatTile` owns the first, `LedgerRow` the second, and the
+  // identity block folded the email into one mono meta line.
   // A card, but dashed and unfilled so it can't be mistaken for a real setting
   // by anyone looking at a dev build over your shoulder. It's the only dashed
   // border in the app, which is the point.

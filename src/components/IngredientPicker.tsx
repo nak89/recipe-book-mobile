@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Ionicons } from '@expo/vector-icons'
-import { FlatList, Modal, Pressable, StyleSheet, Text, View } from 'react-native'
+import { FlatList, Modal, Pressable, StyleSheet, View } from 'react-native'
+import { Text } from '@/components/ui/Text'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import SearchBar from '@/components/ui/SearchBar'
 import PrimaryButton from '@/components/ui/PrimaryButton'
@@ -8,7 +9,7 @@ import type { CommonIngredient } from '@/data/ingredients'
 import { useIngredients } from '@/data/usePantry'
 import { foldForCompare } from '@/lib/text'
 import { useT } from '@/i18n'
-import { radius, spacing, useTheme, useThemedStyles } from '@/theme'
+import { minHeights, radius, spacing, useScreenTopPad, useTheme, useThemedStyles } from '@/theme'
 import type { ThemeColors, TypeScale } from '@/theme'
 
 type Row =
@@ -39,6 +40,7 @@ export default function IngredientPicker({
   const { colors: c } = useTheme()
   const styles = useThemedStyles(makeStyles)
   const insets = useSafeAreaInsets()
+  const topPad = useScreenTopPad()
   const t = useT()
   // The one list in the app that follows the toggle, because what you tap here
   // is written into your recipe — see `data/usePantry.ts`.
@@ -70,7 +72,7 @@ export default function IngredientPicker({
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose} transparent={false}>
-      <View style={[styles.container, { paddingTop: insets.top }]}>
+      <View style={[styles.container, { paddingTop: topPad }]}>
         <View style={styles.header}>
           <View style={styles.headerRow}>
             <Text style={styles.title}>{t('picker.title')}</Text>
@@ -173,7 +175,8 @@ const makeStyles = (c: ThemeColors, type: TypeScale) => StyleSheet.create({
     alignItems: 'center',
     gap: spacing.md,
     paddingHorizontal: spacing.md,
-    height: 52,
+    minHeight: minHeights.row,
+    paddingVertical: 12,
     borderRadius: radius.md,
   },
   rowSelected: { backgroundColor: c.surfaceAlt },

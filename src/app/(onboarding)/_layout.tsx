@@ -1,10 +1,10 @@
-import { Redirect, Stack, usePathname } from 'expo-router'
+import { Redirect, Stack } from 'expo-router'
 import { ActivityIndicator, View } from 'react-native'
 import { useAuth } from '@/context/AuthContext'
 import { useTheme } from '@/theme'
 
 /**
- * The post-signup flow: name, starter packs, tutorial.
+ * The post-signup flow, now a single screen: the starter packs.
  *
  * This is the middle of three route groups, and each one means exactly one
  * thing — `(auth)` is "no session", this is "session but not set up", `(app)`
@@ -20,7 +20,6 @@ import { useTheme } from '@/theme'
 export default function OnboardingLayout() {
   const { colors: c } = useTheme()
   const { session, loading, onboarded } = useAuth()
-  const pathname = usePathname()
 
   if (loading) {
     return (
@@ -34,12 +33,11 @@ export default function OnboardingLayout() {
     return <Redirect href="/login" />
   }
 
-  // The tutorial is the one screen here that outlives onboarding: the profile
-  // tab links to it so you can read it again without resetting your account.
-  // Everything else is once-only and belongs behind the flag.
-  const isRevisitableTutorial = onboarded && pathname === '/tutorial'
-
-  if (onboarded && !isRevisitableTutorial) {
+  // Nothing in this group outlives onboarding any more. The tutorial used to —
+  // the profile screen linked back to it — and it took a `pathname` exception
+  // in this guard to allow that. Both are gone: Chronicle teaches through the
+  // "what it does" screen before sign-up rather than through a replayable tour.
+  if (onboarded) {
     return <Redirect href="/" />
   }
 
@@ -49,10 +47,9 @@ export default function OnboardingLayout() {
         headerShown: false,
         contentStyle: { backgroundColor: c.bg },
         // The flow is forward-only. iOS's edge swipe would otherwise pop you
-        // back to a step you have already committed — off the pack picker to
-        // the name you just saved — which reads as undo but isn't. Re-reading
-        // the tutorial later isn't a flow, so there the swipe-back is welcome.
-        gestureEnabled: isRevisitableTutorial,
+        // back off the pack picker into the sign-up form you have already
+        // submitted, which reads as undo but isn't.
+        gestureEnabled: false,
       }}
     />
   )

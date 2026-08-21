@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Ionicons } from '@expo/vector-icons'
-import { FlatList, Modal, Pressable, StyleSheet, Text, View } from 'react-native'
+import { FlatList, Modal, Pressable, StyleSheet, View } from 'react-native'
+import { Text } from '@/components/ui/Text'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import SearchBar from '@/components/ui/SearchBar'
 import PrimaryButton from '@/components/ui/PrimaryButton'
@@ -8,7 +9,7 @@ import type { CommonTool } from '@/data/tools'
 import { useTools } from '@/data/usePantry'
 import { foldForCompare } from '@/lib/text'
 import { useT } from '@/i18n'
-import { radius, spacing, useTheme, useThemedStyles } from '@/theme'
+import { minHeights, radius, spacing, useScreenTopPad, useTheme, useThemedStyles } from '@/theme'
 import type { ThemeColors, TypeScale } from '@/theme'
 
 type Row =
@@ -40,6 +41,7 @@ export default function ToolPicker({
   const { colors: c } = useTheme()
   const styles = useThemedStyles(makeStyles)
   const insets = useSafeAreaInsets()
+  const topPad = useScreenTopPad()
   const t = useT()
   // Follows the language toggle, because what you tap is written into the
   // recipe — see `data/usePantry.ts`.
@@ -50,6 +52,27 @@ export default function ToolPicker({
     () => new Set(selectedNames.map(foldForCompare)),
     [selectedNames]
   )
+
+  /**
+   * The typed word, when the list has no tool by that name.
+   *
+   * `Recipe.tools` is free text and this picker is a shortcut over it, not a
+   * closed set — so a tool it has never heard of has to be reachable from
+   * inside it. It used to be reachable only from a separate text field beside
+   * the picker on the form; that field is gone (the mockup puts TOOLS in a
+   * half-width trigger beside CUISINE), which would have made this list the
+   * only door and left an unlisted tool with no way in at all.
+   *
+   * Folded on both sides, like the selection check above: a Khmer tool name
+   * can carry an invisible zero-width space, and an offer to add something
+   * that is already in the list is a dead row.
+   */
+  const custom = useMemo(() => {
+    const trimmed = query.trim()
+    if (!trimmed) return null
+    const folded = foldForCompare(trimmed)
+    return tools.some((tool) => foldForCompare(tool.name) === folded) ? null : trimmed
+  }, [query, tools])
 
   const rows = useMemo<Row[]>(() => {
     // Folded, not lowercased — a Khmer name and a Khmer query can differ by an
@@ -71,7 +94,7 @@ export default function ToolPicker({
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose} transparent={false}>
-      <View style={[styles.container, { paddingTop: insets.top }]}>
+      <View style={[styles.container, { paddingTop: topPad }]}>
         <View style={styles.header}>
           <View style={styles.headerRow}>
             <Text style={styles.title}>{t('toolPicker.title')}</Text>
@@ -85,7 +108,11 @@ export default function ToolPicker({
               <Ionicons name="close" size={20} color={c.text} />
             </Pressable>
           </View>
-          <SearchBar value={query} onChangeText={setQuery} placeholder={t('toolPicker.search')} />
+          <SearchBar
+            value={query}
+            onChangeText={setQuery}
+            placeholder={`${t('toolPicker.search')} ${t('select.orTypeYourOwn')}`}
+          />
         </View>
 
         <FlatList
@@ -95,6 +122,24 @@ export default function ToolPicker({
           keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.list}
+          ListHeaderComponent={
+            custom ? (
+              <Pressable
+                onPress={() => {
+                  onAdd(custom)
+                  setQuery('')
+                }}
+                style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+                accessibilityRole="button"
+                accessibilityLabel={`${t('select.use')} ${custom}`}
+              >
+                <Text style={styles.emoji}>✏️</Text>
+                <Text style={styles.name} numberOfLines={1}>
+                  {`${t('select.use')} “${custom}”`}
+                </Text>
+              </Pressable>
+            ) : null
+          }
           renderItem={({ item: row }) => {
             if (row.kind === 'header') {
               return <Text style={styles.category}>{row.category}</Text>
@@ -126,10 +171,12 @@ export default function ToolPicker({
             )
           }}
           ListEmptyComponent={
-            <View style={styles.empty}>
-              <Text style={styles.emptyTitle}>{`${t('toolPicker.noMatch')} “${query.trim()}”`}</Text>
-              <Text style={styles.emptyBody}>{t('toolPicker.noMatchBody')}</Text>
-            </View>
+            custom ? null : (
+              <View style={styles.empty}>
+                <Text style={styles.emptyTitle}>{`${t('toolPicker.noMatch')} “${query.trim()}”`}</Text>
+                <Text style={styles.emptyBody}>{t('toolPicker.noMatchBody')}</Text>
+              </View>
+            )
           }
         />
 
@@ -168,7 +215,8 @@ const makeStyles = (c: ThemeColors, type: TypeScale) => StyleSheet.create({
     alignItems: 'center',
     gap: spacing.md,
     paddingHorizontal: spacing.md,
-    height: 52,
+    minHeight: minHeights.row,
+    paddingVertical: 12,
     borderRadius: radius.md,
   },
   rowSelected: { backgroundColor: c.surfaceAlt },

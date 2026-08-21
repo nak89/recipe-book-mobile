@@ -1,5 +1,6 @@
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native'
-import { radius, shadow, spacing, useThemedStyles } from '@/theme'
+import { Modal, Pressable, StyleSheet, View } from 'react-native'
+import { Text } from '@/components/ui/Text'
+import { minHeights, radius, shadow, spacing, useThemedStyles } from '@/theme'
 import type { ThemeColors, TypeScale } from '@/theme'
 import { useT } from '@/i18n'
 
@@ -83,7 +84,8 @@ const makeStyles = (c: ThemeColors, type: TypeScale) => StyleSheet.create({
   actions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },
   button: {
     flex: 1,
-    height: 46,
+    minHeight: minHeights.dialogButton,
+    paddingVertical: 13,
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',

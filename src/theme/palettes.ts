@@ -1,241 +1,219 @@
 /**
- * Two palettes, one shape.
+ * Chronicle. One palette — see `ThemeContext` for why a printed-page direction
+ * has no night mode.
  *
- * Every colour is named by role rather than hue, which is what makes a second
- * palette possible at all: no screen asks for "fresh 500", it asks for
- * `primary`. It's also what has made each palette change since — warm stone to
- * near-neutral green, and now this — a change to two files rather than thirty.
+ * Every colour is named by role rather than hue, which is what has made each
+ * palette change since — warm stone, to near-neutral green, and now to cream
+ * and tamarind — a change to two files rather than thirty. No screen asks for
+ * "tamarind"; it asks for `primary`.
  *
- * **One green: `#0FC44A`, and nothing deeper than it exists in the system.**
- * A darker green beside it reads as a second brand, and the darker one always
- * wins the eye. The ramp is three stops and stops there: the green itself,
- * `primaryPressed` a step *lighter* (press has nowhere darker to go), and
- * `accentSoft` for the rare soft fill.
+ * **There are exactly four base colours**, and everything else in this file is
+ * one of them at an alpha:
  *
- * **Everything that isn't the green is neutral.** Surfaces, lines and type are
- * near-grey with only a whisper of green in them, which is what lets the one
- * saturated colour carry the whole brand. The previous palette tinted the
- * surfaces green too, and that is precisely what made it read as green-on-green:
- * once everything is slightly green, nothing is green.
+ *   `paper`    #f8f2e6   every background — screens, tab bar, sheets
+ *   `ink`      #241e18   every piece of text, every rule, every icon stroke
+ *   `tamarind` #b4522a   the primary action, the active state, accent numerals
+ *   `oat`      #e7dccb   image placeholders and thumbnails
+ *
+ * **There are only two background colours in the whole app**, `paper` and
+ * `oat`, and no gradients anywhere except the 28px fade behind sticky CTAs.
+ * A card here is defined by a rule and a radius, never by sitting on a
+ * different fill and never by a shadow — which is why `bg`, `surface` and
+ * `textInverse` all resolve to the same cream, and why that is correct rather
+ * than lazy. If a surface needs separating, it gets a hairline, not a tint.
+ *
+ * **Depth is spent once.** The single shadow in the product sits under a
+ * tamarind button (`shadow.raised`). Nothing else is elevated.
+ *
+ * **Muted text is ink at an alpha, never a separate grey.** The design system
+ * states this as `opacity: .5` on ink; it is written here as `rgba` so it can
+ * live in a colour token rather than forcing every consumer to stack an opacity
+ * on a `Text`. The two are equivalent over an opaque `paper` ground, which is
+ * the only ground the app has.
  *
  * **There is no flat `colors` export.** Reading a palette directly would bake
- * one theme into a module-scope `StyleSheet.create`, which is exactly the bug
- * that made dark mode impossible before. Use `useThemedStyles` instead.
+ * it into a module-scope `StyleSheet.create`, which is exactly the bug that
+ * made dark mode impossible before. Use `useThemedStyles` instead — and note
+ * the same indirection now carries the *language*-dependent type scale, so it
+ * is load-bearing whether or not a second palette ever exists.
  */
-const light = {
-  // Surfaces. `bg` and `surface` are the same value, as they have been through
-  // every palette this app has had — a card is defined by its border and shadow
-  // here, not by sitting on a different colour, and splitting them now would
-  // quietly change that relationship on every screen.
-  bg: '#FCFDFC',
-  bgSubtle: '#F7F8F8',
-  surface: '#FCFDFC',
-  surfaceAlt: '#F1F3F2',
-  surfaceSunken: '#E9ECEA',
 
-  // Lines
-  border: '#E2E6E4',
-  borderStrong: '#D0D5D2',
+// The four bases, written once so every alpha below is visibly derived from one
+// of them rather than being an independent colour someone has to reconcile.
+const INK_RGB = '36,30,24'
+const TAMARIND_RGB = '180,82,42'
+/** `bg`/`surface`'s cream, needed as rgb by the one token that fades it out. */
+const PAPER_RGB = '248,242,230'
+/** The hero and tutorial scrims are a *warmer, darker* brown than `ink`, per spec. */
+const SHADE_RGB = '26,20,14'
 
-  // Type. Near-grey rather than the deep green it used to be: the type is part
-  // of the neutral ground now, not part of the tint. 17.7:1 and 5.3:1 on `bg`.
-  text: '#15181A',
-  textMuted: '#636C67',
-  // Placeholders must read as absent, never as a prefilled value. ~2.9:1 on
-  // `bg` — deliberately below the readability floor that `textMuted` clears.
-  textPlaceholder: '#8E9793',
-  textInverse: '#FFFFFF',
-  textOnPhoto: '#FFFFFF',
+const paper = {
+  // ── Surfaces ────────────────────────────────────────────────────────────
+  // Only two exist. `bg` and `surface` are the same cream, as they have been
+  // through every palette this app has had, and `surfaceAlt`/`surfaceSunken`
+  // both land on oat: the design has one recessed fill, used for image
+  // placeholders, thumbnails and tiles alike.
+  bg: '#f8f2e6',
+  /**
+   * `bg` with its alpha taken out, for a gradient that fades the page into
+   * nothing — currently the overflow fade at the end of the dish filter's row.
+   *
+   * It exists for the same reason `scrimNone` does: a gradient ending on a
+   * differently-coloured `transparent` interpolates through that colour's rgb
+   * on the way and leaves a visible fringe down the ramp. The end stop has to
+   * be this cream at zero, not `transparent`.
+   */
+  bgNone: `rgba(${PAPER_RGB},0)`,
+  bgSubtle: '#e7dccb',
+  surface: '#f8f2e6',
+  surfaceAlt: '#e7dccb',
+  surfaceSunken: '#e7dccb',
+  /** The oat base under its own name, for places that mean the fill literally. */
+  oat: '#e7dccb',
+  /**
+   * The ground *behind* the phone in the prototype. The design system marks it
+   * "not an app color", and on a phone it isn't — but the app also runs in a
+   * browser, where the page is wider than the design and the layout is capped
+   * to a phone-width column. This is what surrounds that column, which is the
+   * same job it does in the prototype.
+   */
+  canvas: '#efe7d8',
 
-  // The one token here named by hue rather than role, mirroring the design
-  // system's own `--white` base token. It exists for physical control parts
-  // that are white in both themes because that is what the part *is* — the
-  // switch thumb, and nothing else so far. `textInverse` can't stand in (it
-  // follows the fill, so it goes near-black at night) and `textOnPhoto` is
-  // about photographs. Reach for a semantic token first; this is a last resort.
-  white: '#FFFFFF',
+  // ── Rules ───────────────────────────────────────────────────────────────
+  // Three weights, and the difference between them is the whole visual system:
+  // a page of ruled lines instead of a grid of filled cards. They are alphas
+  // over ink rather than separate greys so they sit *in* the paper rather than
+  // on it.
+  /** List-row separators — the hairline under every ledger row. */
+  border: `rgba(${INK_RGB},0.16)`,
+  /** The rule beside a section header, one step stronger than a row separator. */
+  borderStrong: `rgba(${INK_RGB},0.22)`,
+  /**
+   * Dotted leaders and dashed "add" outlines — the two idioms that make a list
+   * read as a printed index and an empty slot read as an unfilled line.
+   */
+  borderFaint: `rgba(${INK_RGB},0.35)`,
 
-  // Actions. The green at full strength, and the only place it appears at full
-  // strength. What sits *on* a primary fill is ink, not white: white on this
-  // green is 2.1:1 and ink is 7.8:1 — and the ink is also what keeps the button
-  // reading as bright paint rather than as a dark slab. Press moves *lighter*,
-  // since there is nothing darker in the ramp to move to.
-  primary: '#0FC44A',
-  primaryPressed: '#33D66F',
-  onPrimary: '#15181A',
-
-  // `accent` is an alias of `primary` and has no colour of its own. It was a
-  // second, deeper green for the shuffle action; an accent that is a *different
-  // green* from the primary action is the inconsistency, not the feature. The
-  // alias is kept so the two existing usages still resolve — the welcome mark's
-  // squircle, which is the brand mark on the first screen and is meant to be
-  // green, and the shuffle button, which is now a neutral icon button.
-  accent: '#0FC44A',
-  accentSoft: '#E8FCEF',
-
-  // Favourites only. A filled heart has to read as red or it doesn't read as a
-  // heart, so this is the one place a second saturated colour earns its keep —
-  // and the one token the green must not reach, since red against green is the
-  // strongest separation available and that is the entire point of it.
-  favourite: '#EF4444',
-  favouriteSoft: '#FEE2E2',
-
-  // Untinted for the same reason as `favourite`: a warning that shares the hue
-  // of the surface it warns about isn't a warning.
-  danger: '#DC2626',
-  dangerSoft: '#FEF2F2',
-
-  // Scrim under text overlaid on photos.
-  scrim: 'rgba(0,0,0,0.55)',
-  scrimStrong: 'rgba(0,0,0,0.75)',
-  // For a photo nothing is written on — the welcome hero, where the darkening
-  // exists only to keep the status bar legible and to stop the image glaring
-  // against the sheet. `scrim` at 0.55 is built to carry text and reads as a
-  // deliberate dimming here rather than as light falling off.
-  scrimSoft: 'rgba(0,0,0,0.35)',
-  scrimNone: 'rgba(0,0,0,0)',
-
-  // The specular sweep across the welcome screen's primary button.
+  // ── Type ────────────────────────────────────────────────────────────────
+  // One ink, at four strengths. Measured on `paper`:
   //
-  // NOTE: this still inverts between themes, but the reason it used to has gone.
-  // `primary` was the far end of the neutral scale and swapped ends at night, so
-  // a white sheen would have been invisible on the near-white night button. The
-  // green is now the constant across themes, so the same button gets a white
-  // sweep by day and a dark one by night for no reason the palette can state.
-  // Transcribed as specified rather than quietly "fixed" — see the note in the
-  // handoff summary; it's a design call, not a transcription error.
+  //   text          14.78:1   passes AA and AAA comfortably
+  //   textMuted      3.15:1   ⚠ fails AA (4.5:1) for body copy — see below
+  //   textPlaceholder 2.41:1   intentionally sub-threshold; reads as absent
+  //   inactive       2.54:1   ⚠ under the 3:1 floor for a UI control
   //
-  // `sheenNone` exists for the same reason `scrimNone` does: a gradient that
-  // fades to a *differently* coloured transparent interpolates through grey and
-  // leaves a fringe, so the end stops have to share the middle stop's rgb.
-  sheen: 'rgba(255,255,255,0.22)',
-  sheenNone: 'rgba(255,255,255,0)',
+  text: '#241e18',
+  /**
+   * ⚠ Ink at .5, exactly as the design system specifies ("Muted text:
+   * `opacity: .5` on ink, never a separate grey") — and it measures **3.15:1**,
+   * which is under the 4.5:1 needed for body text.
+   *
+   * Transcribed as specified rather than quietly corrected, because it is a
+   * design decision to make rather than a transcription error to fix: this token
+   * carries a lot of real copy (recipe descriptions, meta lines, every
+   * empty-state sub-line), and darkening it to ~.62 would clear AA while
+   * visibly changing the page's colour — the pale secondary voice is a large
+   * part of what makes the layout read as printed rather than as a UI.
+   *
+   * Worth noting this codebase has declined a sub-threshold handoff value
+   * before, on the selected `Chip`, where white-on-green measured 2.3:1. The
+   * difference is that there the fix cost nothing; here it costs the look.
+   */
+  textMuted: `rgba(${INK_RGB},0.5)`,
+  /** Ink at .4 — placeholders and unfilled field values. Reads as absent. */
+  textPlaceholder: `rgba(${INK_RGB},0.4)`,
+  /**
+   * What sits on a tamarind fill: paper, not white. The design system says so
+   * directly ("Primary: tamarind fill, paper text"), and it matters — pure
+   * white against this brown-red is colder than anything else in the product
+   * and reads as a sticker stuck onto the page.
+   */
+  textInverse: '#f8f2e6',
+  textOnPhoto: '#f8f2e6',
 
-  // Floating translucent chrome (the tab dock). These have to be alpha
-  // colours: the whole point is the content scrolling underneath showing
-  // through, so an opaque `surface` can't stand in. `glass` is the floor under
-  // the blur — on iOS 26 the real material replaces it, on Android the blur is
-  // weak enough that without it the pill loses its edges over a photo.
-  // The tint painted *over* the blur (see `Veil` in GlassSurface). Its alpha is
-  // the one dial here: it's how much of the pill is guaranteed light versus how
-  // much is blurred backdrop. Too low and dark recipe photos drag the pill to
-  // grey in light mode; too high and it stops looking like glass at all.
-  //
-  // 0.55 keeps 45% of the blur visible while holding the pill light over even
-  // the darkest photo. It carries `bg`'s tint rather than pure white so the
-  // dock belongs to the same palette as everything it floats over.
-  glass: 'rgba(252,253,252,0.55)',
-  // Translucent *white* in both palettes, not a dark edge in light. It's the
-  // specular lip along the top of a real glass element, and it only reads as
-  // glass if it's lighter than what it sits on. In light mode that leaves it
-  // near-invisible over a light background — which is why the dock carries
-  // `shadow.floating`, and why the shadow is doing the separating, not the edge.
-  glassBorder: 'rgba(255,255,255,0.55)',
-  // The sliding capsule behind the selected tab. Alpha again, and deliberately
-  // faint: it sits *on* glass, so an opaque fill would punch a hole in the
-  // material it's supposed to be part of. Built from `text`'s rgb rather than
-  // pure black, so the capsule darkens toward the palette instead of away.
-  glassHighlight: 'rgba(21,24,26,0.07)',
-  // An unselected icon sitting on glass. Not `textPlaceholder`, which is far
-  // too light here: the pill's colour moves with whatever scrolls under it, and
-  // over a dark photo that pairing measures ~1:1 — invisible, not subtle.
-  onGlassMuted: '#4B5450',
+  // ── Actions ─────────────────────────────────────────────────────────────
+  // Tamarind and paper measure **4.50:1 against each other**, which clears AA
+  // for normal text in both directions — a tamarind link on paper, and a paper
+  // label on a tamarind button. Worth stating because the outgoing palette could
+  // not do this: white on that green was 2.1:1, which is why its buttons had to
+  // carry ink instead. Chronicle's accent needs no such workaround.
+  primary: '#b4522a',
+  /**
+   * INVENTED — the design system specifies no pressed state, and the motion
+   * section allows only four transitions in the product (none of them a button
+   * press). This is tamarind stepped ~10% darker so a press is legible without
+   * introducing a second accent. If the design ever states one, replace it;
+   * the alternative used elsewhere in this app is dropping opacity on press,
+   * which is what the non-tamarind controls already do.
+   */
+  primaryPressed: '#9e4824',
+  onPrimary: '#f8f2e6',
+
+  // `accent` is an alias of `primary` and has no colour of its own. Chronicle
+  // has exactly one accent; a second would be the inconsistency, not the
+  // feature.
+  accent: '#b4522a',
+  /** Tamarind at .1 — chip fills, inline notices, the set-timer chip. */
+  accentSoft: `rgba(${TAMARIND_RGB},0.1)`,
+  /**
+   * Tamarind at .09 — the active tab pill, and *only* that. A hundredth apart
+   * from `accentSoft` and kept separate because the design system states the
+   * two independently and fidelity here is exact; collapsing them would be a
+   * decision, not a tidy-up.
+   */
+  accentPill: `rgba(${TAMARIND_RGB},0.09)`,
+  /** Ghosted display glyphs — the empty-state `០`, cook mode's step numeral. */
+  accentGhost: `rgba(${TAMARIND_RGB},0.18)`,
+  /** Ink at .42 — an inactive tab label, the one "disabled" strength there is. */
+  inactive: `rgba(${INK_RGB},0.42)`,
+
+  /**
+   * Saving a recipe. Chronicle has one accent, so the heart's red is gone with
+   * the rest of the old palette — the detail screen's control is a `◇ SAVE` /
+   * `◆ SAVED` diamond in tamarind, not a filled heart. These stay as aliases
+   * until that screen is restyled.
+   */
+  favourite: '#b4522a',
+  favouriteSoft: `rgba(${TAMARIND_RGB},0.1)`,
+
+  /**
+   * ⚠ Destructive actions have no colour of their own in this design, and this
+   * is a real gap rather than an omission I can fill safely. Chronicle names
+   * four colours and no alert red; introducing one would put a second
+   * saturated hue next to tamarind, which is the thing the palette is built to
+   * avoid. Delete confirmations therefore read as tamarind and lean on their
+   * *copy* to carry the warning. Worth a design decision rather than leaving
+   * it to this comment.
+   */
+  danger: '#b4522a',
+  dangerSoft: `rgba(${TAMARIND_RGB},0.1)`,
+
+  // ── Scrims ──────────────────────────────────────────────────────────────
+  // Warmer and darker than ink: these sit over photographs, where a neutral
+  // black would grey the food out.
+  /** Over the top 190px of a recipe hero, fading to nothing. */
+  scrim: `rgba(20,14,8,0.42)`,
+  /** The tutorial's full-screen dim. */
+  scrimStrong: `rgba(${SHADE_RGB},0.5)`,
+  scrimSoft: `rgba(20,14,8,0.25)`,
+  /**
+   * A gradient fading to a *differently* coloured transparent interpolates
+   * through grey and leaves a visible fringe, so the end stop has to share the
+   * middle stop's rgb rather than being a bare `transparent`.
+   */
+  scrimNone: `rgba(20,14,8,0)`,
 }
 
 /**
- * Annotating both palettes with this rather than inferring each separately is
- * load-bearing: a key present in one and missing from the other is a compile
- * error, so the two can never drift.
- */
-export type ThemeColors = Record<keyof typeof light, string>
-
-export const lightColors: ThemeColors = light
-
-/**
- * Dark swaps the neutral scale for its dark-read twin and **leaves the green
- * alone**. That's the headline difference from every previous version of this
- * file: the green is the constant across themes, not the thing that flips, and
- * a saturated green at this lightness holds up on near-white and near-black
- * alike. `primary` no longer inverts to the light end of the scale — the button
- * is the brand, and the brand doesn't change colour at night.
+ * Kept as a named type even though exactly one palette satisfies it.
  *
- * Two tokens deliberately break the mirror:
- *
- * - `surfaceSunken` steps the *opposite* way. In light it sits below `bg` (a
- *   recessed well — photo placeholders and skeleton blocks); in dark it has to
- *   sit above `bg` or every skeleton block disappears into the background.
- *   Semantic tokens invert their relationship, not their position on the scale.
- * - `danger` and `favourite` converge. Light splits them into red-600 and
- *   red-500 because the deeper red reads better as text on a light surface; on
- *   near-black both roles need the same brightness and the distinction stops
- *   paying off.
+ * Its original job was to stop two palettes drifting — a key present in one and
+ * missing from the other was a compile error. With dark mode gone that
+ * guarantee has nothing left to guard, but the type is what every `makeStyles`
+ * factory takes as its first argument, so it is now the contract between the
+ * palette and the thirty-odd screens reading it — and the shape a night palette
+ * would have to satisfy if one is ever designed.
  */
-export const darkColors: ThemeColors = {
-  // Surfaces
-  bg: '#0C0E0F',
-  bgSubtle: '#141719',
-  surface: '#141719',
-  surfaceAlt: '#1D2123',
-  surfaceSunken: '#141719',
+export type ThemeColors = Record<keyof typeof paper, string>
 
-  // Lines
-  border: '#1D2123',
-  borderStrong: '#2E3437',
-
-  // Type
-  text: '#F3F7F5',
-  textMuted: '#9DA6A2',
-  textPlaceholder: '#6E7975',
-  textInverse: '#0C0E0F',
-  // Unchanged: white text on a photo is white text on a photo.
-  textOnPhoto: '#FFFFFF',
-  // Unchanged, and that is the whole point of it — see light.
-  white: '#FFFFFF',
-
-  // Actions. Identical to light, deliberately — see the note above.
-  primary: '#0FC44A',
-  primaryPressed: '#33D66F',
-  onPrimary: '#0C0E0F',
-
-  // `accent` tracks `primary` here too. `accentSoft` is the one that has to
-  // move: a pale green tint is a bright rectangle on a near-black screen, so at
-  // night the soft fill is simply a raised neutral surface and the green comes
-  // from the glyph sitting on it.
-  accent: '#0FC44A',
-  accentSoft: '#1D2123',
-
-  favourite: '#F87171',
-  favouriteSoft: '#2A1517',
-
-  danger: '#F87171',
-  dangerSoft: '#2A1517',
-
-  // Unchanged for the same reason as textOnPhoto — these darken a photograph
-  // so overlaid text stays legible, and that job is identical in both themes.
-  scrim: 'rgba(0,0,0,0.55)',
-  scrimStrong: 'rgba(0,0,0,0.75)',
-  scrimSoft: 'rgba(0,0,0,0.35)',
-  scrimNone: 'rgba(0,0,0,0)',
-
-  // Still inverted; see the note on light's `sheen` for why that no longer
-  // follows from the palette.
-  sheen: 'rgba(0,0,0,0.18)',
-  sheenNone: 'rgba(0,0,0,0)',
-
-  // Darker and slightly more opaque than light's: a blur over near-black has
-  // far less to work with, so the pill needs more of its own body to read as a
-  // surface. The border flips to a light edge, which is how a raised glass
-  // element catches light at night.
-  // Slightly stronger than light's, and for the mirrored reason: a bright photo
-  // scrolling under the pill at night drags it light, which is the more jarring
-  // direction on a near-black screen.
-  glass: 'rgba(20,23,25,0.60)',
-  glassBorder: 'rgba(255,255,255,0.12)',
-  // Lighter rather than darker: on a near-black pill the selected tab has to be
-  // lifted out, and a darker capsule would read as a hole.
-  glassHighlight: 'rgba(255,255,255,0.12)',
-  // The exact mirror of light's, and it fixes the same bug in the other
-  // direction: `textPlaceholder` on a dark pill sitting over a *bright* photo
-  // measures ~1.3:1. Same invisibility, just harder to stumble into.
-  onGlassMuted: '#9DA6A2',
-}
+export const paperColors: ThemeColors = paper

@@ -11,6 +11,11 @@
 // of a key means "this field is wrong", never the truthiness of its value.
 
 import { foldForCompare } from '@/lib/text'
+// From `lib`, not `@/i18n` — the barrel re-exports it, but going through there
+// would drag React and AsyncStorage into this module's graph and stop
+// `tests/recipeValidation.test.ts` running under plain Node. The `StringKey`
+// import below is a type and erases to nothing.
+import { toLatinDigits } from '@/lib/numerals'
 import type { StringKey } from '@/i18n'
 import type { FormIngredient, FormStep } from '@/types/recipe'
 
@@ -25,11 +30,45 @@ import type { FormIngredient, FormStep } from '@/types/recipe'
  */
 export type Translate = (key: StringKey) => string
 
-/** Fills `{name}` placeholders. Small because the messages are. */
-function fill(template: string, values: Record<string, string | number>): string {
+/**
+ * Everything in this module that renders text needs **both** halves of the
+ * language: the dictionary and the numeral script.
+ *
+ * The second one is easy to forget and produces a bug you have to be able to
+ * read Khmer to notice — `"Description is over 1,000 words"` translated into
+ * Khmer but still carrying Latin `1,000`, which breaks the one-language-at-a-
+ * time rule inside the very message telling you what you did wrong. Bundling
+ * the two into one argument is what makes it impossible to thread one without
+ * the other.
+ */
+export interface Localiser {
+  t: Translate
+  /** `useNum()` from `@/i18n`. Converts every digit to the active script. */
+  n: (value: string | number) => string
+}
+
+/**
+ * Translates a message and fills its `{name}` placeholders, **converting
+ * numerals on the way in**.
+ *
+ * It takes the whole `Localiser` and the key rather than an already-translated
+ * string, which is the point: every number that reaches a user-visible string
+ * in this file passes through here, so the script conversion is one choke point
+ * instead of eleven call sites that each have to remember. Taking `t('key')`
+ * pre-translated would have left `n` as a separate argument someone could
+ * forget, which is the bug this shape exists to make unspellable.
+ *
+ * Values run through `n` whether they arrived as a number or as pre-formatted
+ * text like `'1,000'` — `n` only touches digits, so a thousands comma survives.
+ */
+function fill(
+  loc: Localiser,
+  key: StringKey,
+  values: Record<string, string | number>
+): string {
   return Object.entries(values).reduce(
-    (out, [key, value]) => out.replace(`{${key}}`, String(value)),
-    template
+    (out, [name, value]) => out.replace(`{${name}}`, loc.n(value)),
+    loc.t(key)
   )
 }
 
@@ -125,10 +164,10 @@ export function utf8ByteLength(value: string): number {
  * capped — 100 steps of 2000 characters each is every field within its own
  * limit and still a quarter of a megabyte.
  */
-export function recipeSizeError(body: unknown, t: Translate): string | null {
+export function recipeSizeError(body: unknown, loc: Localiser): string | null {
   const bytes = utf8ByteLength(JSON.stringify(body))
   if (bytes <= MAX_RECIPE_BYTES) return null
-  return fill(t('validation.tooBig'), {
+  return fill(loc, 'validation.tooBig', {
     n: Math.round(bytes / 1024),
     max: MAX_RECIPE_BYTES / 1024,
   })
@@ -141,11 +180,17 @@ export function recipeSizeError(body: unknown, t: Translate): string | null {
  * passed it to a backend column that wants an integer — a 400 at the end of the
  * wizard. `30.5` is also the one case worth a sentence: the box looks filled in,
  * so a bare highlight would leave you staring at it.
+ *
+ * **Digits are folded to Latin first.** `\d` in a JavaScript regex is ASCII
+ * `0-9` and nothing else, so `៣០` typed on a Khmer keyboard failed `^\d+$` and
+ * came back as "highlight only" — a red rule under a field holding a number the
+ * user can read perfectly well. Folding here rather than widening the character
+ * class keeps one definition of "is this a number" for both scripts.
  */
-function wholeNumber(raw: string, label: string, max: number, t: Translate): string | null {
-  const value = raw.trim()
+function wholeNumber(raw: string, label: string, max: number, loc: Localiser): string | null {
+  const value = toLatinDigits(raw).trim()
   if (!value) return HIGHLIGHT_ONLY
-  if (/^\d*[.,]\d+$/.test(value)) return fill(t('validation.wholeNumber'), { field: label })
+  if (/^\d*[.,]\d+$/.test(value)) return fill(loc, 'validation.wholeNumber', { field: label })
   if (!/^\d+$/.test(value)) return HIGHLIGHT_ONLY
   const parsed = Number(value)
   if (parsed < 1 || parsed > max) return HIGHLIGHT_ONLY
@@ -161,7 +206,8 @@ function wholeNumber(raw: string, label: string, max: number, t: Translate): str
  * no words: the number is right there in the outlined box.
  */
 function decimalNumber(raw: string, message: string, max: number): string | null {
-  const value = raw.trim()
+  // Folded for the same reason `wholeNumber` folds — see there.
+  const value = toLatinDigits(raw).trim()
   if (!value) return null
   if (!/^\d+([.,]\d+)?$/.test(value)) return message
   if (Number(value.replace(',', '.')) > max) return HIGHLIGHT_ONLY
@@ -169,7 +215,7 @@ function decimalNumber(raw: string, message: string, max: number): string | null
 }
 
 /** Quantities may be fractional and may be left blank (saved as 0). */
-function quantityError(raw: string, t: Translate): string | null {
+function quantityError(raw: string, { t }: Localiser): string | null {
   return decimalNumber(raw, t('validation.amountsNumbers'), LIMITS.quantity)
 }
 
@@ -189,8 +235,11 @@ export function usedSteps(rows: FormStep[]) {
 export function validateStep(
   index: number,
   values: RecipeFormValues,
-  t: Translate
+  loc: Localiser
 ): FieldErrors {
+  // `loc` stays whole for `fill`, which needs both halves; `t` is pulled out
+  // for the plain lookups that carry no numbers.
+  const { t } = loc
   const errors: FieldErrors = {}
 
   if (index === 0) {
@@ -200,7 +249,7 @@ export function validateStep(
     if (!title) {
       errors.title = HIGHLIGHT_ONLY
     } else if (title.length > LIMITS.title) {
-      errors.title = fill(t('validation.titleTooLong'), { n: LIMITS.title })
+      errors.title = fill(loc, 'validation.titleTooLong', { n: LIMITS.title })
       // `takenTitles` is folded by the caller, so the needle must be folded too —
       // an invisible zero-width space on either side would slip the check.
     } else if (values.takenTitles.has(foldForCompare(title))) {
@@ -211,19 +260,19 @@ export function validateStep(
     // Optional fields still need a ceiling — "optional" means you may leave it
     // out, not that anything goes once you fill it in.
     if (countWords(values.description) > LIMITS.descriptionWords) {
-      errors.description = fill(t('validation.descriptionWords'), {
+      errors.description = fill(loc, 'validation.descriptionWords', {
         n: LIMITS.descriptionWords.toLocaleString(),
       })
     } else if (values.description.trim().length > LIMITS.description) {
-      errors.description = fill(t('validation.descriptionChars'), {
+      errors.description = fill(loc, 'validation.descriptionChars', {
         n: LIMITS.description.toLocaleString(),
       })
     }
 
-    const minutes = wholeNumber(values.totalMinutes, t('form.totalMinutes'), LIMITS.totalMinutes, t)
+    const minutes = wholeNumber(values.totalMinutes, t('form.totalMinutes'), LIMITS.totalMinutes, loc)
     if (minutes !== null) errors.totalMinutes = minutes
 
-    const servings = wholeNumber(values.servings, t('form.servings'), LIMITS.servings, t)
+    const servings = wholeNumber(values.servings, t('form.servings'), LIMITS.servings, loc)
     if (servings !== null) errors.servings = servings
 
     if (values.cuisine.trim().length > LIMITS.cuisine) errors.cuisine = HIGHLIGHT_ONLY
@@ -233,7 +282,7 @@ export function validateStep(
       .map((t) => t.trim())
       .filter(Boolean)
     if (tools.length > LIMITS.tools) {
-      errors.tools = fill(t('validation.tooManyTools'), { n: LIMITS.tools })
+      errors.tools = fill(loc, 'validation.tooManyTools', { n: LIMITS.tools })
     } else if (tools.some((t) => t.length > LIMITS.tool)) {
       errors.tools = t('validation.toolTooLong')
     }
@@ -249,7 +298,7 @@ export function validateStep(
       errors.ingredients = HIGHLIGHT_ONLY
       for (const row of used) errors[ingredientKey(row.id)] = HIGHLIGHT_ONLY
     } else if (used.length > LIMITS.ingredients) {
-      errors.ingredients = fill(t('validation.tooManyIngredients'), { n: LIMITS.ingredients })
+      errors.ingredients = fill(loc, 'validation.tooManyIngredients', { n: LIMITS.ingredients })
     }
 
     for (const row of used) {
@@ -258,7 +307,7 @@ export function validateStep(
         errors[ingredientKey(row.id)] = HIGHLIGHT_ONLY
         continue
       }
-      const quantity = quantityError(row.quantity, t)
+      const quantity = quantityError(row.quantity, loc)
       if (quantity !== null) {
         errors[ingredientKey(row.id)] = quantity
         continue
@@ -273,12 +322,12 @@ export function validateStep(
       errors.steps = HIGHLIGHT_ONLY
       for (const row of values.steps) errors[stepKey(row.id)] = HIGHLIGHT_ONLY
     } else if (used.length > LIMITS.steps) {
-      errors.steps = fill(t('validation.tooManySteps'), { n: LIMITS.steps })
+      errors.steps = fill(loc, 'validation.tooManySteps', { n: LIMITS.steps })
     }
 
     for (const row of used) {
       if (row.instruction.trim().length > LIMITS.instruction) {
-        errors[stepKey(row.id)] = fill(t('validation.stepTooLong'), {
+        errors[stepKey(row.id)] = fill(loc, 'validation.stepTooLong', {
           n: LIMITS.instruction.toLocaleString(),
         })
       }
@@ -298,7 +347,7 @@ export function validateStep(
     for (const [key, raw, label] of nutrition) {
       const error = decimalNumber(
         raw,
-        fill(t('validation.mustBeNumber'), { field: label }),
+        fill(loc, 'validation.mustBeNumber', { field: label }),
         LIMITS[key as keyof typeof LIMITS]
       )
       if (error !== null) errors[key] = error
@@ -314,7 +363,7 @@ export function validateStep(
  * can't say — and stays generic when there's more than one thing wrong rather
  * than stacking messages.
  */
-export function summarise(errors: FieldErrors, t: Translate): string | null {
+export function summarise(errors: FieldErrors, { t }: Localiser): string | null {
   const keys = Object.keys(errors)
   if (keys.length === 0) return null
   const explained = keys.map((k) => errors[k]).filter(Boolean)

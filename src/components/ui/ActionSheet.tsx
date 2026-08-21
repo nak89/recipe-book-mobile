@@ -1,8 +1,9 @@
 import { Ionicons } from '@expo/vector-icons'
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native'
+import { Modal, Pressable, StyleSheet, View } from 'react-native'
+import { Text } from '@/components/ui/Text'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useT } from '@/i18n'
-import { radius, shadow, spacing, useTheme, useThemedStyles } from '@/theme'
+import { contentType, radius, shadow, spacing, useTheme, useThemedStyles } from '@/theme'
 import type { ThemeColors, TypeScale } from '@/theme'
 
 export interface SheetAction {
@@ -43,7 +44,12 @@ export default function ActionSheet({
         >
           <View style={styles.grabber} />
           {title && (
-            <Text style={styles.title} numberOfLines={1}>
+            /* The sheet's title is whatever it was opened on — a recipe name,
+               i.e. content. It matters in this direction too: the Latin
+               `caption` is IBM Plex Mono, which has **no Khmer glyphs at all**,
+               so a Khmer title under an English UI fell through to whatever the
+               OS substituted. */
+            <Text style={[styles.title, contentType('caption', title)]} numberOfLines={1}>
               {title}
             </Text>
           )}
@@ -98,7 +104,6 @@ const makeStyles = (c: ThemeColors, type: TypeScale) => StyleSheet.create({
     marginBottom: spacing.sm,
   },
   title: {
-    ...type.caption,
     color: c.textMuted,
     paddingHorizontal: spacing.md,
     paddingBottom: spacing.sm,

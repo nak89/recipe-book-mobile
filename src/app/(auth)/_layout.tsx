@@ -10,11 +10,11 @@ export default function AuthLayout() {
   const { seen } = useSeenIntro()
   const pathname = usePathname()
 
-  // Spinner rather than the login form while the persisted session *or* the
+  // Spinner rather than the sign-in form while the persisted session *or* the
   // intro flag loads. Both are async reads out of AsyncStorage, and acting on
   // either before it resolves is a visible redirect flash on cold start — the
-  // session one would flash login at a signed-in user, the intro one would
-  // flash the carousel at someone who has already seen it.
+  // session one would flash sign-in at a signed-in user, the intro one would
+  // flash the language picker at someone who has already chosen.
   if (loading || seen === null) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: c.bg }}>
@@ -27,10 +27,13 @@ export default function AuthLayout() {
     return <Redirect href="/" />
   }
 
-  // First run on this device, and the carousel isn't the screen we're already
-  // on. The pathname check is what stops this redirecting /intro to itself.
-  if (!seen && pathname !== '/intro') {
-    return <Redirect href="/intro" />
+  // First run on this device. **Both** pre-auth screens are exempt, not just
+  // the first: the flag isn't written until `/about` is left, so without
+  // `/about` in this list, choosing a language would redirect straight back to
+  // the picker. That is a two-screen trap with no way into the app, and it is
+  // the other half of the reason `markIntroSeen` publishes before it persists.
+  if (!seen && pathname !== '/language' && pathname !== '/about') {
+    return <Redirect href="/language" />
   }
 
   return (

@@ -173,6 +173,89 @@ export const COMMON_INGREDIENTS: CommonIngredient<IngredientCategory>[] = [
   { name: 'Peanuts', emoji: '🥜', unit: 'g', category: 'Baking & Sweet' },
   { name: 'Almonds', emoji: '🌰', unit: 'g', category: 'Baking & Sweet' },
   { name: 'Ice cream', emoji: '🍨', unit: 'g', category: 'Baking & Sweet' },
+
+  // ── The Explore library's pantry ────────────────────────────────────────────
+  //
+  // Every ingredient named by the eight recipes in the backend's
+  // `data/library.ts`, which this list had no word for. Until these existed, a
+  // Khmer dish browsed in the *English* UI rendered most of its rows on the
+  // default 🥄 — the Khmer pantry (`ingredients.km.ts`) has known គ្រឿង, រំដេង
+  // and ស្លឹកគ្រៃ from the start, and only the Latin side was missing them.
+  //
+  // Grouped by category like everything above, but appended as a block rather
+  // than filed into the sections: the picker groups on the `category` field, not
+  // on position, so this stays legible as "what Explore needed" without changing
+  // a single row of what the picker shows.
+  //
+  // **These names are load-bearing.** `data/library.ts` spells its ingredients
+  // against this list exactly; renaming an entry here silently drops the emoji
+  // from every library recipe using it, and from every copy a user has already
+  // taken. The backend test group 13 will not catch it — nothing crosses that
+  // boundary but the string itself.
+
+  // Vegetables
+  { name: 'Galangal', emoji: '🫚', unit: 'g', category: 'Vegetables' },
+  { name: 'Shallots', emoji: '🧅', unit: 'g', category: 'Vegetables' },
+  { name: 'Snow peas', emoji: '🫛', unit: 'g', category: 'Vegetables' },
+  { name: 'Pumpkin', emoji: '🎃', unit: 'g', category: 'Vegetables' },
+  { name: 'Taro', emoji: '🟣', unit: 'g', category: 'Vegetables' },
+  { name: 'Beetroot', emoji: '🟥', unit: '', category: 'Vegetables' },
+  { name: 'Green cubanelle peppers', emoji: '🫑', unit: 'g', category: 'Vegetables' },
+  { name: 'Long red pepper', emoji: '🌶️', unit: '', category: 'Vegetables' },
+  { name: 'Pickled scallion heads', emoji: '🫙', unit: 'g', category: 'Vegetables' },
+
+  // Fruit
+  { name: 'Longan', emoji: '🟤', unit: 'g', category: 'Fruit' },
+  { name: 'Coconut cream', emoji: '🥥', unit: 'ml', category: 'Fruit' },
+  { name: 'Shredded coconut', emoji: '🥥', unit: 'g', category: 'Fruit' },
+  { name: 'Lime juice', emoji: '🍈', unit: 'ml', category: 'Fruit' },
+  { name: 'Bitter orange juice', emoji: '🍊', unit: 'ml', category: 'Fruit' },
+  { name: 'Bitter orange zest', emoji: '🍊', unit: 'g', category: 'Fruit' },
+
+  // Meat & Fish
+  { name: 'Snakehead fish', emoji: '🐟', unit: 'g', category: 'Meat & Fish' },
+  { name: 'Beef tenderloin', emoji: '🥩', unit: 'g', category: 'Meat & Fish' },
+  { name: 'Minced pork belly', emoji: '🥓', unit: 'g', category: 'Meat & Fish' },
+  { name: 'Dried shrimp', emoji: '🦐', unit: 'g', category: 'Meat & Fish' },
+
+  // Herbs & Spices
+  { name: 'Kroeung', emoji: '🌿', unit: 'g', category: 'Herbs & Spices' },
+  { name: 'Kaffir lime leaves', emoji: '🍃', unit: 'leaves', category: 'Herbs & Spices' },
+  { name: 'Kaffir lime zest', emoji: '🍋', unit: 'g', category: 'Herbs & Spices' },
+  { name: 'Fresh turmeric', emoji: '🟡', unit: 'g', category: 'Herbs & Spices' },
+  { name: 'Khmer basil', emoji: '🌿', unit: 'bunch', category: 'Herbs & Spices' },
+  { name: 'Mixed basil', emoji: '🌿', unit: 'g', category: 'Herbs & Spices' },
+  { name: 'Coriander root', emoji: '🌿', unit: 'g', category: 'Herbs & Spices' },
+  { name: 'Pandan leaves', emoji: '🍃', unit: 'leaves', category: 'Herbs & Spices' },
+  { name: 'Kampot pepper', emoji: '⚫', unit: 'tsp', category: 'Herbs & Spices' },
+  // Distinct from 'Salt' rather than a synonym for it: they are different things
+  // on a shelf, and `emojiForIngredient` resolves longest-first, so "sea salt"
+  // lands here while "salt" still lands on 🧂.
+  { name: 'Sea salt', emoji: '🧂', unit: 'tsp', category: 'Herbs & Spices' },
+  // 🍲, the same mark `Stock` carries, rather than the generic spoon — chicken
+  // powder *is* stock, and an entry whose emoji happens to equal
+  // `DEFAULT_INGREDIENT_EMOJI` is indistinguishable on screen from one the
+  // lookup never found.
+  { name: 'Chicken powder', emoji: '🍲', unit: 'g', category: 'Herbs & Spices' },
+
+  // Sauces & Oils
+  { name: 'Shrimp paste', emoji: '🦐', unit: 'g', category: 'Sauces & Oils' },
+  { name: 'Kapi phao', emoji: '🦐', unit: 'g', category: 'Sauces & Oils' },
+  { name: 'Cooking oil', emoji: '🛢️', unit: 'tbsp', category: 'Sauces & Oils' },
+  { name: 'Chinese cooking wine', emoji: '🍶', unit: 'tbsp', category: 'Sauces & Oils' },
+  { name: 'Pickled scallion brine', emoji: '🫙', unit: 'ml', category: 'Sauces & Oils' },
+  // Fresh and dried are separate products and separate shopping lines, which is
+  // why both are here rather than one standing in for the other.
+  { name: 'Red cubanelle pepper paste', emoji: '🌶️', unit: 'g', category: 'Sauces & Oils' },
+  { name: 'Dried red cubanelle pepper paste', emoji: '🌶️', unit: 'g', category: 'Sauces & Oils' },
+
+  // Grains & Pasta
+  { name: 'Sticky rice flour', emoji: '🌾', unit: 'g', category: 'Grains & Pasta' },
+
+  // Baking & Sweet
+  { name: 'Palm sugar', emoji: '🍯', unit: 'g', category: 'Baking & Sweet' },
+  { name: 'Brown sugar', emoji: '🟤', unit: 'g', category: 'Baking & Sweet' },
+  { name: 'Roasted peanuts', emoji: '🥜', unit: 'g', category: 'Baking & Sweet' },
 ]
 
 /** Fallback for anything the list doesn't recognise. */

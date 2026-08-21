@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react'
 import { Ionicons } from '@expo/vector-icons'
-import { FlatList, Modal, Pressable, StyleSheet, Text, View } from 'react-native'
+import { FlatList, Modal, Pressable, StyleSheet, View } from 'react-native'
+import { Text } from '@/components/ui/Text'
 import type { StyleProp, ViewStyle } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import FieldTrigger from '@/components/ui/FieldTrigger'
 import SearchBar from '@/components/ui/SearchBar'
-import { radius, spacing, useTheme, useThemedStyles } from '@/theme'
+import { minHeights, radius, spacing, useScreenTopPad, useTheme, useThemedStyles } from '@/theme'
 import type { ThemeColors, TypeScale } from '@/theme'
 import { useT } from '@/i18n'
 
@@ -14,22 +15,16 @@ export interface SelectOption {
 }
 
 /**
- * A dropdown that isn't a closed list. The trigger matches `Field` so a form
- * row of inputs and selects lines up, and the sheet is a Modal for the same
- * reason `ActionSheet` is — the native pickers don't exist on web.
+ * The dropdown: a `Field`-shaped trigger opening a searchable list.
  *
- * `allowCustom` turns the search box into an entry field: whatever you type
- * that doesn't match an option can be committed as-is. That's required wherever
- * the underlying column is free text, so the picker can never refuse to
- * represent a value that's already stored.
+ * `allowCustom` offers whatever you type as its own option, and a `value` the
+ * options don't contain is pinned to the top of the list — both exist so a
+ * picker over a **free-text column** can never refuse to represent a stored
+ * value. Use this rather than a raw picker for anything with a
+ * suggested-but-open set.
  *
- * There is no separate `value` on an option: **the label is the stored value.**
- * Anything needing a different display string wants a translation layer like
- * `i18n/labels.ts`, not a second field here — a picker over a free-text column
- * has to be able to offer text the list has never seen.
- *
- * `containerStyle` and `invalid` mirror `Field`, so a Select can sit in a form
- * row beside one and go red on the same terms.
+ * The trigger itself is `FieldTrigger`, shared with the tools control on the
+ * New Recipe screen.
  */
 export default function Select({
   label,
@@ -38,7 +33,7 @@ export default function Select({
   placeholder,
   title,
   searchPlaceholder,
-  allowCustom = false,
+  allowCustom,
   clearable = true,
   invalid,
   containerStyle,
@@ -65,7 +60,7 @@ export default function Select({
   // call a hook, and every one of these needs translating.
   const placeholderText = placeholder ?? t('select.placeholder')
   const searchText = searchPlaceholder ?? t('select.search')
-  const insets = useSafeAreaInsets()
+  const topPad = useScreenTopPad()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
 
@@ -103,28 +98,18 @@ export default function Select({
   }
 
   return (
-    <View style={[styles.wrapper, containerStyle]}>
-      {label && <Text style={styles.label}>{label}</Text>}
-
-      <Pressable
+    <View style={containerStyle}>
+      <FieldTrigger
+        label={label}
+        value={value}
+        placeholder={placeholderText}
+        emoji={value ? emojiFor?.(value) : undefined}
+        invalid={invalid}
         onPress={() => setOpen(true)}
-        style={({ pressed }) => [
-          styles.trigger,
-          invalid && styles.triggerInvalid,
-          pressed && styles.triggerPressed,
-        ]}
-        accessibilityRole="button"
-        accessibilityLabel={label ? `${label}: ${value ?? placeholderText}` : placeholderText}
-      >
-        {value ? <Text style={styles.triggerEmoji}>{emojiFor?.(value)}</Text> : null}
-        <Text style={[styles.triggerText, !value && styles.triggerPlaceholder]} numberOfLines={1}>
-          {value || placeholderText}
-        </Text>
-        <Ionicons name="chevron-down" size={18} color={c.textMuted} />
-      </Pressable>
+      />
 
       <Modal visible={open} animationType="slide" onRequestClose={close}>
-        <View style={[styles.sheet, { paddingTop: insets.top }]}>
+        <View style={[styles.sheet, { paddingTop: topPad }]}>
           <View style={styles.header}>
             <View style={styles.headerRow}>
               <Text style={styles.title}>{title ?? label ?? placeholderText}</Text>
@@ -210,26 +195,6 @@ export default function Select({
 }
 
 const makeStyles = (c: ThemeColors, type: TypeScale) => StyleSheet.create({
-  wrapper: { gap: spacing.sm },
-  label: { ...type.label, color: c.text },
-  // Deliberately identical to Field's input box so the two line up in a form.
-  trigger: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    borderWidth: 1,
-    borderColor: c.border,
-    backgroundColor: c.surfaceAlt,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.lg,
-    height: 50,
-  },
-  // Matches Field's `inputInvalid` — the outline is the whole message.
-  triggerInvalid: { borderColor: c.danger, backgroundColor: c.dangerSoft },
-  triggerPressed: { backgroundColor: c.surfaceSunken },
-  triggerEmoji: { fontSize: 18 },
-  triggerText: { ...type.bodyLarge, color: c.text, flex: 1, minWidth: 0 },
-  triggerPlaceholder: { color: c.textPlaceholder },
   sheet: { flex: 1, backgroundColor: c.bg },
   header: { padding: spacing.lg, gap: spacing.lg },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
@@ -248,7 +213,8 @@ const makeStyles = (c: ThemeColors, type: TypeScale) => StyleSheet.create({
     alignItems: 'center',
     gap: spacing.md,
     paddingHorizontal: spacing.md,
-    height: 52,
+    minHeight: minHeights.row,
+    paddingVertical: 12,
     borderRadius: radius.md,
   },
   rowSelected: { backgroundColor: c.surfaceAlt },

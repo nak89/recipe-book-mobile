@@ -14,7 +14,7 @@ interface AuthContextType {
   /** False until the post-signup flow (name, packs, tutorial) has been finished or skipped. */
   onboarded: boolean
   login: (email: string, password: string) => Promise<void>
-  signup: (email: string, password: string) => Promise<void>
+  signup: (email: string, password: string, name?: string) => Promise<void>
   logout: () => Promise<void>
   updateDisplayName: (name: string) => Promise<void>
   completeOnboarding: () => Promise<void>
@@ -67,8 +67,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) throw new Error(error.message)
   }
 
-  async function signup(email: string, password: string) {
-    const { error } = await supabase.auth.signUp({ email, password })
+  /**
+   * Sign-up now carries the display name, because the form now asks for it.
+   *
+   * It goes in `signUp`'s own `options.data` rather than in a follow-up
+   * `updateUser`, and that is what closes a real gap: a second call can fail on
+   * its own, leaving an account that exists with no name on it and a user
+   * looking at a dashboard that greets them by the local part of their email.
+   * One call means the account is either created named or not created.
+   */
+  async function signup(email: string, password: string, name?: string) {
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: name ? { data: { displayName: name.trim() } } : undefined,
+    })
     if (error) throw new Error(error.message)
   }
 

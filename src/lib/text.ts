@@ -64,3 +64,28 @@ export function foldForCompare(value: string): string {
   const composed = CAN_NORMALIZE ? stripped.normalize('NFC') : stripped
   return composed.trim().toLowerCase()
 }
+
+/**
+ * Does this string contain Khmer script?
+ *
+ * Used to decide whether a `line-through` is safe to draw. It isn't: the rule
+ * is painted across the middle of the line box, which is exactly where a Khmer
+ * cluster carries its vowel signs — so striking a Khmer label crosses out the
+ * vowels rather than the word, and what gets obscured is meaning. It is the
+ * same failure mode as pinning a line-height (see `theme/typography.ts`), for
+ * the same reason: the marks live where Latin text has nothing.
+ *
+ * Deliberately a *content* test, not a language test. The language toggle moves
+ * chrome only, and a recipe written in Khmer keeps its Khmer ingredient names
+ * when the interface is in English — so asking `useLanguage()` would strike
+ * through exactly the labels this exists to protect. Ask the string.
+ *
+ * `ក-៿` is the Khmer block; `᧠-᧿` is Khmer Symbols. The
+ * range covers consonants, vowels, signs and digits, which is everything that
+ * can carry a mark.
+ */
+const KHMER = /[ក-៿᧠-᧿]/
+
+export function hasKhmer(value: string): boolean {
+  return KHMER.test(value)
+}

@@ -22,6 +22,16 @@ export interface Step {
   id?: string
   stepNumber: number
   instruction: string
+  /**
+   * Cook mode's countdown for this step, in **seconds**, or null for a step
+   * that doesn't want one — which is most of them.
+   *
+   * Null rather than 0 because a zero-second timer and an unset timer are the
+   * same thing on screen and shouldn't be two states in the data. Same
+   * `number | null | undefined` shape as the nutrition fields, for the same
+   * reason: the API returns a real JSON null.
+   */
+  durationSeconds?: number | null
 }
 
 export interface Recipe {
@@ -109,4 +119,10 @@ export interface FormIngredient {
 export interface FormStep {
   id: string
   instruction: string
+  /**
+   * Seconds, or null. Unlike every other field on these form shapes it is
+   * **not** a string: it is chosen from a list rather than typed, so there is
+   * no half-entered state to preserve and nothing to parse back.
+   */
+  durationSeconds: number | null
 }

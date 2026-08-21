@@ -1,30 +1,33 @@
 import { useState } from 'react'
-import { Ionicons } from '@expo/vector-icons'
-import { Link } from 'expo-router'
-import {
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native'
+import { useRouter } from 'expo-router'
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { Text } from '@/components/ui/Text'
+import Field from '@/components/ui/Field'
 import PrimaryButton from '@/components/ui/PrimaryButton'
+import TextLink from '@/components/ui/TextLink'
 import LanguageToggle from '@/components/ui/LanguageToggle'
+import { MAX_NAME_LENGTH } from '@/context/AuthContext'
 import { useT } from '@/i18n'
 import { authErrorKey } from '@/i18n/errors'
-import { radius, spacing, useTheme, useThemedStyles } from '@/theme'
+import { spacing, useScreenTopPad, useThemedStyles } from '@/theme'
 import type { ThemeColors, TypeScale } from '@/theme'
 
+/** The design's 3-segment strength meter, and the threshold it reports. */
+const MIN_PASSWORD = 8
+
 /**
- * Shared by login and signup — the two screens differ only in copy and which
- * auth call they make.
+ * Shared by sign-in and sign-up — the two screens differ in copy, in which auth
+ * call they make, and in whether they collect a name.
  *
- * Every input sets `placeholderTextColor` explicitly. Leaving it unset renders
- * placeholders in the platform default, which is what made these boxes look
- * empty on a phone whose system theme wasn't light.
+ * **The display name is collected here now.** It used to be its own onboarding
+ * step after sign-up, which meant an account existed for a moment with no name
+ * on it and a screen whose only job was one text field. Chronicle's § 4 puts it
+ * on the form with the email and the password, where it costs one more row.
+ *
+ * Fields are `Field`, so there are no boxes: a label, the value, and a rule
+ * whose weight is the state. That is also what removed the hand-rolled
+ * `placeholderTextColor` and `keyboardAppearance` on every input — `Field` sets
+ * both, which is why it exists.
  */
 export default function AuthForm({
   heading,
@@ -34,37 +37,52 @@ export default function AuthForm({
   footerText,
   footerLinkText,
   footerHref,
+  collectName = false,
 }: {
   heading: string
   subheading: string
   submitLabel: string
-  onSubmit: (email: string, password: string) => Promise<void>
+  onSubmit: (email: string, password: string, name?: string) => Promise<void>
   footerText: string
   footerLinkText: string
   footerHref: '/login' | '/signup'
+  /** Sign-up only. Adds the name row above the email. */
+  collectName?: boolean
 }) {
-  const { colors: c, isDark } = useTheme()
   const styles = useThemedStyles(makeStyles)
   const t = useT()
+  const router = useRouter()
+  const topPad = useScreenTopPad()
+  const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
+  /**
+   * Three segments, filled by length alone.
+   *
+   * Deliberately not an entropy estimate. A meter that grades character classes
+   * teaches people to append `1!` rather than to choose a longer passphrase, and
+   * the only rule this app actually enforces is the one Supabase enforces —
+   * length. The meter reports what the form will reject, and nothing else.
+   */
+  const strength = password.length === 0 ? 0 : password.length < 6 ? 1 : password.length < MIN_PASSWORD ? 2 : 3
+
   async function handleSubmit() {
-    if (!email.trim() || !password) {
+    if (!email.trim() || !password || (collectName && !name.trim())) {
       setError(t('auth.missingFields'))
       return
     }
     setError(null)
     setSubmitting(true)
     try {
-      await onSubmit(email.trim(), password)
+      await onSubmit(email.trim(), password, collectName ? name.trim() : undefined)
     } catch (err) {
       // Supabase's messages are English and not ours to change, so they're
-      // mapped onto keys rather than shown raw — an unrecognised one falls
-      // back to a generic *translated* message. See i18n/errors.ts.
+      // mapped onto keys rather than shown raw — an unrecognised one falls back
+      // to a generic *translated* message. See i18n/errors.ts.
       setError(t(authErrorKey(err)))
     } finally {
       setSubmitting(false)
@@ -77,137 +95,155 @@ export default function AuthForm({
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, { paddingTop: topPad }]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* Above the brand and right-aligned, so it's the first thing found and
+        {/* Right-aligned above the heading, so it is the first thing found and
             the last thing read. It has to be reachable here and not only on the
-            intro carousel: a returning user who reinstalls skips straight past
-            the carousel to this screen, and without a control here there'd be no
-            way into Khmer at all before signing in. */}
+            first-run picker: a returning user who reinstalls passes the picker
+            once, and someone who tapped the wrong row there would otherwise have
+            no way into Khmer until after signing in. */}
         <LanguageToggle style={styles.language} />
 
         <View style={styles.brand}>
-          <View style={styles.mark}>
-            <Ionicons name="restaurant" size={26} color={c.onPrimary} />
-          </View>
           <Text style={styles.heading}>{heading}</Text>
           <Text style={styles.subheading}>{subheading}</Text>
         </View>
 
         <View style={styles.fields}>
-          <View style={styles.field}>
-            <Text style={styles.label}>{t('auth.email')}</Text>
-            <TextInput
-              style={styles.input}
-              placeholder={t('auth.emailPlaceholder')}
-              placeholderTextColor={c.textPlaceholder}
-              keyboardAppearance={isDark ? 'dark' : 'light'}
-              autoCapitalize="none"
-              autoComplete="email"
-              autoCorrect={false}
-              keyboardType="email-address"
-              value={email}
-              onChangeText={setEmail}
+          {collectName && (
+            <Field
+              label={t('first.name')}
+              value={name}
+              onChangeText={setName}
+              autoCapitalize="words"
+              autoComplete="name"
+              maxLength={MAX_NAME_LENGTH}
               returnKeyType="next"
             />
-          </View>
+          )}
 
-          <View style={styles.field}>
-            <Text style={styles.label}>{t('auth.password')}</Text>
-            <View style={styles.passwordWrapper}>
-              <TextInput
-                style={styles.passwordInput}
-                placeholder={t('auth.passwordPlaceholder')}
-                placeholderTextColor={c.textPlaceholder}
-                keyboardAppearance={isDark ? 'dark' : 'light'}
-                secureTextEntry={!showPassword}
-                autoCapitalize="none"
-                value={password}
-                onChangeText={setPassword}
-                returnKeyType="go"
-                onSubmitEditing={handleSubmit}
-              />
+          <Field
+            label={t('auth.email')}
+            value={email}
+            onChangeText={setEmail}
+            placeholder={t('auth.emailPlaceholder')}
+            autoCapitalize="none"
+            autoComplete="email"
+            autoCorrect={false}
+            keyboardType="email-address"
+            returnKeyType="next"
+          />
+
+          <View>
+            <View style={styles.passwordHeader}>
+              <Text style={styles.passwordLabel}>{t('auth.password')}</Text>
+              {/* `SHOW` as a tracked mono word rather than an eye glyph: the
+                  glyph is the only pictogram left on the screen, and this is
+                  the one place the design names a word instead. */}
               <Pressable
                 onPress={() => setShowPassword((v) => !v)}
-                hitSlop={8}
+                hitSlop={12}
+                accessibilityRole="button"
                 accessibilityLabel={showPassword ? t('auth.hidePassword') : t('auth.showPassword')}
               >
-                <Ionicons
-                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                  size={20}
-                  color={c.textMuted}
-                />
+                <Text style={styles.showToggle}>
+                  {showPassword ? t('auth.hidePassword') : t('auth.showPassword')}
+                </Text>
               </Pressable>
             </View>
+            <Field
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={!showPassword}
+              autoCapitalize="none"
+              returnKeyType="go"
+              onSubmitEditing={handleSubmit}
+            />
+            {collectName && (
+              <View style={styles.meterRow}>
+                <View style={styles.meter}>
+                  {[1, 2, 3].map((segment) => (
+                    <View
+                      key={segment}
+                      style={[styles.segment, strength >= segment && styles.segmentOn]}
+                    />
+                  ))}
+                </View>
+                <Text style={styles.meterHint}>{t('auth.passwordHint')}</Text>
+              </View>
+            )}
           </View>
 
           {error && <Text style={styles.error}>{error}</Text>}
 
-          <PrimaryButton label={submitLabel} onPress={handleSubmit} loading={submitting} />
+          <PrimaryButton
+            label={submitLabel}
+            onPress={handleSubmit}
+            loading={submitting}
+            style={styles.submit}
+          />
         </View>
 
         <View style={styles.footer}>
           <Text style={styles.footerText}>{footerText}</Text>
-          <Link href={footerHref} style={styles.footerLink}>
-            {footerLinkText}
-          </Link>
+          {/* A `TextLink`, not expo-router's `Link`. `Link` renders an anchor
+              whose underline is a text decoration, which on a Khmer label is
+              drawn through the descender space where a subscript consonant
+              sits — the same reason `LedgerRow` never strikes Khmer through. */}
+          <TextLink label={footerLinkText} onPress={() => router.replace(footerHref)} />
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
   )
 }
 
-const makeStyles = (c: ThemeColors, type: TypeScale) => StyleSheet.create({
-  container: { flex: 1, backgroundColor: c.bg },
-  content: { flexGrow: 1, justifyContent: 'center', padding: spacing.xl, gap: spacing.xxl },
-  // `alignSelf` rather than a wrapper: the toggle sizes to its content, so
-  // pushing it right is all the placement it needs. Negative bottom margin
-  // absorbs the content gap, keeping it visually attached to the top of the
-  // screen instead of floating a third of the way down beside the brand.
-  language: { alignSelf: 'flex-end', marginBottom: -spacing.lg },
-  brand: { alignItems: 'center', gap: spacing.sm },
-  mark: {
-    width: 60,
-    height: 60,
-    borderRadius: radius.lg,
-    backgroundColor: c.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.md,
-  },
-  heading: { ...type.display, color: c.text, textAlign: 'center' },
-  subheading: { ...type.body, color: c.textMuted, textAlign: 'center' },
-  fields: { gap: spacing.lg },
-  field: { gap: spacing.sm },
-  label: { ...type.label, color: c.text },
-  input: {
-    borderWidth: 1,
-    borderColor: c.border,
-    backgroundColor: c.surfaceAlt,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.lg,
-    height: 52,
-    ...type.body,
-    fontSize: 16,
-    color: c.text,
-  },
-  passwordWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    borderWidth: 1,
-    borderColor: c.border,
-    backgroundColor: c.surfaceAlt,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.lg,
-    height: 52,
-  },
-  // minWidth: 0 so a long password can't push the eye toggle off the edge.
-  passwordInput: { flex: 1, minWidth: 0, ...type.bodyLarge, color: c.text },
-  error: { ...type.body, color: c.danger },
-  footer: { flexDirection: 'row', justifyContent: 'center', gap: spacing.xs },
-  footerText: { ...type.body, color: c.textMuted },
-  footerLink: { ...type.bodyStrong, color: c.text },
-})
+const makeStyles = (c: ThemeColors, type: TypeScale) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: c.bg },
+    /**
+     * Top-aligned, **not centred**. `justifyContent: 'center'` held the form in
+     * the middle of the viewport, which on a tall phone opened a screen's worth
+     * of empty paper above the heading and the same again below the footer —
+     * and centring a form that grows (the name row, an error line, the keyboard)
+     * means it also drifts as you fill it in. `flexGrow` stays, so a short
+     * screen still fills and the whole thing scrolls when the keyboard is up.
+     */
+    content: {
+      flexGrow: 1,
+      paddingHorizontal: spacing.gutterWide,
+      paddingBottom: spacing.xxl,
+      gap: spacing.xxl,
+    },
+    // `alignSelf` rather than a wrapper: the toggle sizes to its content, so
+    // pushing it right is all the placement it needs.
+    language: { alignSelf: 'flex-end' },
+    // The tamarind app mark is gone. It was a filled 60pt square with a glyph
+    // in it — the heaviest thing on a screen made of rules — and the heading
+    // already names the product.
+    brand: { gap: spacing.sm },
+    heading: { ...type.screenTitle, color: c.text },
+    subheading: { ...type.bodyRead, color: c.textMuted },
+    fields: { gap: spacing.xl },
+
+    passwordHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: spacing.md,
+    },
+    passwordLabel: { ...type.sectionLabel, color: c.textMuted, textTransform: 'uppercase' },
+    showToggle: { ...type.metadataSmall, color: c.primary, textTransform: 'uppercase' },
+
+    meterRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: spacing.sm },
+    meter: { flexDirection: 'row', gap: 4, flex: 1, maxWidth: 120 },
+    segment: { flex: 1, height: 3, borderRadius: 999, backgroundColor: c.borderStrong },
+    segmentOn: { backgroundColor: c.primary },
+    meterHint: { ...type.metadataSmall, color: c.textMuted, textTransform: 'uppercase' },
+
+    error: { ...type.body, color: c.danger },
+    submit: { marginTop: spacing.sm },
+    footer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm },
+    footerText: { ...type.body, color: c.textMuted },
+  })

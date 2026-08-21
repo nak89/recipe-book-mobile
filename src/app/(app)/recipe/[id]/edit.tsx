@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, StyleSheet, View } from 'react-native'
+import { Text } from '@/components/ui/Text'
 import { useAuth } from '@/context/AuthContext'
 import { getRecipe, updateRecipe } from '@/lib/api'
 import RecipeForm from '@/components/RecipeForm'

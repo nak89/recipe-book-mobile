@@ -101,7 +101,7 @@ export const en = {
   'name.saveFailed': 'Could not save your name',
 
   // --------------------------------------------------- onboarding: welcome
-  'welcome.headline': 'Welcome to your\nRecipe Book',
+  'welcome.headline': 'Welcome to your\nKroung Psom',
   'welcome.body':
     'Everything you cook, in one place. Take the sixty-second tour and you will know your way around it.',
   'welcome.takeTour': 'Take the tour',
@@ -136,8 +136,10 @@ export const en = {
   'auth.password': 'Password',
   'auth.passwordPlaceholder': 'Enter your password',
   'auth.missingFields': 'Enter your email and password',
-  'auth.showPassword': 'Show password',
-  'auth.hidePassword': 'Hide password',
+  'auth.showPassword': 'Show',
+  'auth.hidePassword': 'Hide',
+  /** Rendered beside the strength meter — the one rule the form enforces. */
+  'auth.passwordHint': '8+ characters',
 
   // ---------------------------------------------------------------- errors
   // Everything unrecognised lands on `error.generic` rather than leaking the
@@ -178,6 +180,8 @@ export const en = {
   'dashboard.favourites': 'Favourites',
   'dashboard.results': 'Results',
   'dashboard.allRecipes': 'All Recipes',
+  'dashboard.everythingElse': 'Everything else',
+  'dashboard.favouritesOnly': 'Favourites only',
   'dashboard.emptyTitle': 'No recipes yet',
   'dashboard.emptyBody': 'Tap the + button below to add your first one.',
   'dashboard.noMatchTitle': 'Nothing matches',
@@ -213,6 +217,9 @@ export const en = {
   'nav.editRecipe': 'Edit Recipe',
   'nav.recipe': 'Recipe',
   'nav.profile': 'Profile',
+  // Deliberately generic. Profile is pushed from all three tabs, so a back
+  // button naming one of them would be wrong two thirds of the time.
+  'nav.back': 'Back',
 
   // ---------------------------------------------------------- meal planner
   // The day strip's labels. Three letters in English because seven of them
@@ -225,11 +232,29 @@ export const en = {
   'day.fri': 'Fri',
   'day.sat': 'Sat',
   'day.sun': 'Sun',
+  // Month names, for the same reason the day names are here: the mastheads and
+  // the week label used `toLocaleDateString`, which follows the **device**
+  // locale rather than the toggle — so a Khmer UI printed `AUGUST ១៥`, a Khmer
+  // numeral against an English month, on one line. Forcing `km-KH` instead was
+  // the other option and is not safe: Hermes ships a reduced ICU, so it can
+  // silently fall back to English, which is the same bug with a longer fuse.
+  // Uppercased at the call site, which is a no-op on Khmer.
+  'month.1': 'January',
+  'month.2': 'February',
+  'month.3': 'March',
+  'month.4': 'April',
+  'month.5': 'May',
+  'month.6': 'June',
+  'month.7': 'July',
+  'month.8': 'August',
+  'month.9': 'September',
+  'month.10': 'October',
+  'month.11': 'November',
+  'month.12': 'December',
   'planner.title': 'Meal planner',
   // Two placeholders, which is one more than anything else here needs. The
   // total isn't hardcoded because it's `days × mealtimes` — adding a mealtime
   // would otherwise leave this string quietly lying about the denominator.
-  'planner.subtitle': '{n} of {total} meals planned this week',
   'planner.thisWeek': 'This week',
   'planner.previousWeek': 'Previous week',
   'planner.nextWeek': 'Next week',
@@ -260,8 +285,60 @@ export const en = {
   'search.placeholder': 'Search recipes',
   'search.clear': 'Clear search',
   'tabs.recipes': 'Recipes',
-  'tabs.planner': 'Meal planner',
+  // Dock-only (`TabBar.tsx` is the sole consumer), and the dock is four equal
+  // columns: Explore / Recipes / Grocery are all seven characters and 'Meal
+  // planner' was twelve, so it truncated to "MEAL PLA…" at 375pt and below —
+  // uppercased and tracked at .18em it needs ~89pt in a ~78pt column. The
+  // screen itself still calls the destination "The Week".
+  'tabs.planner': 'Planner',
   'tabs.addRecipe': 'Add recipe',
+  'tabs.grocery': 'Grocery',
+  'tabs.addIngredient': 'Add an ingredient',
+
+  // ── Grocery ───────────────────────────────────────────────────────────────
+  'grocery.title': 'Grocery',
+  'grocery.stillToBuy': '{n} still to buy',
+  'grocery.scopeWeek': 'This week',
+  'grocery.scopeDay': 'Today',
+  'grocery.scopeMissing': 'Missing only',
+  'grocery.addedByYou': 'Added by you',
+  /**
+   * The section every ticked row sinks into, at the foot of the list.
+   *
+   * Its own key rather than `market.gathered`, which is the tail of a
+   * sentence (`12 / 18 gathered`) and reads as a fragment on a header rule.
+   */
+  'grocery.gathered': 'Gathered',
+  'grocery.aisleProduce': 'Produce',
+  'grocery.aisleProtein': 'Protein',
+  'grocery.aislePantry': 'Pantry',
+  'grocery.aisleOther': 'Other',
+  'grocery.composerName': 'Ingredient',
+  'grocery.composerAmount': 'Amount',
+  'grocery.composerUnit': 'Unit',
+  'grocery.composerAdd': 'Add',
+  'grocery.composerClose': 'Close',
+  'grocery.emptyTitle': 'Nothing to buy yet',
+  'grocery.emptyBody': 'Plan a meal for this week and its ingredients land here.',
+  'grocery.emptyMissingTitle': 'Everything gathered',
+  // Deliberately not "this week's list": the same message stands when the list
+  // is narrowed to one dish, and naming the week there would be a small lie.
+  'grocery.emptyMissingBody': 'Nothing left to gather.',
+  // Narrowed to a day with nothing planned on it. Distinct from the week being
+  // empty: the list has things in it, they just aren't for this day.
+  'grocery.emptyDayTitle': 'Nothing planned for this day',
+  'grocery.emptyDayBody': 'Switch to This week to see the rest of the list.',
+  // ── The dish filter ──
+  'grocery.allDishes': 'All dishes',
+  'grocery.filterByDish': 'Filter by dish',
+  /** The overflow badge — how many chips are still off the right of the row. */
+  'grocery.moreDishes': '{n} more dishes',
+  'grocery.emptyDishTitle': 'Nothing here for this dish',
+  'grocery.emptyDishBody': 'Switch to All dishes to see the rest of the list.',
+  'grocery.less': 'Less {name}',
+  'grocery.more': 'More {name}',
+  'grocery.resetAmount': 'Back to the planned amount',
+  'grocery.remove': 'Remove {name}',
 
   // ------------------------------------------------ operations that can fail
   'error.loadRecipes': 'Failed to load recipes',
@@ -271,6 +348,8 @@ export const en = {
   'error.favourite': 'Could not update favourite',
   'error.savePlan': 'Could not save that meal',
   'error.clearPlan': 'Could not clear that slot',
+  'error.saveGrocery': 'Could not update that item',
+  'error.clearGrocery': 'Could not remove that item',
 
   // ----------------------------------------------------------- recipe form
   // The form's submit button. Passed in as a *key* by each route, so the two
@@ -287,7 +366,6 @@ export const en = {
   'form.changePhoto': 'Change photo',
   'form.addPhoto': 'Add a photo',
   'form.change': 'Change',
-  'form.required': 'Required',
   'form.title': 'Title',
   'form.titlePlaceholder': 'e.g. Spaghetti Carbonara',
   'form.description': 'Description',
@@ -309,6 +387,7 @@ export const en = {
   'form.ingredientsHeading': 'What goes in?',
   'form.pickCommon': 'Pick from common ingredients',
   'form.pickCommonHint': 'Garlic, soy sauce, rice…',
+  'form.added': 'Added',
   'form.ingredientPlaceholder': 'Ingredient',
   'form.unitPlaceholder': 'unit',
   'form.addYourOwn': 'Add your own',
@@ -317,18 +396,28 @@ export const en = {
   'form.stepPlaceholder': 'e.g. Boil the pasta until al dente',
   'form.removeStep': 'Remove step',
   'form.removeIngredient': 'Remove ingredient',
+  'form.reorder': 'Drag to reorder',
   'form.addStep': 'Add step',
   'form.noSteps': 'No steps yet — add the first one below.',
+  // The timer chip on a method step. SCREENS.md § 17 draws it as a dashed
+  // `⏱ ADD TIMER` when unset and a filled tamarind `⏱ 10:00` when set, and
+  // names this screen as where cook mode's timers come from.
+  'form.addTimer': 'ADD TIMER',
+  'form.stepTimer': 'Step timer',
+  'form.stepTimerHint': 'Cook mode counts this down for you while you cook.',
+  'form.noTimer': 'No timer',
+  'form.hoursShort': 'h',
+  'form.minutesShort': 'min',
+  'form.secondsShort': 's',
+  // The heading carries "per serving" on its own: there is no line under it
+  // any more, and the four columns are bare floats that can't say which
+  // convention they were typed in. The Khmer below has to do the same work —
+  // its old wording only said "nutrition information".
   'form.nutritionHeading': 'What’s in a serving?',
-  'form.nutritionIntro': 'All optional, and all per serving. Leave anything you don’t know blank.',
-  'form.calories': 'Calories (kcal)',
-  'form.caloriesPlaceholder': 'e.g. 520',
-  'form.protein': 'Protein (g)',
-  'form.proteinPlaceholder': 'e.g. 31',
-  'form.carbs': 'Carbs (g)',
-  'form.carbsPlaceholder': 'e.g. 48',
-  'form.fat': 'Fat (g)',
-  'form.fatPlaceholder': 'e.g. 22',
+  'form.calories': 'Calories',
+  'form.protein': 'Protein',
+  'form.carbs': 'Carbs',
+  'form.fat': 'Fat',
 
   // ------------------------------------------------------------ validation
   // `{n}` / `{field}` are substituted by recipeValidation.ts. A red outline is
@@ -348,6 +437,171 @@ export const en = {
   'validation.stepTooLong': 'A step can’t be longer than {n} characters.',
   'validation.fillHighlighted': 'Fill in the highlighted fields.',
   'validation.checkHighlighted': 'Check the highlighted fields.',
+
+  // ================================================================ Chronicle
+  // Copy for the reworked screens. SCREENS.md marks its UI copy **final in both
+  // languages** — where it gives a Khmer string, the value below is that string
+  // verbatim, and it must not be "improved".
+  //
+  // ⚠ Where it gives only English, the Khmer below is written here and is
+  // **owed a native reader**. Those keys are listed in `KHMER_NEEDS_REVIEW` in
+  // `tests/strings.test.ts` so the debt is enumerated in one place rather than
+  // spread through comments.
+
+  // ------------------------------------------------------ masthead & wordmark
+  'brand.wordmark': 'Hearth',
+
+  // ------------------------------------------------------------ recipes index
+  'index.todaysDish': 'TODAY’S DISH',
+  'index.index': 'INDEX',
+  'index.addRecipe': 'ADD A NEW RECIPE',
+  'index.planADish': 'PLAN A DISH',
+  /** The empty "today" slot, which is a plan for today rather than a pick. */
+  'index.nothingToday': 'Nothing planned for today.',
+  'index.languageToggle': 'Language',
+
+  // ----------------------------------------------------------- recipe detail
+  'detail.startCooking': 'START COOKING',
+  // ---------------------------------------------------------------- cook mode
+  /** Rendered as: {title} · {cook.cooking} — `FISH AMOK · COOKING`. */
+  'cook.cooking': 'COOKING',
+  'cook.exit': 'Stop cooking',
+  'cook.start': 'START',
+  'cook.pause': 'PAUSE',
+  'cook.resume': 'RESUME',
+  'cook.reset': 'Reset the timer',
+  /** Rendered as: {n} {cook.ofSteps} {total} — `2 of 5`. */
+  'cook.ofSteps': 'of',
+  'cook.previous': 'Previous step',
+  'cook.next': 'Next step',
+  'cook.done': 'DONE',
+  'cook.finishedTitle': 'That’s the last step.',
+  'cook.finishedBody': 'Leave it to rest a minute before you serve it.',
+  'cook.noSteps': 'This recipe has no method written down yet.',
+  'detail.edit': 'EDIT',
+  'detail.save': 'SAVE',
+  'detail.saved': 'SAVED',
+  'detail.ingredientsHeader': 'INGREDIENTS',
+  'detail.methodHeader': 'METHOD',
+  'detail.toolsPrefix': 'TOOLS',
+  /** Rendered as: ×{n} — the servings the quantities are written for. */
+  'detail.servingsMultiplier': 'Quantities are for {n} servings',
+
+  // --------------------------------------------------------------- the week
+  'week.masthead': 'The Week',
+  // `week.sendToMarket`, the two `…dishesPlanned` counters and `week.nothingYet`
+  // are gone with the footer button, the day summary and the empty-day block
+  // they belonged to — the market list is derived from the plan, and an empty
+  // day now draws its four ruled sections like any other.
+  'week.emptyTitle': 'Nothing planned this week.',
+  'week.emptyBody': 'Put a dish on a day and its ingredients land on the market list.',
+  /** Rendered as: {week.planDay} {weekday} — `PLAN WEDNESDAY`. */
+  'week.planDay': 'PLAN',
+
+  // ------------------------------------------------------------- the market
+  'market.masthead': 'Market',
+  'market.share': 'Share the list',
+  /** Rendered as: {gathered} / {total} — `12 of 18 gathered`. */
+  'market.gathered': 'gathered',
+  'market.emptyTitle': 'The list is clear.',
+  'market.emptyBody': 'Plan a few dishes and everything they need gathers here on its own.',
+  'market.goToWeek': 'GO TO THE WEEK',
+  'market.addByHand': 'add an item by hand',
+
+  // ---------------------------------------------------------------- settings
+  'settings.masthead': 'Settings',
+  'settings.language': 'LANGUAGE',
+  'settings.kitchen': 'KITCHEN',
+  'settings.about': 'ABOUT',
+  /** Rendered as: {n} {settings.recipeCount} — mono, beside the email. */
+  'settings.recipeCount': 'RECIPES',
+
+  // ----------------------------------------------------------- empty states
+  'empty.recipesTitle': 'No recipes yet.',
+  'empty.recipesBody':
+    'The first one is usually the dish you could already cook with your eyes shut.',
+  'empty.recipesPrimary': 'WRITE THE FIRST ONE',
+  'empty.recipesAlt': 'begin with eight classics',
+  'empty.noMatchTitle': 'Nothing under that name yet.',
+  'empty.noMatchBody': 'Not in your book, and not in the shared collections.',
+  'empty.writeItYourself': 'WRITE IT YOURSELF',
+
+  // ---------------------------------------------- onboarding: what it does
+  // The language picker that precedes this screen is **not** here: it is the
+  // one screen in the product that shows both scripts at once, so its copy is
+  // hardcoded bilingual in `(auth)/language.tsx` rather than translated. See
+  // that file.
+  'about.title': 'Three things it does',
+  'about.skip': 'SKIP',
+  'about.carryOn': 'CARRY ON',
+  'about.oneTitle': 'Keeps the recipes',
+  'about.oneBody':
+    'Write them down once, in either language, and they stay in your own book.',
+  'about.twoTitle': 'Plans the week',
+  'about.twoBody': 'Put dishes on days, and the market list writes itself.',
+  'about.threeTitle': 'Cooks with you',
+  'about.threeBody': 'One big step at a time, with the timers already set.',
+
+  // --------------------------------------------------- onboarding: first recipe
+  'first.title': 'Start your book',
+  'first.subtitle': 'Your book opens empty. Fill the first page however you like.',
+  'first.writeTitle': 'Write one from memory',
+  'first.writeBody': 'The way your mother makes it',
+  'first.classicsTitle': 'Begin with eight classics',
+  'first.classicsBody': 'Amok, lok lak, samlor korko…',
+  'first.name': 'YOUR NAME',
+
+  // -------------------------------------------------------------------- explore
+  'tabs.explore': 'Explore',
+  'explore.title': 'Explore',
+  'explore.searchPlaceholder': 'Search dishes, ingredients, people',
+  'explore.bySubject': 'BY SUBJECT',
+  'explore.subjectAll': 'All',
+  // ⚠ SCREENS.md §11 titles this band `AT THE MARKET NOW` with a month label,
+  // over two tiles captioned like "TAMARIND · 45′". The caption is derivable —
+  // a recipe's headline ingredient and its time are both real — but the heading
+  // claims seasonality, and nothing in this product knows what is in a Cambodian
+  // market in August. Rather than hand-author a produce calendar (the same
+  // "inventing product rather than transcribing a design" that kept Explore
+  // unbuilt for so long), the band keeps its shape, its month label and its
+  // captions, and says only what it can stand behind. One string to change back
+  // if a seasonality source ever arrives.
+  'explore.twoToTry': 'TWO TO TRY',
+  'explore.collections': 'COLLECTIONS',
+  'explore.collectionKroeung': 'Begins with kroeung',
+  'explore.collectionQuick': 'Done inside an hour',
+  'explore.noResultsTitle': 'Nothing under that name yet.',
+  'explore.noResultsBody': 'Not in your book, and not in the shared collections.',
+  'explore.writeYourself': 'WRITE IT YOURSELF',
+  'explore.didYouMean': 'DID YOU MEAN',
+  'explore.inYourBook': 'IN YOUR BOOK',
+  'explore.copyToBook': 'COPY TO MY BOOK',
+  'explore.copying': 'COPYING…',
+  'explore.copied': 'Copied to your book.',
+  'explore.openCopy': 'Open it',
+  'explore.byChefNak': 'Chef Nak',
+  'explore.sourceLine': 'Transcribed from chefnak.com',
+  'explore.method': 'METHOD',
+  'explore.chefsNote': 'CHEF’S NOTE',
+  'explore.offlineTitle': 'NO CONNECTION',
+  'explore.offlineBody': 'Shared recipes need a signal.',
+  // ⚠ § 195 writes this "all 24 recipes are on this phone" — but Explore never
+  // loads the user's own recipes, and the one request that would count them is
+  // the request that just failed. Rather than show a number the screen cannot
+  // know, the claim is narrowed to the part that is true offline. Restore the
+  // count only if something starts caching the book locally.
+  'explore.offlineSub': 'Your own book still works. It’s on this phone.',
+  'explore.openMyBook': 'OPEN MY BOOK',
+  'explore.tryAgain': 'try again',
+  // `explore.recipeCount` and `explore.savedCount` are gone with the masthead's
+  // metadata line — the only place either was rendered.
+  // The four BY SUBJECT chips. Keyed by the stored English value, exactly as
+  // `Mealtime` and `Difficulty` are — a chip reading "ស៊ុប" still filters on
+  // 'Soups', and adding a subject is a compile error in `labels.ts`.
+  'subject.soups': 'Soups',
+  'subject.grilled': 'Grilled',
+  'subject.sweets': 'Sweets',
+  'subject.festival': 'Festival',
 } as const
 
 /**
@@ -421,7 +675,7 @@ export const km: Strings = {
   'name.saveFailed': 'មិនអាចរក្សាទុកឈ្មោះរបស់អ្នកបានទេ',
 
   // --------------------------------------------------- onboarding: welcome
-  'welcome.headline': 'សូមស្វាគមន៍មកកាន់\nសៀវភៅរូបមន្តរបស់អ្នក',
+  'welcome.headline': 'សូមស្វាគមន៍មកកាន់\nគ្រឿងផ្សំ',
   'welcome.body':
     'អ្វីគ្រប់យ៉ាងដែលអ្នកចម្អិន នៅកន្លែងតែមួយ។ ចំណាយពេលមួយនាទីមើលការណែនាំ នោះអ្នកនឹងស្គាល់វាទាំងស្រុង។',
   'welcome.takeTour': 'មើលការណែនាំ',
@@ -453,8 +707,9 @@ export const km: Strings = {
   'auth.password': 'ពាក្យសម្ងាត់',
   'auth.passwordPlaceholder': 'បញ្ចូលពាក្យសម្ងាត់របស់អ្នក',
   'auth.missingFields': 'សូមបញ្ចូលអ៊ីមែល និងពាក្យសម្ងាត់',
-  'auth.showPassword': 'បង្ហាញពាក្យសម្ងាត់',
-  'auth.hidePassword': 'លាក់ពាក្យសម្ងាត់',
+  'auth.showPassword': 'បង្ហាញ',
+  'auth.hidePassword': 'លាក់',
+  'auth.passwordHint': 'យ៉ាងតិច ៨ តួ', // ⚠
 
   // ---------------------------------------------------------------- errors
   'error.generic': 'មានបញ្ហាកើតឡើង',
@@ -491,6 +746,8 @@ export const km: Strings = {
   'dashboard.favourites': 'សំណព្វ',
   'dashboard.results': 'លទ្ធផល',
   'dashboard.allRecipes': 'រូបមន្តទាំងអស់',
+  'dashboard.everythingElse': 'អ្វីៗផ្សេងទៀត',
+  'dashboard.favouritesOnly': 'តែសំណព្វ',
   'dashboard.emptyTitle': 'មិនទាន់មានរូបមន្តទេ',
   'dashboard.emptyBody': 'ចុចប៊ូតុង + ខាងក្រោម ដើម្បីបញ្ចូលរូបមន្តដំបូងរបស់អ្នក។',
   'dashboard.noMatchTitle': 'រកមិនឃើញ',
@@ -522,6 +779,7 @@ export const km: Strings = {
   'nav.editRecipe': 'កែរូបមន្ត',
   'nav.recipe': 'រូបមន្ត',
   'nav.profile': 'គណនី',
+  'nav.back': 'ថយក្រោយ',
 
   // ---------------------------------------------------------- meal planner
   // The Khmer day names, in their conventional short form (ថ្ងៃ, "day", is
@@ -533,8 +791,22 @@ export const km: Strings = {
   'day.fri': 'សុក្រ',
   'day.sat': 'សៅរ៍',
   'day.sun': 'អាទិត្យ',
+  // The Khmer solar months — what a Cambodian calendar prints, and what the
+  // mockup's masthead shows (`ថ្ងៃអង្គារ · ១២ សីហា`). Not the traditional lunar
+  // month names, which do not line up with a Gregorian date.
+  'month.1': 'មករា',
+  'month.2': 'កុម្ភៈ',
+  'month.3': 'មីនា',
+  'month.4': 'មេសា',
+  'month.5': 'ឧសភា',
+  'month.6': 'មិថុនា',
+  'month.7': 'កក្កដា',
+  'month.8': 'សីហា',
+  'month.9': 'កញ្ញា',
+  'month.10': 'តុលា',
+  'month.11': 'វិច្ឆិកា',
+  'month.12': 'ធ្នូ',
   'planner.title': 'កម្មវិធីគ្រោងអាហារ',
-  'planner.subtitle': 'បានគ្រោង {n} ក្នុងចំណោម {total} អាហារសប្តាហ៍នេះ',
   'planner.thisWeek': 'សប្តាហ៍នេះ',
   'planner.previousWeek': 'សប្តាហ៍មុន',
   'planner.nextWeek': 'សប្តាហ៍ក្រោយ',
@@ -564,6 +836,41 @@ export const km: Strings = {
   'tabs.recipes': 'រូបមន្ត',
   'tabs.planner': 'គ្រោងអាហារ',
   'tabs.addRecipe': 'បញ្ចូលរូបមន្ត',
+  'tabs.grocery': 'ទំនិញ',
+  'tabs.addIngredient': 'បន្ថែមគ្រឿងផ្សំ',
+
+  // ── Grocery ───────────────────────────────────────────────────────────────
+  'grocery.title': 'ទំនិញ',
+  'grocery.stillToBuy': 'នៅសល់ {n} ត្រូវទិញ',
+  'grocery.scopeWeek': 'សប្តាហ៍នេះ',
+  'grocery.scopeDay': 'ថ្ងៃនេះ',
+  'grocery.scopeMissing': 'តែអ្វីដែលខ្វះ',
+  'grocery.addedByYou': 'អ្នកបានបន្ថែម',
+  'grocery.gathered': 'ប្រមូលបានហើយ',
+  'grocery.aisleProduce': 'បន្លែ និងផ្លែឈើ',
+  'grocery.aisleProtein': 'សាច់ និងទឹកដោះ',
+  'grocery.aislePantry': 'គ្រឿងទេស និងស្បៀង',
+  'grocery.aisleOther': 'ផ្សេងៗ',
+  'grocery.composerName': 'គ្រឿងផ្សំ',
+  'grocery.composerAmount': 'បរិមាណ',
+  'grocery.composerUnit': 'ឯកតា',
+  'grocery.composerAdd': 'បន្ថែម',
+  'grocery.composerClose': 'បិទ',
+  'grocery.emptyTitle': 'មិនទាន់មានអ្វីត្រូវទិញ',
+  'grocery.emptyBody': 'គ្រោងអាហារសម្រាប់សប្តាហ៍នេះ រួចគ្រឿងផ្សំនឹងមកទីនេះ។',
+  'grocery.emptyMissingTitle': 'បានយកគ្រប់ហើយ',
+  'grocery.emptyMissingBody': 'គ្មានអ្វីនៅសល់ត្រូវប្រមូលទេ។',
+  'grocery.emptyDayTitle': 'គ្មានគម្រោងសម្រាប់ថ្ងៃនេះ',
+  'grocery.emptyDayBody': 'ប្តូរទៅ សប្តាហ៍នេះ ដើម្បីមើលបញ្ជីទាំងមូល។',
+  'grocery.allDishes': 'មុខម្ហូបទាំងអស់',
+  'grocery.filterByDish': 'ត្រងតាមមុខម្ហូប',
+  'grocery.moreDishes': 'នៅមាន {n} មុខទៀត',
+  'grocery.emptyDishTitle': 'គ្មានអ្វីសម្រាប់មុខម្ហូបនេះទេ',
+  'grocery.emptyDishBody': 'ប្តូរទៅ មុខម្ហូបទាំងអស់ ដើម្បីមើលបញ្ជីទាំងមូល។',
+  'grocery.less': 'បន្ថយ {name}',
+  'grocery.more': 'បន្ថែម {name}',
+  'grocery.resetAmount': 'ត្រឡប់ទៅបរិមាណដែលបានគ្រោង',
+  'grocery.remove': 'ដក {name}',
 
   // ------------------------------------------------ operations that can fail
   'error.loadRecipes': 'មិនអាចទាញយករូបមន្តបានទេ',
@@ -573,6 +880,8 @@ export const km: Strings = {
   'error.favourite': 'មិនអាចធ្វើបច្ចុប្បន្នភាពសំណព្វបានទេ',
   'error.savePlan': 'មិនអាចរក្សាទុកអាហារនោះបានទេ',
   'error.clearPlan': 'មិនអាចសម្អាតប្រអប់នោះបានទេ',
+  'error.saveGrocery': 'មិនអាចធ្វើបច្ចុប្បន្នភាពរបស់នោះបានទេ',
+  'error.clearGrocery': 'មិនអាចដករបស់នោះបានទេ',
 
   // ----------------------------------------------------------- recipe form
   'form.addRecipe': 'បញ្ចូលរូបមន្ត',
@@ -587,7 +896,6 @@ export const km: Strings = {
   'form.changePhoto': 'ប្តូររូបភាព',
   'form.addPhoto': 'បញ្ចូលរូបភាព',
   'form.change': 'ប្តូរ',
-  'form.required': 'ត្រូវការ',
   'form.title': 'ចំណងជើង',
   'form.titlePlaceholder': 'ឧ. សម្លម្ជូរគ្រឿង',
   'form.description': 'ការពិពណ៌នា',
@@ -595,9 +903,9 @@ export const km: Strings = {
   'form.mealtime': 'ពេលវេលាអាហារ',
   'form.difficulty': 'កម្រិតលំបាក',
   'form.totalMinutes': 'រយៈពេលសរុប (នាទី)',
-  'form.totalMinutesPlaceholder': 'ឧ. 30',
+  'form.totalMinutesPlaceholder': 'ឧ. ៣០',
   'form.servings': 'ចំនួនចាន',
-  'form.servingsPlaceholder': 'ឧ. 4',
+  'form.servingsPlaceholder': 'ឧ. ៤',
   'form.cuisine': 'ប្រភេទម្ហូប',
   'form.cuisinePlaceholder': 'ជ្រើសរើសប្រភេទម្ហូប',
   'form.cuisineSearch': 'ស្វែងរកប្រភេទម្ហូប',
@@ -609,6 +917,7 @@ export const km: Strings = {
   'form.ingredientsHeading': 'គ្រឿងផ្សំ',
   'form.pickCommon': 'ជ្រើសរើសពីគ្រឿងផ្សំទូទៅ',
   'form.pickCommonHint': 'ខ្ទឹមស, ទឹកត្រី, អង្ករ…',
+  'form.added': 'បានបញ្ចូល',
   'form.ingredientPlaceholder': 'គ្រឿងផ្សំ',
   'form.unitPlaceholder': 'ឯកតា',
   'form.addYourOwn': 'បញ្ចូលដោយខ្លួនឯង',
@@ -617,32 +926,163 @@ export const km: Strings = {
   'form.stepPlaceholder': 'ឧ. ដាំទឹកឱ្យពុះ រួចដាក់មីចូល',
   'form.removeStep': 'លុបជំហាន',
   'form.removeIngredient': 'លុបគ្រឿងផ្សំ',
+  'form.reorder': 'អូសដើម្បីរៀបលំដាប់',
   'form.addStep': 'បន្ថែមជំហាន',
   'form.noSteps': 'មិនទាន់មានជំហានទេ — បន្ថែមជំហានដំបូងខាងក្រោម។',
-  'form.nutritionHeading': 'ព័ត៌មានសារធាតុចិញ្ចឹម',
-  'form.nutritionIntro': 'ដាក់ក៏បាន មិនដាក់ក៏បាន',
-  'form.calories': 'កាឡូរី (kcal)',
-  'form.caloriesPlaceholder': 'ឧ. 520',
-  'form.protein': 'ប្រូតេអ៊ីន (g)',
-  'form.proteinPlaceholder': 'ឧ. 31',
-  'form.carbs': 'កាបូអ៊ីដ្រាត (g)',
-  'form.carbsPlaceholder': 'ឧ. 48',
-  'form.fat': 'ខ្លាញ់ (g)',
-  'form.fatPlaceholder': 'ឧ. 22',
+  'form.addTimer': 'កំណត់ម៉ោង', // ⚠
+  'form.stepTimer': 'ម៉ោងកំណត់ជំហាន', // ⚠
+  'form.stepTimerHint': 'ពេលចម្អិន កម្មវិធីនឹងរាប់ថយក្រោយឲ្យអ្នក។', // ⚠
+  'form.noTimer': 'គ្មានម៉ោងកំណត់', // ⚠
+  // Unit abbreviations in the timer list. Khmer writes these as words rather
+  // than as Latin symbols — unlike `g`/`ml`, which stay Latin because they are
+  // symbols (see `data/units.km.ts`); these are counts of time, not measures.
+  'form.hoursShort': 'ម៉ោង', // ⚠
+  'form.minutesShort': 'នាទី', // ⚠
+  'form.secondsShort': 'វិនាទី', // ⚠
+  'form.nutritionHeading': 'សារធាតុចិញ្ចឹមក្នុងមួយចាន',
+  'form.calories': 'កាឡូរី',
+  'form.protein': 'ប្រូតេអ៊ីន',
+  'form.carbs': 'កាបូអ៊ីដ្រាត',
+  'form.fat': 'ខ្លាញ់',
 
   // ------------------------------------------------------------ validation
   'validation.tooBig': 'រូបមន្តនេះមាន {n}KB — កំណត់ត្រឹម {max}KB។ សូមកាត់បន្ថយការពិពណ៌នា ឬលុបជំហានខ្លះ។',
   'validation.wholeNumber': '{field} ត្រូវជាចំនួនគត់។',
   'validation.mustBeNumber': '{field} ត្រូវដាក់ជាលេខ។',
   'validation.amountsNumbers': 'បរិមាណត្រូវដាក់ជាលេខ។',
-  'validation.titleTooLong': 'ចំណងជើងវែងពេក',
-  'validation.descriptionWords': 'ការពិពណ៌នាវែងពេក',
-  'validation.descriptionChars': 'ការពិពណ៌នាវែងពេក',
+  // ⚠ These four dropped their `{n}` in translation, so the Khmer message said
+  // "too long" and never said *how* long — the number the English carries is
+  // the only actionable part of the sentence. The `(អតិបរមា {n})` suffix is
+  // lifted verbatim from the three strings below it rather than newly written,
+  // so no Khmer copy is being invented here.
+  //
+  // What is still owed to a Khmer reader: the English distinguishes a *word*
+  // limit from a *character* limit, and `descriptionWords`/`descriptionChars`
+  // remain word-for-word identical in Khmer. Both now carry their number, which
+  // tells them apart in practice (1,000 vs 8,000), but that is a workaround for
+  // missing copy, not the copy.
+  'validation.titleTooLong': 'ចំណងជើងវែងពេក (អតិបរមា {n})។',
+  'validation.descriptionWords': 'ការពិពណ៌នាវែងពេក (អតិបរមា {n})។',
+  'validation.descriptionChars': 'ការពិពណ៌នាវែងពេក (អតិបរមា {n})។',
   'validation.tooManyTools': 'ឧបករណ៍ច្រើនពេក (អតិបរមា {n})។',
   'validation.toolTooLong': 'បំបែកឧបករណ៍ដោយសញ្ញាក្បៀស — មានមួយវែងពេក។',
   'validation.tooManyIngredients': 'គ្រឿងផ្សំច្រើនពេក (អតិបរមា {n})។',
   'validation.tooManySteps': 'ជំហានច្រើនពេក (អតិបរមា {n})។',
-  'validation.stepTooLong': 'ជំហានអក្សរច្រើនពេក',
+  'validation.stepTooLong': 'ជំហានអក្សរច្រើនពេក (អតិបរមា {n})។',
   'validation.fillHighlighted': 'សូមបំពេញប្រអប់ដែលខ្វះ',
   'validation.checkHighlighted': 'សូមពិនិត្យប្រអប់ដែលខ្វះ',
+
+  // ================================================================ Chronicle
+  // ✓ = the Khmer is SCREENS.md's own, verbatim and final.
+  // ⚠ = written here because the handoff gave English only. Owed a reader; the
+  //     full list is `KHMER_NEEDS_REVIEW` in `tests/strings.test.ts`.
+
+  'brand.wordmark': 'ចង្ក្រាន', // ✓
+
+  'index.todaysDish': 'ម្ហូបថ្ងៃនេះ', // ✓
+  'index.index': 'បញ្ជី', // ✓
+  'index.addRecipe': 'បញ្ចូលរូបមន្តថ្មី', // ✓
+  'index.planADish': 'បន្ថែមម្ហូប', // ✓
+  'index.nothingToday': 'មិនទាន់មានម្ហូបសម្រាប់ថ្ងៃនេះទេ។', // ⚠
+  'index.languageToggle': 'ភាសា', // ✓ (matches settings.language)
+
+  'detail.startCooking': 'ចាប់ផ្ដើមចម្អិន', // ✓
+  // ---------------------------------------------------------------- cook mode
+  'cook.cooking': 'កំពុងចម្អិន', // ✓ (SCREENS.md § 8)
+  'cook.exit': 'ឈប់ចម្អិន', // ⚠
+  'cook.start': 'ចាប់ផ្ដើម', // ✓ (SCREENS.md § 8)
+  'cook.pause': 'ផ្អាក', // ✓ (SCREENS.md § 8)
+  'cook.resume': 'បន្ត', // ⚠
+  'cook.reset': 'កំណត់ម៉ោងឡើងវិញ', // ⚠
+  'cook.ofSteps': 'ក្នុងចំណោម', // ⚠
+  'cook.previous': 'ជំហានមុន', // ⚠
+  'cook.next': 'ជំហានបន្ទាប់', // ⚠
+  'cook.done': 'រួចរាល់', // ⚠
+  'cook.finishedTitle': 'នេះជាជំហានចុងក្រោយ។', // ⚠
+  'cook.finishedBody': 'ទុកឲ្យត្រជាក់បន្តិចមុននឹងរៀបចំបម្រើ។', // ⚠
+  'cook.noSteps': 'រូបមន្តនេះមិនទាន់មានវិធីចំអិនទេ។', // ⚠
+  'detail.edit': 'កែសម្រួល', // ✓
+  'detail.save': 'រក្សាទុក', // ✓
+  'detail.saved': 'បានរក្សាទុក', // ⚠
+  'detail.ingredientsHeader': 'គ្រឿងផ្សំ', // ✓
+  'detail.methodHeader': 'របៀបធ្វើ', // ✓
+  'detail.toolsPrefix': 'ឧបករណ៍', // ⚠
+  'detail.servingsMultiplier': 'បរិមាណសម្រាប់ {n} ចំណែក', // ⚠
+
+  'week.masthead': 'សប្ដាហ៍', // ✓
+  'week.emptyTitle': 'មិនទាន់មានផែនការសម្រាប់សប្ដាហ៍នេះទេ។', // ⚠
+  'week.emptyBody': 'ដាក់ម្ហូបលើថ្ងៃណាមួយ នោះគ្រឿងផ្សំនឹងចូលទៅបញ្ជីទីផ្សារដោយស្វ័យប្រវត្តិ។', // ⚠
+  'week.planDay': 'រៀបផែនការ', // ✓ (from `រៀបផែនការសប្ដាហ៍`)
+
+  'market.masthead': 'ទីផ្សារ', // ✓
+  'market.share': 'ចែករំលែកបញ្ជី', // ⚠
+  'market.gathered': 'ប្រមូលបាន', // ✓
+  'market.emptyTitle': 'បញ្ជីទទេ។', // ✓
+  'market.emptyBody': 'រៀបផែនការម្ហូបខ្លះ នោះអ្វីៗដែលត្រូវការនឹងចូលមកទីនេះដោយខ្លួនឯង។', // ⚠
+  'market.goToWeek': 'ទៅកាន់សប្ដាហ៍', // ⚠
+  'market.addByHand': 'បញ្ចូលដោយខ្លួនឯង', // ✓ (from the authoring screens)
+
+  'settings.masthead': 'ការកំណត់', // ✓
+  'settings.language': 'ភាសា', // ✓
+  'settings.kitchen': 'ផ្ទះបាយ', // ✓
+  'settings.about': 'អំពី', // ⚠
+  'settings.recipeCount': 'រូបមន្ត', // ⚠
+
+  'empty.recipesTitle': 'មិនទាន់មានរូបមន្តទេ។', // ✓
+  'empty.recipesBody': 'រូបមន្តដំបូងច្រើនតែជាម្ហូបដែលអ្នកចេះធ្វើរួចស្រេច។', // ⚠
+  'empty.recipesPrimary': 'សរសេររូបមន្តដំបូង', // ⚠
+  'empty.recipesAlt': 'ចាប់ផ្ដើមដោយម្ហូបប្រពៃណី ៨', // ✓
+  'empty.noMatchTitle': 'មិនទាន់មានឈ្មោះនេះទេ។', // ✓
+  'empty.noMatchBody': 'គ្មានក្នុងសៀវភៅរបស់អ្នក ហើយក៏គ្មានក្នុងបណ្ដុំរួមដែរ។', // ⚠
+  'empty.writeItYourself': 'សរសេរដោយខ្លួនឯង', // ✓
+
+  'about.title': 'ចង្ក្រានធ្វើអ្វីខ្លះ', // ✓
+  'about.skip': 'រំលង', // ✓
+  'about.carryOn': 'បន្ត', // ✓
+  'about.oneTitle': 'រក្សារូបមន្តទុក', // ✓
+  'about.oneBody': 'សរសេរតែម្ដង ជាភាសាណាក៏បាន ហើយវានៅក្នុងសៀវភៅផ្ទាល់ខ្លួនរបស់អ្នក។', // ⚠
+  'about.twoTitle': 'រៀបផែនការសប្ដាហ៍', // ✓
+  'about.twoBody': 'ដាក់ម្ហូបលើថ្ងៃនីមួយៗ រួចបញ្ជីទីផ្សារនឹងសរសេរខ្លួនឯង។', // ⚠
+  'about.threeTitle': 'ចម្អិនជាមួយអ្នក', // ✓
+  'about.threeBody': 'មួយជំហានធំម្ដងៗ ព្រមទាំងម៉ោងកំណត់ដែលមានស្រាប់។', // ⚠
+
+  'first.title': 'ចាប់ផ្ដើមសៀវភៅ', // ✓
+  'first.subtitle': 'សៀវភៅរបស់អ្នកបើកឡើងទទេ។ បំពេញទំព័រដំបូងតាមចិត្តអ្នក។', // ⚠
+  'first.writeTitle': 'សរសេរតាមការចងចាំ', // ✓
+  'first.writeBody': 'តាមរបៀបដែលម្ដាយអ្នកធ្វើ', // ⚠
+  'first.classicsTitle': 'ចាប់ផ្ដើមដោយម្ហូបប្រពៃណី ៨', // ✓
+  'first.classicsBody': 'អាម៉ុក ឡុកឡាក់ សម្លកកូរ…', // ⚠
+  'first.name': 'ឈ្មោះរបស់អ្នក', // ✓ (from the retired name step)
+
+  'tabs.explore': 'រុករក', // ✓
+  'explore.title': 'រុករក', // ✓
+  'explore.searchPlaceholder': 'ស្វែងរកម្ហូប គ្រឿងផ្សំ អ្នកចម្អិន', // ✓
+  'explore.bySubject': 'តាមប្រភេទ', // ✓
+  'explore.subjectAll': 'ទាំងអស់', // ✓
+  'explore.twoToTry': 'ពីរមុខគួរសាកល្បង', // ⚠
+  'explore.collections': 'ចង្កោមម្ហូប', // ✓
+  'explore.collectionKroeung': 'ចាប់ផ្ដើមដោយគ្រឿង', // ⚠
+  'explore.collectionQuick': 'រួចរាល់ក្នុងមួយម៉ោង', // ⚠
+  'explore.noResultsTitle': 'មិនទាន់មានឈ្មោះនេះទេ។', // ✓
+  'explore.noResultsBody': 'គ្មានក្នុងសៀវភៅរបស់អ្នក ហើយក៏គ្មានក្នុងចង្កោមរួមដែរ។', // ⚠
+  'explore.writeYourself': 'សរសេរដោយខ្លួនឯង', // ✓
+  'explore.didYouMean': 'ប្រហែលជា', // ✓
+  'explore.inYourBook': 'មានក្នុងសៀវភៅ', // ⚠
+  'explore.copyToBook': 'ចម្លងទៅសៀវភៅខ្ញុំ', // ⚠
+  'explore.copying': 'កំពុងចម្លង…', // ⚠
+  'explore.copied': 'បានចម្លងទៅសៀវភៅរបស់អ្នក។', // ⚠
+  'explore.openCopy': 'បើកមើល', // ⚠
+  'explore.byChefNak': 'ចេហ្វ ណាក់', // ⚠
+  'explore.sourceLine': 'ចម្លងពី chefnak.com', // ⚠
+  'explore.method': 'វិធីធ្វើ', // ⚠
+  'explore.chefsNote': 'កំណត់សម្គាល់របស់ចុងភៅ', // ⚠
+  'explore.offlineTitle': 'គ្មានអ៊ីនធឺណិត', // ✓
+  'explore.offlineBody': 'រូបមន្តរួមត្រូវការសញ្ញាអ៊ីនធឺណិត។', // ⚠
+  'explore.offlineSub': 'សៀវភៅរបស់អ្នកនៅតែដំណើរការ។ វានៅក្នុងទូរស័ព្ទនេះ។', // ⚠
+  'explore.openMyBook': 'បើកសៀវភៅខ្ញុំ', // ⚠
+  'explore.tryAgain': 'ព្យាយាមម្ដងទៀត', // ⚠
+  'subject.soups': 'ស៊ុប', // ⚠
+  'subject.grilled': 'អាំង', // ⚠
+  'subject.sweets': 'បង្អែម', // ⚠
+  'subject.festival': 'ពិធីបុណ្យ', // ⚠
 }

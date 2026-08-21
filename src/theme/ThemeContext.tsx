@@ -1,73 +1,47 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useContext, useMemo } from 'react'
 import type { ReactNode } from 'react'
-import { useColorScheme } from 'react-native'
-import AsyncStorage from '@react-native-async-storage/async-storage'
-import { darkColors, lightColors } from './palettes'
+import { paperColors } from './palettes'
 import type { ThemeColors } from './palettes'
 
 /**
- * `'system'` is a real, persistent state rather than "no preference yet": it
- * keeps tracking the phone — including a scheduled switch at sunset — until the
- * user touches the toggle, at which point their explicit choice wins for good.
+ * One palette, and no way to choose another.
+ *
+ * This used to be a three-state preference — `'system' | 'light' | 'dark'` —
+ * persisted in AsyncStorage and resolved against `useColorScheme()`. Chronicle
+ * removes it, and not as a simplification: the direction *is* a printed page,
+ * cream stock with one ink, and the design system names exactly two background
+ * colours (`paper` and `oat`), both of them paper. There is no night palette to
+ * switch to, and paper does not invert.
+ *
+ * The alternative — keeping the machinery and pointing both palettes at
+ * Chronicle — was considered and rejected. It would have left `isDark`
+ * permanently false and thirty-odd conditional branches that can never be
+ * taken: dead code that reads as live. Deleting the flag instead makes the
+ * compiler name every site that assumed a second palette existed.
+ *
+ * What deliberately survives is the *shape*: colours arrive through a context
+ * and reach a screen as an argument to its `makeStyles` factory, never as a
+ * module-scope import. That indirection is not about theming — `StyleSheet.create`
+ * runs once at import, so a palette read there is baked in forever — and it is
+ * held in place anyway by the type scale, which is language-dependent and must
+ * stay dynamic. Restoring a flat `colors` export would break Khmer, not just a
+ * future dark mode.
+ *
+ * If a night palette is ever designed, it returns here as a real second
+ * `ThemeColors` and a preference above it. Nothing about this file makes that
+ * harder than it was.
  */
-export type ThemePreference = 'system' | 'light' | 'dark'
-
-const STORAGE_KEY = 'theme-preference'
-
 interface ThemeValue {
   colors: ThemeColors
-  isDark: boolean
-  preference: ThemePreference
-  setPreference: (preference: ThemePreference) => void
 }
 
 const ThemeContext = createContext<ThemeValue | null>(null)
 
-function isPreference(value: string | null): value is ThemePreference {
-  return value === 'system' || value === 'light' || value === 'dark'
-}
-
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [preference, setPreferenceState] = useState<ThemePreference>('system')
-
-  // `useColorScheme` is synchronous, so the very first frame is already correct
-  // for anyone on 'system' — which is everyone until they touch the switch.
-  // AsyncStorage is not, so reading it first would mean either a white flash or
-  // a gate on every launch. Instead the stored value only ever *corrects* the
-  // first render, and only for someone who overrode against their own phone.
-  const systemScheme = useColorScheme()
-
-  useEffect(() => {
-    let cancelled = false
-    AsyncStorage.getItem(STORAGE_KEY)
-      .then((stored) => {
-        if (!cancelled && isPreference(stored)) setPreferenceState(stored)
-      })
-      .catch(() => {
-        // A theme we couldn't read back is not worth surfacing — 'system' is a
-        // sane answer and the user can set it again.
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  const setPreference = useCallback((next: ThemePreference) => {
-    // Set state first so the switch moves under the finger; persistence is
-    // allowed to lose the race, exactly like the optimistic favourite toggle.
-    setPreferenceState(next)
-    AsyncStorage.setItem(STORAGE_KEY, next).catch(() => {})
-  }, [])
-
-  const value = useMemo<ThemeValue>(() => {
-    const isDark = preference === 'system' ? systemScheme === 'dark' : preference === 'dark'
-    return {
-      colors: isDark ? darkColors : lightColors,
-      isDark,
-      preference,
-      setPreference,
-    }
-  }, [preference, systemScheme, setPreference])
+  // Constant, but still memoised and still a context rather than a bare export:
+  // consumers destructure `{ colors }` and pass it to a style factory, and that
+  // contract is what has to hold if a second palette ever arrives.
+  const value = useMemo<ThemeValue>(() => ({ colors: paperColors }), [])
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
 }

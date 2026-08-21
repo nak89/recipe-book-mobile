@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { Animated, Easing, Platform, StyleSheet } from 'react-native'
 import type { StyleProp, ViewStyle } from 'react-native'
-import { radius, useThemedStyles } from '@/theme'
+import { curve, duration, radius, useThemedStyles } from '@/theme'
 import type { ThemeColors } from '@/theme'
 
 /**
@@ -19,8 +19,13 @@ export function usePulse(): Animated.Value {
     const step = (toValue: number) =>
       Animated.timing(pulse, {
         toValue,
-        duration: 700,
-        easing: Easing.inOut(Easing.ease),
+        duration: duration.pulse,
+        // `in-out-sine` is the design system's curve for anything that loops,
+        // as against `out-cubic` for anything arriving. Built from the raw
+        // control points rather than imported ready-made, because this
+        // animation runs on React Native's own `Animated` and not on
+        // Reanimated — same curve, different constructor.
+        easing: Easing.bezier(...curve.inOutSine),
         // react-native-web has no native driver to hand off to.
         useNativeDriver: Platform.OS !== 'web',
         // Decoration, not an interaction. Left at its default, this loop holds
