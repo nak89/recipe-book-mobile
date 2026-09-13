@@ -334,7 +334,7 @@ const makeStyles = (c: ThemeColors, type: TypeScale) =>
     scroll: { paddingBottom: 120 },
 
     hero: { height: HERO_HEIGHT, backgroundColor: c.surfaceSunken },
-    heroPhoto: { ...StyleSheet.absoluteFillObject },
+    heroPhoto: { ...StyleSheet.absoluteFill },
     heroActions: {
       position: 'absolute',
       left: spacing.gutter,

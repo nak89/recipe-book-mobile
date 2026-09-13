@@ -5,18 +5,16 @@ import {
   TabActions,
   TabRouter,
   useNavigationBuilder,
-} from '@react-navigation/native'
-import type {
-  DefaultNavigatorOptions,
-  Descriptor,
-  NavigationHelpers,
-  NavigationProp,
-  ParamListBase,
-  RouteProp,
-  TabActionHelpers,
-  TabNavigationState,
-  TabRouterOptions,
-} from '@react-navigation/native'
+  type DefaultNavigatorOptions,
+  type Descriptor,
+  type NavigationHelpers,
+  type NavigationProp,
+  type ParamListBase,
+  type RouteProp,
+  type TabActionHelpers,
+  type TabNavigationState,
+  type TabRouterOptions,
+} from 'expo-router/react-navigation'
 import { withLayoutContext } from 'expo-router'
 import { Dimensions, Platform, StyleSheet, View } from 'react-native'
 import type { StyleProp, ViewStyle } from 'react-native'

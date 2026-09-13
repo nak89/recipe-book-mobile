@@ -2,6 +2,10 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true,
+    // TS 6 + `moduleResolution: bundler` stopped auto-including @types/node, which the
+    // offline tests need for `node:test`/`node:assert`. Naming `types` disables automatic
+    // inclusion entirely, so `react` has to be listed alongside it.
+    "types": ["node", "react"],
     "paths": {
       "@/*": [
         "./src/*"

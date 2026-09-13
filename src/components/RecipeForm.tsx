@@ -1,7 +1,7 @@
 import { createRef, forwardRef, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Ionicons } from '@expo/vector-icons'
-import { useHeaderHeight } from '@react-navigation/elements'
+import { useHeaderHeight } from 'expo-router/react-navigation'
 import { useNavigation } from 'expo-router'
 import * as ImagePicker from 'expo-image-picker'
 import { Image } from 'expo-image'

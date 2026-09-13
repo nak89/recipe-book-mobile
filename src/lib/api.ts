@@ -1,3 +1,4 @@
+import { File as FsFile } from 'expo-file-system'
 import { Platform } from 'react-native'
 import type { Difficulty, Mealtime, PlanSlot, Recipe, RecipeInput } from '@/types/recipe'
 // Type-only, so the i18n barrel — and the React context inside it — never enters
@@ -371,18 +372,33 @@ export async function uploadPhoto(uri: string, token: string): Promise<string> {
   const formData = new FormData()
 
   if (Platform.OS === 'web') {
-    // On web the picker hands back a blob:/data: uri — the uri/name/type shape
-    // below is React Native only and would serialise to "[object Object]".
+    // On web the picker hands back a blob:/data: uri, and fetch can read it into a
+    // real Blob. The native branch below can't: there is no file:// support here and
+    // RN's Blob won't take bytes, so the two platforms stay separate.
     const blob = await fetch(uri).then((r) => r.blob())
     const type = blob.type || 'image/jpeg'
     const extension = type.split('/')[1] ?? 'jpg'
     formData.append('photo', blob, `photo.${extension}`)
   } else {
-    const filename = uri.split('/').pop() ?? 'photo.jpg'
+    // The global fetch is Expo's WinterCG one as of SDK 57, and it rejects React
+    // Native's legacy { uri, name, type } part outright — "Unsupported FormDataPart
+    // implementation", asserted by a test of Expo's own. It takes a string, a real
+    // Blob, or an object exposing bytes(); this is the third, the shape Expo's tests
+    // call a FileBlob. Building a Blob instead is not an option: RN's Blob refuses to
+    // be constructed from a Uint8Array.
+    const file = new FsFile(uri)
+    const filename = file.name || uri.split('/').pop() || 'photo.jpg'
     const match = /\.(\w+)$/.exec(filename)
-    const type = match ? `image/${match[1]}` : 'image/jpeg'
-    // React Native's fetch accepts this uri/name/type shape for file parts.
-    formData.append('photo', { uri, name: filename, type } as unknown as Blob)
+    // name and type are spelled out rather than left to the File: they become the
+    // part's filename and content-type, and the upload route rejects anything whose
+    // mimetype isn't image/*, while File.type is documented to be '' for a file it
+    // cannot read.
+    const type = file.type || (match ? `image/${match[1]}` : 'image/jpeg')
+    formData.append('photo', {
+      name: filename,
+      type,
+      bytes: () => file.bytes(),
+    } as unknown as Blob)
   }
 
   const res = await fetch(`${API_URL}/upload`, {
