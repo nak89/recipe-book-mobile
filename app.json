@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "recipe-book-mobile",
+    "name": "Recipe Book",
     "slug": "recipe-book-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -39,6 +39,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "68ff450c-1a69-456e-8ba7-29f01c941698"
+      }
+    },
+    "owner": "nak89"
   }
 }
