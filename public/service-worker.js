@@ -1,5 +1,11 @@
-const CACHE_NAME = 'recipe-book-shell-v2'
-const APP_SHELL = ['/', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png']
+const CACHE_NAME = 'recipe-book-shell-v3'
+const APP_SHELL = [
+  '/',
+  '/manifest.webmanifest?v=romdoul-1',
+  '/icons/romdoul-192-v1.png',
+  '/icons/romdoul-512-v1.png',
+  '/icons/romdoul-apple-touch-v1.png',
+]
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)))
