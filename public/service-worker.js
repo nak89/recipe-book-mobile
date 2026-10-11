@@ -1,4 +1,4 @@
-const CACHE_NAME = 'recipe-book-shell-v3'
+const CACHE_NAME = 'recipe-book-shell-v4'
 const APP_SHELL = [
   '/',
   '/manifest.webmanifest?v=romdoul-1',

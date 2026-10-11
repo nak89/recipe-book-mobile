@@ -4,6 +4,7 @@ import type { Difficulty, Mealtime, PlanSlot, Recipe, RecipeInput } from '@/type
 // Type-only, so the i18n barrel — and the React context inside it — never enters
 // this module's runtime graph. `api.ts` is imported by every screen.
 import type { LinePart } from '@/lib/grocery'
+import { createPhotoResolver, type SignedPhoto } from '@/lib/photoAccess'
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL
 
@@ -53,6 +54,13 @@ async function request<T>(path: string, token: string, options: RequestInit = {}
 export function getRecipes(token: string) {
   return request<Recipe[]>('/recipes', token)
 }
+
+export const resolvePhoto = createPhotoResolver(async (urls, token) => {
+  const result = await request<{ photos: SignedPhoto[] }>('/photos/sign', token, {
+    method: 'POST', body: JSON.stringify({ urls }),
+  })
+  return result.photos
+})
 
 export function getRecipe(id: string, token: string) {
   return request<Recipe>(`/recipes/${id}`, token)

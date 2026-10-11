@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Image } from 'expo-image'
+import Image from '@/components/RecipeImage'
 import { Pressable, StyleSheet, View } from 'react-native'
 import type { LayoutChangeEvent } from 'react-native'
 import Animated, {

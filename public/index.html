@@ -27,13 +27,7 @@
       href="/icons/romdoul-apple-touch-v1.png"
     />
     <title>%WEB_TITLE%</title>
-    <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', function () {
-          navigator.serviceWorker.register('/service-worker.js')
-        })
-      }
-    </script>
+    <script src="/register-service-worker.js" defer></script>
     <!-- The `react-native-web` recommended style reset: https://necolas.github.io/react-native-web/docs/setup/#root-element -->
     <style id="expo-reset">
       /* These styles make the body full-height */

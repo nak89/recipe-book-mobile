@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { Image } from 'expo-image'
+import Image from '@/components/RecipeImage'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native'

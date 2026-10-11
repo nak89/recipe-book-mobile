@@ -1,4 +1,4 @@
-import { Image } from 'expo-image'
+import Image from '@/components/RecipeImage'
 import { Pressable, StyleSheet, View } from 'react-native'
 import { Text } from '@/components/ui/Text'
 import { useNum, useT } from '@/i18n'

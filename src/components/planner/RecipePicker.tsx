@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Image } from 'expo-image'
+import Image from '@/components/RecipeImage'
 import { FlatList, Modal, Pressable, StyleSheet, View } from 'react-native'
 import { Text } from '@/components/ui/Text'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'

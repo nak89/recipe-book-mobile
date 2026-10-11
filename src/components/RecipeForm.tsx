@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useHeaderHeight } from 'expo-router/react-navigation'
 import { useNavigation } from 'expo-router'
 import * as ImagePicker from 'expo-image-picker'
-import { Image } from 'expo-image'
+import Image from '@/components/RecipeImage'
 import { ActivityIndicator, Dimensions, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import { Text, TextInput } from '@/components/ui/Text'
 import type {
