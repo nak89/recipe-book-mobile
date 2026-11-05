@@ -183,7 +183,7 @@ export default function Select({
               )
             }}
             ListEmptyComponent={
-              custom ? null : (
+              custom ? undefined : (
                 <Text style={styles.empty}>{`${t('select.noMatch')} “${trimmed}”`}</Text>
               )
             }

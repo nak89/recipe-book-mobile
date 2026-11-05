@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import { Animated, Easing, Platform, StyleSheet } from 'react-native'
 import type { StyleProp, ViewStyle } from 'react-native'
 import { curve, duration, radius, useThemedStyles } from '@/theme'
@@ -13,7 +13,7 @@ import type { ThemeColors } from '@/theme'
  * broken rather than loading.
  */
 export function usePulse(): Animated.Value {
-  const pulse = useRef(new Animated.Value(0.5)).current
+  const pulse = useState(() => new Animated.Value(0.5))[0]
 
   useEffect(() => {
     const step = (toValue: number) =>

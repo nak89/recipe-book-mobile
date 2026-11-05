@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Ionicons } from '@expo/vector-icons'
 import { FlatList, Modal, Pressable, StyleSheet, View } from 'react-native'
 import { Text } from '@/components/ui/Text'
@@ -49,9 +49,11 @@ export default function UnitPicker({
 
   // One picker instance serves every row, so the query has to be dropped between
   // openings — otherwise the second ingredient inherits the first one's search.
-  useEffect(() => {
-    if (!visible) setQuery('')
-  }, [visible])
+  const [wasVisible, setWasVisible] = useState(visible)
+  if (wasVisible !== visible) {
+    setWasVisible(visible)
+    setQuery('')
+  }
 
   const trimmed = query.trim()
   const current = foldForCompare(value)
@@ -165,7 +167,7 @@ export default function UnitPicker({
             )
           }}
           ListEmptyComponent={
-            custom ? null : (
+            custom ? undefined : (
               <Text style={styles.empty}>{`${t('select.noMatch')} “${trimmed}”`}</Text>
             )
           }

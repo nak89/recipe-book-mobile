@@ -165,6 +165,8 @@ export const minHeights = {
  * the layout, so the drawn size and the tappable size can disagree safely.
  */
 export const sizes = {
+  /** Larger image for recognising dishes in the Recipes/Favourites index. */
+  recipeThumb: 58,
   avatar: 88,
   mark: 56,
   circleButton: 38,

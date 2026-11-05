@@ -171,15 +171,17 @@ export default function GroceryScreen() {
    * chip that isn't in the row any more.
    */
   const [dish, setDish] = useState<string | null>(null)
-  useEffect(() => {
+  const [dishWeek, setDishWeek] = useState(weekStartKey)
+  if (dishWeek !== weekStartKey) {
+    setDishWeek(weekStartKey)
     setDish(null)
-  }, [weekStartKey])
+  }
 
   const [composerOpen, setComposerOpen] = useState(false)
   const [draftName, setDraftName] = useState('')
   const [draftAmount, setDraftAmount] = useState('')
   const [draftUnit, setDraftUnit] = useState('')
-  const nameInput = useRef<RNTextInput>(null)
+  const nameInput = useRef<React.ComponentRef<typeof RNTextInput>>(null)
 
   useFocusEffect(
     useCallback(() => {
@@ -194,6 +196,7 @@ export default function GroceryScreen() {
           // unconditional setState rebuilds the list on the frames the
           // animation needs.
           setList((prev) => (JSON.stringify(prev) === JSON.stringify(data) ? prev : data))
+          setDish((current) => current && !data.dishes.some((d) => d.id === current) ? null : current)
         })
         .catch((err) => {
           if (!cancelled) setError(apiErrorKey(err))
@@ -213,16 +216,6 @@ export default function GroceryScreen() {
   const lines = useMemo(() => list?.lines ?? [], [list])
   const items = useMemo(() => list?.items ?? [], [list])
   const dishes = useMemo(() => list?.dishes ?? [], [list])
-
-  /**
-   * And dropped if the plan stops holding it. The list refetches on focus, so
-   * unplanning the dinner you were filtering by is an ordinary path back from
-   * the planner — and it would otherwise leave the screen empty, with the
-   * explanation ("this dish") no longer in the row to point at.
-   */
-  useEffect(() => {
-    if (dish && list && !dishes.some((d) => d.id === dish)) setDish(null)
-  }, [dish, list, dishes])
 
   const total = lines.length + items.length
   const gathered =

@@ -34,7 +34,7 @@ import type { ThemeColors, TypeScale } from '@/theme'
  * Chronicle's 50/50 rows depend on that going to the right place.
  */
 const Field = forwardRef<
-  RNTextInput,
+  React.ComponentRef<typeof RNTextInput>,
   TextInputProps & {
     label?: string
     hint?: string

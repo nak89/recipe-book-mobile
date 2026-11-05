@@ -11,6 +11,8 @@ const THUMB = 46
 const CHECK = 13
 
 interface LedgerRowProps {
+  /** Photo-led browsing; compact stays the default for other lists. */
+  variant?: 'compact' | 'recipe'
   title: string
   /** The right-hand value — a duration, a quantity, a count. Always mono. */
   value?: string
@@ -30,7 +32,7 @@ interface LedgerRowProps {
    * rather than a guide to the number.
    */
   ingredient?: boolean
-  /** 46×46 thumbnail at radius 12. */
+  /** Compact thumbnail, enlarged for the recipe variant. */
   photoUrl?: string | null
   /** Stands in where a row has no photograph of its own. */
   emoji?: string
@@ -88,6 +90,7 @@ interface LedgerRowProps {
  * instead put every English recipe title in a Khmer UI into Moul's Latin glyphs.
  */
 export default function LedgerRow({
+  variant = 'compact',
   title,
   value,
   ingredient,
@@ -104,6 +107,7 @@ export default function LedgerRow({
 }: LedgerRowProps) {
   const styles = useThemedStyles(makeStyles)
   const checkable = onToggle != null || checked != null
+  const recipe = variant === 'recipe'
 
   const handlePress = onToggle ? () => onToggle(!checked) : onPress
 
@@ -117,6 +121,7 @@ export default function LedgerRow({
       onLongPress={onLongPress}
       style={({ pressed }) => [
         styles.row,
+        recipe && styles.rowRecipe,
         ingredient && styles.rowIngredient,
         !last && styles.ruled,
         pressed && handlePress != null && styles.pressed,
@@ -133,7 +138,7 @@ export default function LedgerRow({
       {photoUrl ? (
         <Image
           source={photoUrl}
-          style={styles.thumb}
+          style={[styles.thumb, recipe && styles.recipeThumb]}
           contentFit="cover"
           transition={150}
           accessibilityIgnoresInvertColors
@@ -142,7 +147,7 @@ export default function LedgerRow({
         ingredient ? (
           <Text style={styles.emojiGlyph}>{emoji}</Text>
         ) : (
-          <View style={styles.thumb}>
+          <View style={[styles.thumb, recipe && styles.recipeThumb]}>
             <Text style={styles.emoji}>{emoji}</Text>
           </View>
         )
@@ -150,19 +155,22 @@ export default function LedgerRow({
 
       {/* The face comes from the title, not from the interface language — a
           Latin title in a Khmer UI is still Newsreader. */}
-      <Text
-        style={[
-          styles.title,
-          contentType(ingredient ? 'ingredientName' : 'rowTitle', title),
-          checked === true && styles.titleDone,
-          checked === true && styles.struck,
-        ]}
-      >
-        {title}
-      </Text>
+      <View style={styles.content}>
+        <Text
+          style={[
+            styles.title,
+            contentType(recipe ? 'recipeTitle' : ingredient ? 'ingredientName' : 'rowTitle', title),
+            checked === true && styles.titleDone,
+            checked === true && styles.struck,
+          ]}
+        >
+          {title}
+        </Text>
+        {recipe && value != null && <Text style={styles.recipeValue}>{value}</Text>}
+      </View>
 
       {trailing}
-      {value != null && <Text style={styles.value}>{value}</Text>}
+      {!recipe && value != null && <Text style={styles.value}>{value}</Text>}
     </Pressable>
   )
 }
@@ -190,6 +198,7 @@ const makeStyles = (c: ThemeColors, type: TypeScale) =>
      * carries the `sizes.hitMin` floor above.
      */
     rowIngredient: { minHeight: 0, paddingVertical: spacing.rowYTight },
+    rowRecipe: { paddingVertical: spacing.lg, gap: spacing.lg },
     ruled: { borderBottomWidth: 0.5, borderBottomColor: c.border },
     pressed: { opacity: 0.6 },
 
@@ -202,6 +211,7 @@ const makeStyles = (c: ThemeColors, type: TypeScale) =>
       justifyContent: 'center',
     },
     emoji: { fontSize: 22 },
+    recipeThumb: { width: sizes.recipeThumb, height: sizes.recipeThumb, borderRadius: radius.card },
     // No `lineHeight`: an emoji's own box is taller than a Latin one at the
     // same size, and pinning one crops it on Android. The fixed width is what
     // keeps the names aligned down the column when the glyphs aren't all the
@@ -219,11 +229,12 @@ const makeStyles = (c: ThemeColors, type: TypeScale) =>
 
     // Colour and layout only — the type comes from `contentType` at the call
     // site, so a residual `letterSpacing` from the other scale can't survive
-    // underneath it. `flex: 1` and `minWidth: 0` so a long title yields to the
-    // value rather than pushing it off the edge.
-    title: { color: c.text, flex: 1, minWidth: 0 },
+    // underneath it. The content column yields to any trailing controls.
+    content: { flex: 1, minWidth: 0, gap: spacing.xs },
+    title: { color: c.text },
     titleDone: { opacity: 0.34 },
     struck: { textDecorationLine: 'line-through' },
 
     value: { ...type.metadata, color: c.textPlaceholder },
+    recipeValue: { ...type.recipeMetadata, color: c.textMuted },
   })

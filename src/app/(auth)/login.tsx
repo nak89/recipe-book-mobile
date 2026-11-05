@@ -9,7 +9,7 @@ export default function LoginScreen() {
   return (
     <AuthForm
       heading={t('auth.login.heading')}
-      subheading={t('auth.login.heading')}
+      subheading={t('auth.login.subheading')}
       submitLabel={t('auth.login.submit')}
       onSubmit={login}
       footerText={t('auth.login.footer')}

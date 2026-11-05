@@ -138,7 +138,7 @@ export default function ToolPicker({
                   {`${t('select.use')} “${custom}”`}
                 </Text>
               </Pressable>
-            ) : null
+            ) : undefined
           }
           renderItem={({ item: row }) => {
             if (row.kind === 'header') {
@@ -171,7 +171,7 @@ export default function ToolPicker({
             )
           }}
           ListEmptyComponent={
-            custom ? null : (
+            custom ? undefined : (
               <View style={styles.empty}>
                 <Text style={styles.emptyTitle}>{`${t('toolPicker.noMatch')} “${query.trim()}”`}</Text>
                 <Text style={styles.emptyBody}>{t('toolPicker.noMatchBody')}</Text>

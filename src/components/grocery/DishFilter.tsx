@@ -101,9 +101,10 @@ export default function DishFilter({
    * that is never true of anything.
    */
   const [badgeCount, setBadgeCount] = useState(0)
-  useEffect(() => {
-    if (hidden > 0) setBadgeCount(hidden)
-  }, [hidden])
+  const updateHidden = useCallback((count: number) => {
+    setHidden(count)
+    if (count > 0) setBadgeCount(count)
+  }, [])
 
   /**
    * A week that loses a dish has to lose its measurement too. The array is
@@ -115,11 +116,11 @@ export default function DishFilter({
     const count = dishes.length + 1
     if (measured.current.length <= count) return
     measured.current = measured.current.slice(0, count)
-    ends.value = [...measured.current]
+    ends.set([...measured.current])
   }, [dishes.length, ends])
 
   const handleScroll = useAnimatedScrollHandler((event) => {
-    scrollX.value = event.contentOffset.x
+    scrollX.set(event.contentOffset.x)
   })
 
   const onChipLayout = useCallback(
@@ -128,7 +129,7 @@ export default function DishFilter({
       // `x` is measured inside the content container, padding included, which
       // is the same space `contentOffset.x` is in. No gutter arithmetic needed.
       measured.current[index] = x + width
-      ends.value = [...measured.current]
+      ends.set([...measured.current])
     },
     [ends]
   )
@@ -139,8 +140,8 @@ export default function DishFilter({
    * use them; the numbers come off shared values, which are readable from JS.
    */
   function revealNext() {
-    const edge = viewport.value - spacing.gutter - badgeWidth.value - BADGE_GAP
-    const next = ends.value.find((end) => end > scrollX.value + edge + 0.5)
+    const edge = viewport.get() - spacing.gutter - badgeWidth.get() - BADGE_GAP
+    const next = ends.get().find((end) => end > scrollX.get() + edge + 0.5)
     if (next === undefined) return
     selectionFeedback()
     scrollRef.current?.scrollTo({ x: next - edge, animated: true })
@@ -149,20 +150,20 @@ export default function DishFilter({
   useAnimatedReaction(
     () => {
       const edge =
-        scrollX.value + viewport.value - spacing.gutter - badgeWidth.value - BADGE_GAP
+        scrollX.get() + viewport.get() - spacing.gutter - badgeWidth.get() - BADGE_GAP
       // Half a point of slack: a chip whose edge lands exactly on the boundary
       // is visible, and float arithmetic should not be allowed to disagree.
-      return ends.value.filter((end) => end > edge + 0.5).length
+      return ends.get().filter((end) => end > edge + 0.5).length
     },
     (count, previous) => {
       if (count === previous) return
-      hiddenCount.value = count
-      runOnJS(setHidden)(count)
+      hiddenCount.set(count)
+      runOnJS(updateHidden)(count)
     }
   )
 
   const badgeStyle = useAnimatedStyle(() => {
-    const shown = hiddenCount.value > 0 ? 1 : 0
+    const shown = hiddenCount.get() > 0 ? 1 : 0
     const timing = { duration: duration.state, easing: ease.outCubic }
     return {
       opacity: withTiming(shown, timing),
@@ -179,7 +180,7 @@ export default function DishFilter({
         onScroll={handleScroll}
         scrollEventThrottle={16}
         onLayout={(event) => {
-          viewport.value = event.nativeEvent.layout.width
+          viewport.set(event.nativeEvent.layout.width)
         }}
         contentContainerStyle={styles.track}
       >
@@ -236,7 +237,7 @@ export default function DishFilter({
             accessibilityElementsHidden={hidden === 0}
             importantForAccessibility={hidden === 0 ? 'no-hide-descendants' : 'auto'}
             onLayout={(event) => {
-              badgeWidth.value = event.nativeEvent.layout.width
+              badgeWidth.set(event.nativeEvent.layout.width)
             }}
             style={({ pressed }) => [styles.badge, pressed && styles.pressed]}
           >
@@ -283,14 +284,14 @@ function DishChip({
   const styles = useThemedStyles(makeStyles)
 
   const revealStyle = useAnimatedStyle(() => {
-    const end = ends.value[index]
+    const end = ends.get()[index]
     // Before layout there is nothing to interpolate against, so the chip is
     // fully drawn: a chip that defaulted to hidden would flash on its first
     // frame. The same three properties come back either way — an animated style
     // that changes which keys it sets is a Reanimated warning, not a shortcut.
     const edge =
-      scrollX.value + viewport.value - spacing.gutter - badgeWidth.value - BADGE_GAP
-    const unmeasured = end === undefined || viewport.value === 0
+      scrollX.get() + viewport.get() - spacing.gutter - badgeWidth.get() - BADGE_GAP
+    const unmeasured = end === undefined || viewport.get() === 0
     const p = unmeasured ? 1 : Math.min(1, Math.max(0, 1 - (end - edge) / REVEAL))
     return {
       opacity: 0.1 + 0.9 * p,

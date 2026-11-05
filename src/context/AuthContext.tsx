@@ -14,7 +14,7 @@ interface AuthContextType {
   /** False until the post-signup flow (name, packs, tutorial) has been finished or skipped. */
   onboarded: boolean
   login: (email: string, password: string) => Promise<void>
-  signup: (email: string, password: string, name?: string) => Promise<void>
+  signup: (email: string, password: string, name?: string) => Promise<'signedIn' | 'confirmEmail'>
   logout: () => Promise<void>
   updateDisplayName: (name: string) => Promise<void>
   completeOnboarding: () => Promise<void>
@@ -64,7 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function login(email: string, password: string) {
     const { error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) throw new Error(error.message)
+    if (error) throw error
   }
 
   /**
@@ -77,12 +77,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
    * One call means the account is either created named or not created.
    */
   async function signup(email: string, password: string, name?: string) {
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: name ? { data: { displayName: name.trim() } } : undefined,
     })
-    if (error) throw new Error(error.message)
+    if (error) throw error
+    return data.session ? 'signedIn' as const : 'confirmEmail' as const
   }
 
   async function logout() {
@@ -93,7 +94,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data, error } = await supabase.auth.updateUser({
       data: { displayName: name.trim() },
     })
-    if (error) throw new Error(error.message)
+    if (error) throw error
     // updateUser also emits USER_UPDATED, but setting it here means the profile
     // screen re-renders immediately rather than a tick later.
     setSession((current) => (current && data.user ? { ...current, user: data.user } : current))
@@ -112,7 +113,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data, error } = await supabase.auth.updateUser({
       data: { onboardedAt: new Date().toISOString() },
     })
-    if (error) throw new Error(error.message)
+    if (error) throw error
     setSession((current) => (current && data.user ? { ...current, user: data.user } : current))
   }
 
@@ -129,7 +130,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data, error } = await supabase.auth.updateUser({
       data: { onboardedAt: null },
     })
-    if (error) throw new Error(error.message)
+    if (error) throw error
     setSession((current) => (current && data.user ? { ...current, user: data.user } : current))
   }
 

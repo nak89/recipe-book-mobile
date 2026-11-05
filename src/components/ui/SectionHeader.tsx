@@ -31,9 +31,11 @@ import type { ThemeColors, TypeScale } from '@/theme'
 export default function SectionHeader({
   label,
   count,
+  variant = 'compact',
   style,
 }: {
   label: string
+  variant?: 'compact' | 'recipe'
   /**
    * Rendered as given. Callers pass an already-formatted string so that Khmer
    * numerals are applied by whoever knows the number's meaning — a count of
@@ -46,13 +48,13 @@ export default function SectionHeader({
   const styles = useThemedStyles(makeStyles)
   return (
     <View style={[styles.row, style]}>
-      <Text style={styles.label} numberOfLines={1}>
+      <Text accessibilityRole="header" style={[styles.label, variant === 'recipe' && styles.recipeLabel]}>
         {label}
       </Text>
       {/* Not a border on the row itself: the rule has to start where the label
           ends and stop where the count begins, which only a sibling can do. */}
       <View style={styles.rule} />
-      {count != null && <Text style={styles.count}>{count}</Text>}
+      {count != null && <Text style={[styles.count, variant === 'recipe' && styles.recipeCount]}>{count}</Text>}
     </View>
   )
 }
@@ -65,9 +67,11 @@ const makeStyles = (c: ThemeColors, type: TypeScale) =>
       gap: spacing.sm,
       marginBottom: spacing.sectionGap,
     },
-    label: { ...type.sectionLabel, color: c.text, textTransform: 'uppercase' },
+    label: { ...type.sectionLabel, color: c.text, textTransform: 'uppercase', flexShrink: 1 },
+    recipeLabel: { ...type.recipeSection, textTransform: 'none' },
     // `flex: 1` with a fixed height rather than a border, so the line sits on
     // the label's optical centre instead of on its baseline.
     rule: { flex: 1, height: 1, backgroundColor: c.borderStrong },
     count: { ...type.metadata, color: c.textPlaceholder },
+    recipeCount: { ...type.recipeMetadata, color: c.textMuted },
   })

@@ -36,7 +36,7 @@ function fontSizeOf(style: unknown): number | undefined {
 // `ref` is declared explicitly rather than reached for through `forwardRef`:
 // React 19 passes it to function components as an ordinary prop, and RN's own
 // prop types don't carry it. `grocery.tsx` focuses its composer field this way.
-export type TextProps = RNTextProps & { ref?: React.Ref<RNText> }
+export type TextProps = RNTextProps & { ref?: React.Ref<React.ComponentRef<typeof RNText>> }
 
 export function Text({ style, maxFontSizeMultiplier, ...rest }: TextProps) {
   return (
@@ -54,7 +54,7 @@ export function Text({ style, maxFontSizeMultiplier, ...rest }: TextProps) {
  * bare inputs in `RecipeForm`'s ingredient row, which is one line by design and
  * has nowhere to grow.
  */
-export type AppTextInputProps = TextInputProps & { ref?: React.Ref<RNTextInput> }
+export type AppTextInputProps = TextInputProps & { ref?: React.Ref<React.ComponentRef<typeof RNTextInput>> }
 
 export function TextInput({ style, maxFontSizeMultiplier, ...rest }: AppTextInputProps) {
   return (

@@ -26,7 +26,7 @@ import SectionHeader from '@/components/ui/SectionHeader'
 import Skeleton, { usePulse } from '@/components/ui/Skeleton'
 import TextLink from '@/components/ui/TextLink'
 import type { SwipeTabsNavigationProp } from '@/navigation/SwipeTabs'
-import { radius, sized, spacing, useScreenTopPad, useTheme, useThemedStyles } from '@/theme'
+import { radius, sized, sizes, spacing, useScreenTopPad, useTheme, useThemedStyles } from '@/theme'
 import type { ThemeColors, TypeScale } from '@/theme'
 import { MEALTIMES } from '@/types/recipe'
 import type { Mealtime, PlanSlot, Recipe } from '@/types/recipe'
@@ -286,9 +286,10 @@ export default function RecipesIndexScreen() {
           carousel is a shop window, and this is an index. */}
       {!searching && favourites.length > 0 && (
         <View style={styles.section}>
-          <SectionHeader label={t('dashboard.favourites')} count={n(favourites.length)} />
+          <SectionHeader variant="recipe" label={t('dashboard.favourites')} count={n(favourites.length)} />
           {favourites.map((recipe, index) => (
             <LedgerRow
+              variant="recipe"
               key={recipe.id}
               title={recipe.title}
               photoUrl={recipe.photoUrl}
@@ -302,7 +303,8 @@ export default function RecipesIndexScreen() {
 
       {visible.length > 0 && (
         <SectionHeader
-          label={t(searching ? 'dashboard.results' : 'index.index')}
+          variant="recipe"
+          label={t(searching ? 'dashboard.results' : 'tabs.recipes')}
           count={indexRange}
           style={styles.indexHeader}
         />
@@ -358,9 +360,10 @@ export default function RecipesIndexScreen() {
           />
         }
         ListHeaderComponent={header}
-        ListFooterComponent={footer}
+        ListFooterComponent={footer ?? undefined}
         renderItem={({ item, index }) => (
           <LedgerRow
+            variant="recipe"
             style={styles.row}
             title={item.title}
             photoUrl={item.photoUrl}
@@ -476,8 +479,8 @@ function Empty({
 }
 
 /**
- * Placeholder rows that **copy the real row's measurements** — the 46pt
- * thumbnail, the 12pt vertical padding, the hairline — so content lands where
+ * Placeholder rows that copy the recipe variant's image and type measurements,
+ * so content lands where
  * the placeholder was instead of the page jumping when data arrives.
  *
  * `usePulse()` is called once and the value shared, never per block: independent
@@ -494,8 +497,8 @@ function IndexSkeleton() {
           <Skeleton pulse={pulse} style={styles.skeletonThumb} />
           <View style={styles.skeletonText}>
             <Skeleton pulse={pulse} style={styles.skeletonTitle} />
+            <Skeleton pulse={pulse} style={styles.skeletonValue} />
           </View>
-          <Skeleton pulse={pulse} style={styles.skeletonValue} />
         </View>
       ))}
     </View>
@@ -540,12 +543,12 @@ const makeStyles = (c: ThemeColors, type: TypeScale) =>
     emptyButton: { alignSelf: 'stretch', marginTop: spacing.sm },
 
     skeleton: { paddingHorizontal: spacing.gutter, paddingTop: spacing.xxl, gap: spacing.lg },
-    skeletonRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+    skeletonRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg, paddingVertical: spacing.lg },
     // The real row's measurements, copied — that is the whole point of a
     // skeleton. Content lands where the placeholder was instead of the page
     // jumping the moment data arrives.
-    skeletonThumb: { width: 46, height: 46, borderRadius: radius.thumb },
-    skeletonText: { flex: 1 },
-    skeletonTitle: { width: '70%', height: 15 },
-    skeletonValue: { width: 44, height: 11 },
+    skeletonThumb: { width: sizes.recipeThumb, height: sizes.recipeThumb, borderRadius: radius.card },
+    skeletonText: { flex: 1, gap: spacing.xs },
+    skeletonTitle: { width: '85%', height: type.recipeTitle.lineHeight },
+    skeletonValue: { width: '35%', height: type.recipeMetadata.lineHeight },
   })

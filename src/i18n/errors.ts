@@ -31,23 +31,7 @@ import type { StringKey } from './strings'
  * because these strings are Supabase's to reword, and a wording change should
  * degrade to the generic fallback rather than to raw English.
  */
-const AUTH_PATTERNS: { match: string; key: StringKey }[] = [
-  { match: 'invalid login credentials', key: 'error.auth.invalidCredentials' },
-  { match: 'already registered', key: 'error.auth.emailTaken' },
-  { match: 'user already exists', key: 'error.auth.emailTaken' },
-  { match: 'password should be at least', key: 'error.auth.passwordTooShort' },
-  { match: 'unable to validate email', key: 'error.auth.invalidEmail' },
-  { match: 'invalid email', key: 'error.auth.invalidEmail' },
-  { match: 'email not confirmed', key: 'error.auth.emailNotConfirmed' },
-  { match: 'rate limit', key: 'error.tooManyRequests' },
-  { match: 'network', key: 'error.network' },
-]
-
-/** A translation key for whatever came back from a sign-in or sign-up attempt. */
-export function authErrorKey(error: unknown): StringKey {
-  const message = error instanceof Error ? error.message.toLowerCase() : ''
-  return AUTH_PATTERNS.find((p) => message.includes(p.match))?.key ?? 'error.generic'
-}
+export { authErrorKey } from '@/lib/authFeedback'
 
 /**
  * A translation key for a failed API call.

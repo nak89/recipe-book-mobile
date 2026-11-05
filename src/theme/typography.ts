@@ -224,6 +224,11 @@ export const type = {
     fontSize: 10,
     letterSpacing: em(10, 0.2),
   },
+  /** Prominent headings on the photo-led Recipes index. */
+  recipeSection: { fontFamily: fonts.serifMedium, fontSize: 18, lineHeight: lh(18, 1.2), letterSpacing: 0 },
+  /** Recipe browsing has more room than a compact ingredient/planner row. */
+  recipeTitle: { fontFamily: fonts.serifMedium, fontSize: 16, lineHeight: lh(16, 1.25) },
+  recipeMetadata: { fontFamily: fonts.mono, fontSize: 13, lineHeight: lh(13, 1.4) },
   /** Durations, quantities, dates, issue numbers, the timer. */
   metadata: { fontFamily: fonts.mono, fontSize: 12 },
   metadataSmall: { fontFamily: fonts.mono, fontSize: 11 },
@@ -426,6 +431,9 @@ export type TypeScale = Record<keyof typeof type, TextToken>
  *     one wants checking on a device — it is the single riskiest value here.
  */
 export const typeKm: TypeScale = {
+  recipeSection: { fontFamily: fonts.khmerDisplay, fontSize: 15, lineHeight: lhMoul(15), letterSpacing: kmTrack(15) },
+  recipeTitle: { fontFamily: fonts.khmerDisplay, fontSize: 14, lineHeight: lhMoul(14), letterSpacing: kmTrack(14) },
+  recipeMetadata: { fontFamily: fonts.khmer, fontSize: 14, lineHeight: lhKm(14, 1.5), letterSpacing: kmTrack(14) },
   // ── Chronicle roles ─────────────────────────────────────────────────────
   masthead: {
     fontFamily: fonts.khmerDisplay,

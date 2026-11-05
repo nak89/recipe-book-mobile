@@ -1,0 +1,15 @@
+diff --git a/node_modules/@react-native-masked-view/masked-view/types/index.d.ts b/node_modules/@react-native-masked-view/masked-view/types/index.d.ts
+index 6a66a1e..28526c7 100644
+--- a/node_modules/@react-native-masked-view/masked-view/types/index.d.ts
++++ b/node_modules/@react-native-masked-view/masked-view/types/index.d.ts
+@@ -13,8 +13,6 @@ interface MaskedViewProps extends ReactNative.ViewProps {
+  * @see https://github.com/react-native-masked-view/masked-view
+  */
+ declare class MaskedViewComponent extends React.Component<MaskedViewProps> {}
+-declare const MaskedViewBase: Constructor<
+-  ReactNative.NativeMethods
+-> &
+-  typeof MaskedViewComponent;
++// RN 0.88 removes NativeMethods; the public props still come from React.Component.
++declare const MaskedViewBase: typeof MaskedViewComponent;
+ export default class MaskedView extends MaskedViewBase {}

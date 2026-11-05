@@ -81,7 +81,7 @@ export default function CookModeScreen() {
   const [pageWidth, setPageWidth] = useState(() =>
     Dimensions.get('window').width > 0 ? Dimensions.get('window').width : 0
   )
-  const pagerRef = useRef<ScrollView>(null)
+  const pagerRef = useRef<React.ComponentRef<typeof ScrollView>>(null)
 
   /**
    * Per-step timer state, keyed by step id.

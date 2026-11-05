@@ -85,8 +85,8 @@ export default function Reorderable({
   const measured = useRef<{ tops: number[]; heights: number[] }>({ tops: [], heights: [] })
 
   const publish = useCallback(() => {
-    tops.value = [...measured.current.tops]
-    heights.value = [...measured.current.heights]
+    tops.set([...measured.current.tops])
+    heights.set([...measured.current.heights])
   }, [tops, heights])
 
   const onRowLayout = (index: number) => (event: LayoutChangeEvent) => {
@@ -121,26 +121,26 @@ export default function Reorderable({
           .activeOffsetY([-8, 8])
           .failOffsetX([-12, 12])
           .onStart(() => {
-            active.value = index
-            target.value = index
-            offset.value = 0
+            active.set(index)
+            target.set(index)
+            offset.set(0)
             runOnJS(begin)()
           })
           .onUpdate((event) => {
-            offset.value = event.translationY
-            const top = tops.value[index] ?? 0
-            const height = heights.value[index] ?? 0
-            target.value = dropIndex(tops.value, top + height / 2 + event.translationY)
+            offset.set(event.translationY)
+            const top = tops.get()[index] ?? 0
+            const height = heights.get()[index] ?? 0
+            target.set(dropIndex(tops.get(), top + height / 2 + event.translationY))
           })
           .onEnd(() => {
-            runOnJS(finish)(index, target.value)
+            runOnJS(finish)(index, target.get())
           })
           // Runs whether the gesture ended or was cancelled — a cancelled drag
           // still has to put the row back and unlock the scroller.
           .onFinalize(() => {
-            active.value = -1
-            target.value = -1
-            offset.value = 0
+            active.set(-1)
+            target.set(-1)
+            offset.set(0)
           })
 
         // §16's `⋮⋮` — six dots in two columns, drawn rather than set as a
@@ -224,7 +224,7 @@ function Row({
   children: ReactNode
 }) {
   const style = useAnimatedStyle(() => {
-    const from = active.value
+    const from = active.get()
     // Nothing is being dragged: every row sits exactly where it was laid out.
     if (from === -1) return { transform: [{ translateY: 0 }, { scale: 1 }], zIndex: 0, opacity: 1 }
 
@@ -232,7 +232,7 @@ function Row({
       return {
         // The finger's own translation, untouched — an eased or sprung value
         // here would put the row behind the finger it is following.
-        transform: [{ translateY: offset.value }, { scale: reduced ? 1 : 1.02 }],
+        transform: [{ translateY: offset.get() }, { scale: reduced ? 1 : 1.02 }],
         // Above every other row, or a tall neighbour draws over the row you
         // are holding.
         zIndex: 10,
@@ -242,8 +242,8 @@ function Row({
 
     // The space the dragged row leaves behind: its own height plus the gap it
     // was sitting in. One number, whatever the rows around it are.
-    const vacated = (heights.value[from] ?? 0) + gap
-    const to = target.value
+    const vacated = (heights.get()[from] ?? 0) + gap
+    const to = target.get()
     let shift = 0
     if (to > from && index > from && index <= to) shift = -vacated
     if (to < from && index >= to && index < from) shift = vacated

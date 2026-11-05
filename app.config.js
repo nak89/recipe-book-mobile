@@ -1,6 +1,4 @@
-const base = require('./app.json').expo
-
-module.exports = () => {
+module.exports = ({ config: base }) => {
   const origins = [process.env.EXPO_PUBLIC_API_URL, process.env.EXPO_PUBLIC_SUPABASE_URL]
     .filter(Boolean).map(value => new URL(value).origin)
   const images = ['https://images.unsplash.com', 'https://images.squarespace-cdn.com']

@@ -42,7 +42,7 @@ export default function AuthForm({
   heading: string
   subheading: string
   submitLabel: string
-  onSubmit: (email: string, password: string, name?: string) => Promise<void>
+  onSubmit: (email: string, password: string, name?: string) => Promise<void | 'signedIn' | 'confirmEmail'>
   footerText: string
   footerLinkText: string
   footerHref: '/login' | '/signup'
@@ -57,7 +57,8 @@ export default function AuthForm({
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<ReturnType<typeof authErrorKey> | null>(null)
+  const [confirmationEmail, setConfirmationEmail] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
   /**
@@ -65,25 +66,33 @@ export default function AuthForm({
    *
    * Deliberately not an entropy estimate. A meter that grades character classes
    * teaches people to append `1!` rather than to choose a longer passphrase, and
-   * the only rule this app actually enforces is the one Supabase enforces —
-   * length. The meter reports what the form will reject, and nothing else.
+   * the signup form enforces its advertised minimum length. The meter reports what the form will reject, and nothing else.
    */
   const strength = password.length === 0 ? 0 : password.length < 6 ? 1 : password.length < MIN_PASSWORD ? 2 : 3
 
   async function handleSubmit() {
+    if (submitting || confirmationEmail) return
     if (!email.trim() || !password || (collectName && !name.trim())) {
-      setError(t('auth.missingFields'))
+      setError(collectName ? 'auth.missingSignupFields' : 'auth.missingFields')
+      return
+    }
+    if (collectName && password.length < MIN_PASSWORD) {
+      setError('error.auth.passwordTooShort')
       return
     }
     setError(null)
     setSubmitting(true)
     try {
-      await onSubmit(email.trim(), password, collectName ? name.trim() : undefined)
+      const result = await onSubmit(email.trim(), password, collectName ? name.trim() : undefined)
+      if (result === 'confirmEmail') {
+        setConfirmationEmail(email.trim())
+        setPassword('')
+      }
     } catch (err) {
       // Supabase's messages are English and not ours to change, so they're
       // mapped onto keys rather than shown raw — an unrecognised one falls back
       // to a generic *translated* message. See i18n/errors.ts.
-      setError(t(authErrorKey(err)))
+      setError(authErrorKey(err))
     } finally {
       setSubmitting(false)
     }
@@ -111,7 +120,15 @@ export default function AuthForm({
           <Text style={styles.subheading}>{subheading}</Text>
         </View>
 
-        <View style={styles.fields}>
+        {confirmationEmail ? (
+          <View style={styles.fields}>
+            <Text style={styles.heading} accessibilityRole="header">{t('auth.confirm.heading')}</Text>
+            <Text style={styles.subheading} accessibilityLiveRegion="polite">
+              {t('auth.confirm.body').replace('{email}', confirmationEmail)}
+            </Text>
+            <PrimaryButton label={t('auth.login.submit')} onPress={() => router.replace('/login')} />
+          </View>
+        ) : <View style={styles.fields}>
           {collectName && (
             <Field
               label={t('first.name')}
@@ -176,7 +193,7 @@ export default function AuthForm({
             )}
           </View>
 
-          {error && <Text style={styles.error}>{error}</Text>}
+          {error && <Text style={styles.error} accessibilityRole="alert">{t(error)}</Text>}
 
           <PrimaryButton
             label={submitLabel}
@@ -184,16 +201,16 @@ export default function AuthForm({
             loading={submitting}
             style={styles.submit}
           />
-        </View>
+        </View>}
 
-        <View style={styles.footer}>
+        {!confirmationEmail && <View style={styles.footer}>
           <Text style={styles.footerText}>{footerText}</Text>
           {/* A `TextLink`, not expo-router's `Link`. `Link` renders an anchor
               whose underline is a text decoration, which on a Khmer label is
               drawn through the descender space where a subscript consonant
               sits — the same reason `LedgerRow` never strikes Khmer through. */}
           <TextLink label={footerLinkText} onPress={() => router.replace(footerHref)} />
-        </View>
+        </View>}
       </ScrollView>
     </KeyboardAvoidingView>
   )

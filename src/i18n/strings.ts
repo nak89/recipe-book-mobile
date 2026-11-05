@@ -131,11 +131,14 @@ export const en = {
   'auth.signup.subheading': 'Save what you cook, all in one place.',
   'auth.signup.submit': 'Sign up',
   'auth.signup.footer': 'Already have an account?',
+  'auth.confirm.heading': 'Check your email',
+  'auth.confirm.body': 'Check {email} for a confirmation link, including your spam folder. Confirm your email, then come back to log in.',
   'auth.email': 'Email',
   'auth.emailPlaceholder': 'you@example.com',
   'auth.password': 'Password',
   'auth.passwordPlaceholder': 'Enter your password',
   'auth.missingFields': 'Enter your email and password',
+  'auth.missingSignupFields': 'Enter your name, email and password',
   'auth.showPassword': 'Show',
   'auth.hidePassword': 'Hide',
   /** Rendered beside the strength meter — the one rule the form enforces. */
@@ -151,7 +154,8 @@ export const en = {
   'error.auth.emailTaken': 'An account with that email already exists.',
   'error.auth.passwordTooShort': 'Your password is too short.',
   'error.auth.invalidEmail': 'That doesn’t look like an email address.',
-  'error.auth.emailNotConfirmed': 'Confirm your email address first.',
+  'error.auth.emailNotConfirmed': 'Confirm your email address first. Check your inbox and spam folder for the link.',
+  'error.auth.rateLimited': 'Too many sign-in or signup attempts. Wait a few minutes before trying again.',
   'error.api.invalid': 'Something in this recipe isn’t valid.',
   'error.api.sessionExpired': 'Your session has expired. Sign in again.',
   'error.api.forbidden': 'That isn’t yours to change.',
@@ -702,11 +706,14 @@ export const km: Strings = {
   'auth.signup.subheading': 'រក្សាទុកអ្វីដែលអ្នកចម្អិន នៅកន្លែងតែមួយ។',
   'auth.signup.submit': 'ចុះឈ្មោះ',
   'auth.signup.footer': 'មានគណនីរួចហើយ?',
+  'auth.confirm.heading': 'សូមពិនិត្យអ៊ីមែលរបស់អ្នក', // ⚠
+  'auth.confirm.body': 'សូមពិនិត្យ {email} និងថតសារឥតបានការ ដើម្បីរកតំណបញ្ជាក់។ បញ្ជាក់អ៊ីមែលរបស់អ្នក រួចត្រឡប់មកចូលគណនី។', // ⚠
   'auth.email': 'អ៊ីមែល',
   'auth.emailPlaceholder': 'you@example.com',
   'auth.password': 'ពាក្យសម្ងាត់',
   'auth.passwordPlaceholder': 'បញ្ចូលពាក្យសម្ងាត់របស់អ្នក',
   'auth.missingFields': 'សូមបញ្ចូលអ៊ីមែល និងពាក្យសម្ងាត់',
+  'auth.missingSignupFields': 'សូមបញ្ចូលឈ្មោះ អ៊ីមែល និងពាក្យសម្ងាត់', // ⚠
   'auth.showPassword': 'បង្ហាញ',
   'auth.hidePassword': 'លាក់',
   'auth.passwordHint': 'យ៉ាងតិច ៨ តួ', // ⚠
@@ -719,7 +726,8 @@ export const km: Strings = {
   'error.auth.emailTaken': 'មានគណនីប្រើអ៊ីមែលនេះរួចហើយ។',
   'error.auth.passwordTooShort': 'ពាក្យសម្ងាត់របស់អ្នកខ្លីពេក។',
   'error.auth.invalidEmail': 'នេះមិនមែនជាអាសយដ្ឋានអ៊ីមែលទេ។',
-  'error.auth.emailNotConfirmed': 'សូមបញ្ជាក់អាសយដ្ឋានអ៊ីមែលរបស់អ្នកជាមុនសិន។',
+  'error.auth.emailNotConfirmed': 'សូមបញ្ជាក់អ៊ីមែលរបស់អ្នកជាមុនសិន។ ពិនិត្យប្រអប់សំបុត្រ និងថតសារឥតបានការ ដើម្បីរកតំណបញ្ជាក់។', // ⚠
+  'error.auth.rateLimited': 'ព្យាយាមចូលគណនី ឬចុះឈ្មោះច្រើនដងពេក។ សូមរង់ចាំពីរបីនាទី មុនព្យាយាមម្តងទៀត។', // ⚠
   'error.api.invalid': 'មានអ្វីមួយក្នុងរូបមន្តនេះមិនត្រឹមត្រូវ។',
   'error.api.sessionExpired': 'វគ្គរបស់អ្នកបានផុតកំណត់។ សូមចូលគណនីម្តងទៀត។',
   'error.api.forbidden': 'នេះមិនមែនជារបស់អ្នកដើម្បីកែទេ។',

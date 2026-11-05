@@ -96,7 +96,7 @@ const TOTAL_MINUTE_PRESETS = [5, 10, 15, 30, 45, 60, 75, 90, 120]
  * end up stacked in the first screenful.
  */
 const Page = forwardRef<
-  ScrollView,
+  React.ComponentRef<typeof ScrollView>,
   {
     width: number
     contentStyle: StyleProp<ViewStyle>
@@ -222,8 +222,8 @@ export default function RecipeForm({
   // The horizontal pager, plus one vertical scroller per page. A field's offset
   // is relative to its own page, so scrolling to an error means picking the
   // right ref rather than sharing one.
-  const pagerRef = useRef<ScrollView>(null)
-  const pageRefs = useRef(STEP_KEYS.map(() => createRef<ScrollView>())).current
+  const pagerRef = useRef<React.ComponentRef<typeof ScrollView>>(null)
+  const pageRefs = useRef(STEP_KEYS.map(() => createRef<React.ComponentRef<typeof ScrollView>>())).current
 
   // `onLayout` is the authority — this form is a modal on iOS and a resizable
   // window on web, so the window's width is only ever an opening guess.
