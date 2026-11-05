@@ -1,3 +1,4 @@
+import { tabLayout } from '@/lib/tabLayout'
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
@@ -129,6 +130,19 @@ function SwipeTabsNavigator({
     screenOptions,
   })
 
+  const ordered = tabLayout(state.routeNames, state.routes, state.routes[state.index]?.key)
+  const displayState = { ...state, ...ordered }
+
+  // Materialise adjacent pages without changing focus. SDK 58 no longer
+  // creates a live route for every declared tab on initial navigation.
+  useEffect(() => {
+    for (const name of state.routeNames) {
+      if (!state.routes.some(route => route.name === name)) {
+        navigation.dispatch({ type: 'PRELOAD', payload: { name }, target: state.key })
+      }
+    }
+  }, [state.routeNames, state.routes, state.key, navigation])
+
   // An *animated* ref, so the tab bar's drag can call reanimated's `scrollTo`
   // from inside a worklet and move the pages without a trip through JS.
   const pagerRef = useAnimatedRef<Animated.ScrollView>()
@@ -148,8 +162,8 @@ function SwipeTabsNavigator({
     const resized = lastWidth.current !== width
     lastWidth.current = width
     if (width === 0) return
-    pagerRef.current?.scrollTo({ x: state.index * width, animated: !resized })
-  }, [state.index, width, pagerRef])
+    pagerRef.current?.scrollTo({ x: ordered.index * width, animated: !resized })
+  }, [ordered.index, width, pagerRef])
 
   /**
    * A swipe finished — tell the router where we ended up.
@@ -163,8 +177,8 @@ function SwipeTabsNavigator({
   function onSettled(offsetX: number) {
     if (width === 0) return
     const index = Math.round(offsetX / width)
-    const route = state.routes[index]
-    if (!route || index === state.index) return
+    const route = ordered.routes[index]
+    if (!route || index === ordered.index) return
     navigation.dispatch({ ...TabActions.jumpTo(route.name), target: state.key })
   }
 
@@ -193,17 +207,17 @@ function SwipeTabsNavigator({
           scrollEventThrottle={16}
         >
           {width > 0 &&
-            state.routes.map((route) => (
+            ordered.routes.map((route) => (
               // Both scenes stay mounted — there are two of them, and a pager
               // has to have something to reveal as your finger moves. They are
               // rendered, not focused: focus still comes from the router, so
               // `useFocusEffect` fires on tab change exactly as before.
               <View key={route.key} style={[styles.scene, { width }, sceneStyle]}>
-                {descriptors[route.key].render()}
+                {descriptors[route.key]?.render()}
               </View>
             ))}
         </Animated.ScrollView>
-        {tabBar({ state, navigation, descriptors, scrollX, pageWidth: width, pagerRef })}
+        {tabBar({ state: displayState, navigation, descriptors, scrollX, pageWidth: width, pagerRef })}
       </View>
     </NavigationContent>
   )

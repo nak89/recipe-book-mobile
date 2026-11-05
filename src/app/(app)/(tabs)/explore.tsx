@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useFocusEffect, useNavigation, useRouter } from 'expo-router'
-import { FlatList, Image, Pressable, RefreshControl, StyleSheet, View } from 'react-native'
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, View, useWindowDimensions } from 'react-native'
+import { Image } from 'expo-image'
 import { Text } from '@/components/ui/Text'
 import { useAuth } from '@/context/AuthContext'
-import { getLibrary, LIBRARY_SUBJECTS } from '@/lib/api'
+import { copyLibraryRecipe, getLibrary, LIBRARY_SUBJECTS } from '@/lib/api'
 import type { LibrarySubject, LibrarySummary } from '@/lib/api'
 import { useDebounce } from '@/hooks/useDebounce'
 import { refreshFeedback } from '@/lib/haptics'
@@ -22,22 +23,11 @@ import SectionHeader from '@/components/ui/SectionHeader'
 import Skeleton, { usePulse } from '@/components/ui/Skeleton'
 import TextLink from '@/components/ui/TextLink'
 import type { SwipeTabsNavigationProp } from '@/navigation/SwipeTabs'
-import { contentType, radius, sized, spacing, useScreenTopPad, useTheme, useThemedStyles } from '@/theme'
+import { contentType, radius, sized, sizes, spacing, useScreenTopPad, useTheme, useThemedStyles } from '@/theme'
 import type { ThemeColors, TypeScale } from '@/theme'
 
 type Filter = 'All' | LibrarySubject
 
-/** SCREENS.md § 11's tile height. Literal, like `Chip`'s 15×9 — it measures this
- *  control rather than being a step anyone should reach for elsewhere. */
-const TILE_HEIGHT = 118
-
-/** Two, and the band is hidden rather than shortened if fewer survive. */
-const TILE_COUNT = 2
-
-/** Under this many minutes, a recipe is in the "done inside an hour" collection. */
-const QUICK_MINUTES = 60
-
-const SKELETON_KEYS = ['e0', 'e1', 'e2', 'e3', 'e4']
 
 /**
  * Explore — the shared library, and the tab the app opens onto.
@@ -64,7 +54,6 @@ export default function ExploreScreen() {
   const { colors: c } = useTheme()
   const styles = useThemedStyles(makeStyles)
   const t = useT()
-  const n = useNum()
   const { language } = useLanguage()
   const subjectLabel = useSubjectLabel()
   const { token } = useAuth()
@@ -82,6 +71,26 @@ export default function ExploreScreen() {
   const [error, setError] = useState<StringKey | null>(null)
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<Filter>('All')
+
+  const [savingIds, setSavingIds] = useState<string[]>([])
+  const pending = useRef(new Set<string>())
+  const columns = useWindowDimensions().width < 360 ? 1 : 2
+
+  async function saveRecipe(id: string) {
+    if (!token || savedIds.includes(id) || pending.current.has(id)) return
+    pending.current.add(id)
+    setSavingIds(prev => [...prev, id])
+    setError(null)
+    try {
+      await copyLibraryRecipe(id, token)
+      setSavedIds(prev => prev.includes(id) ? prev : [...prev, id])
+    } catch (err) {
+      setError(apiErrorKey(err))
+    } finally {
+      pending.current.delete(id)
+      setSavingIds(prev => prev.filter(value => value !== id))
+    }
+  }
 
   const debouncedQuery = useDebounce(query)
 
@@ -164,49 +173,6 @@ export default function ExploreScreen() {
   }, [recipes, debouncedQuery, filter])
 
   const searching = debouncedQuery.trim().length > 0
-  const browsing = !searching && filter === 'All'
-
-  /**
-   * Two tiles, preferring what the reader has *not* already taken.
-   *
-   * Deliberately not random: a band that reshuffles every time you come back
-   * makes the tab feel like it has no memory, and this app already declined a
-   * recommender it has no data for (see "Real recommendations" in CLAUDE.md).
-   * Untaken-first, then by time, is a rule you can state in one sentence and
-   * which stops suggesting a recipe once you have it.
-   */
-  const tiles = useMemo(() => {
-    const unsaved = recipes.filter((r) => !savedIds.includes(r.id))
-    return [...(unsaved.length >= TILE_COUNT ? unsaved : recipes)]
-      .sort((a, b) => a.totalMinutes - b.totalMinutes)
-      .slice(0, TILE_COUNT)
-  }, [recipes, savedIds])
-
-  /**
-   * Two collections, both *derived* rather than hand-authored.
-   *
-   * SCREENS.md § 11 names "Sunday with the whole family" (9) and "Grandmother's
-   * handwriting" (6) over a library that does not exist. Transcribing those
-   * would mean inventing curation and hardcoding counts that the content cannot
-   * back — the exact thing that kept Explore unbuilt. These two say something
-   * true about the eight recipes and recount themselves when the library grows.
-   */
-  const collections = useMemo(
-    () => [
-      {
-        key: 'kroeung' as const,
-        label: t('explore.collectionKroeung'),
-        ids: recipes.filter((r) => KROEUNG_DISHES.includes(r.id)).map((r) => r.id),
-      },
-      {
-        key: 'quick' as const,
-        label: t('explore.collectionQuick'),
-        ids: recipes.filter((r) => r.totalMinutes <= QUICK_MINUTES).map((r) => r.id),
-      },
-    ],
-    [recipes, t]
-  )
-
   /**
    * The index's range, `០១–០៨`, exactly as the Recipes index computes it — the
    * header names the rows beneath it, so while a chip or a query is narrowing
@@ -255,7 +221,7 @@ export default function ExploreScreen() {
         />
       </View>
 
-      {error && <Text style={styles.error}>{t(error)}</Text>}
+      {error && <Text accessibilityRole="alert" style={styles.error}>{t(error)}</Text>}
 
       <View style={styles.section}>
         <SectionHeader label={t('explore.bySubject')} />
@@ -274,58 +240,10 @@ export default function ExploreScreen() {
         </View>
       </View>
 
-      {/* Both bands are about the library as a whole, so they step aside the
-          moment a query or a chip narrows it — leaving them up would put two
-          unrelated suggestions above a filtered result. */}
-      {browsing && tiles.length === TILE_COUNT && (
-        <View style={styles.section}>
-          <SectionHeader
-            label={t('explore.twoToTry')}
-            count={n(
-              new Date().toLocaleDateString(undefined, { month: 'short' })
-            ).toUpperCase()}
-          />
-          <View style={styles.tiles}>
-            {tiles.map((recipe) => (
-              <Tile
-                key={recipe.id}
-                title={recipe.title}
-                photoUrl={recipe.photoUrl}
-                // No `.toUpperCase()`: `headline` is Khmer, which has no case,
-                // so it was a no-op dressed up as a caption style.
-                caption={`${recipe.headline} · ${n(recipe.totalMinutes)}′`}
-                onPress={() => router.push(`/library/${recipe.id}`)}
-              />
-            ))}
-          </View>
-        </View>
-      )}
-
-      {browsing && (
-        <View style={styles.section}>
-          <SectionHeader label={t('explore.collections')} />
-          {collections.map((collection, index) => (
-            <LedgerRow
-              key={collection.key}
-              title={collection.label}
-              value={n(collection.ids.length)}
-              last={index === collections.length - 1}
-              onPress={() => {
-                // A collection is a saved query, not a place. Dropping the chip
-                // back to All and putting its name in the search box is what
-                // makes the back-out obvious — you clear a field, you don't hunt
-                // for the way out of a screen you didn't mean to open.
-                setFilter('All')
-                setQuery(collection.label)
-              }}
-            />
-          ))}
-        </View>
-      )}
-
       {visible.length > 0 && (
         <SectionHeader
-          label={t(searching ? 'dashboard.results' : 'index.index')}
+          variant="recipe"
+          label={t(searching ? 'dashboard.results' : 'explore.title')}
           count={indexRange}
           style={styles.indexHeader}
         />
@@ -369,7 +287,10 @@ export default function ExploreScreen() {
   return (
     <View style={styles.container}>
       <FlatList
+        key={columns}
         ref={listRef}
+        numColumns={columns}
+        columnWrapperStyle={columns === 2 ? styles.gridRow : undefined}
         data={visible}
         keyExtractor={(item) => item.id}
         contentContainerStyle={[styles.list, { paddingTop: topPad }]}
@@ -388,22 +309,16 @@ export default function ExploreScreen() {
           />
         }
         ListHeaderComponent={header}
-        renderItem={({ item, index }) => (
-          <LedgerRow
-            style={styles.row}
-            title={item.title}
-            photoUrl={item.photoUrl}
-            // A tick would mean "done"; this is "you have it". The saved marker
-            // is the value column rather than a checkbox for that reason — and
-            // because a checkbox you cannot untick is a broken control.
-            value={
-              savedIds.includes(item.id)
-                ? t('explore.inYourBook')
-                : `${n(item.totalMinutes)} ${t('detail.minutes')}`
-            }
-            last={index === visible.length - 1}
+        renderItem={({ item }) => (
+          <View style={[styles.gridCell, columns === 1 && styles.singleCell]}>
+          <Tile
+            recipe={item}
+            saved={savedIds.includes(item.id)}
+            saving={savingIds.includes(item.id)}
+            onSave={() => saveRecipe(item.id)}
             onPress={() => router.push(`/library/${item.id}`)}
           />
+          </View>
         )}
         ListEmptyComponent={
           <NoResults
@@ -463,60 +378,31 @@ function Offline({ onOpenBook, onRetry }: { onOpenBook: () => void; onRetry: () 
   )
 }
 
-/**
- * The dishes built on kroeung, by id — the paste itself first, since it is the
- * thing you would make before any of the others.
- *
- * A list rather than a scan of the ingredients, and not because scanning is
- * hard: the browse payload carries no ingredients at all, by design. It is also
- * the more honest rule — the collection means "starts by making this", which is
- * a fact about the method, not about a string appearing in an array.
- */
-const KROEUNG_DISHES = [
-  'kroeung',
-  'fish-amok',
-  'grilled-stuffed-squid',
-  'chicken-emerald-soup',
-]
-
-/**
- * SCREENS.md § 11's 118pt tile. A photograph, a title over it, and a mono
- * caption beneath — the one place on this screen where a picture is the control
- * rather than a 46pt thumbnail beside a rule.
- */
-function Tile({
-  title,
-  photoUrl,
-  caption,
-  onPress,
-}: {
-  title: string
-  photoUrl: string
-  caption: string
-  onPress: () => void
+/** Photo and detail navigation are separate from the save action. */
+function Tile({ recipe, saved, saving, onSave, onPress }: {
+  recipe: LibrarySummary; saved: boolean; saving: boolean
+  onSave: () => void; onPress: () => void
 }) {
   const styles = useThemedStyles(makeStyles)
+  const { colors: c } = useTheme()
+  const t = useT()
+  const n = useNum()
   return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={title}
-      style={({ pressed }) => [styles.tile, pressed && styles.tilePressed]}
-    >
-      <Image source={{ uri: photoUrl }} style={styles.tilePhoto} resizeMode="cover" />
-      {/* A recipe name, so the face follows its script rather than the toggle —
-          the same rule every other user-written string on screen follows. */}
-      <Text style={[styles.tileTitle, contentType('bodyStrong', title)]} numberOfLines={2}>
-        {title}
-      </Text>
-      {/* `headline` is an ingredient name — content — so the caption goes
-          through `contentType` too. The Latin `metadataSmall` is IBM Plex Mono,
-          which has no Khmer glyphs at all: keyed to the language instead, every
-          tile caption in the library would render as tofu. */}
-      <Text style={[styles.tileCaption, contentType('metadataSmall', caption)]} numberOfLines={1}>
-        {caption}
-      </Text>
-    </Pressable>
+    <View style={styles.tile}>
+      <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={recipe.title}
+        style={({ pressed }) => [styles.tileDetail, pressed && styles.tilePressed]}>
+        <Image source={recipe.photoUrl} style={styles.tilePhoto} contentFit="cover" />
+        <Text style={[styles.tileTitle, contentType('recipeTitle', recipe.title)]}>{recipe.title}</Text>
+        <Text style={styles.tileCaption}>{`${n(recipe.totalMinutes)} ${t('detail.minutes')}`}</Text>
+      </Pressable>
+      <Pressable onPress={onSave} disabled={saved || saving} accessibilityRole="button"
+        accessibilityLabel={`${t(saved ? 'explore.inYourBook' : 'common.save')} · ${recipe.title}`}
+        accessibilityState={{ disabled: saved || saving, busy: saving }}
+        style={({ pressed }) => [styles.save, saved && styles.saved, pressed && styles.tilePressed]}>
+        {saving ? <ActivityIndicator size="small" color={c.text} /> :
+          <Text style={styles.saveLabel}>{t(saved ? 'explore.inYourBook' : 'common.save')}</Text>}
+      </Pressable>
+    </View>
   )
 }
 
@@ -598,15 +484,7 @@ function ExploreSkeleton() {
         <Skeleton pulse={pulse} style={styles.skeletonTile} />
         <Skeleton pulse={pulse} style={styles.skeletonTile} />
       </View>
-      {SKELETON_KEYS.map((key) => (
-        <View key={key} style={styles.skeletonRow}>
-          <Skeleton pulse={pulse} style={styles.skeletonThumb} />
-          <View style={styles.skeletonText}>
-            <Skeleton pulse={pulse} style={styles.skeletonTitle} />
-          </View>
-          <Skeleton pulse={pulse} style={styles.skeletonValue} />
-        </View>
-      ))}
+
     </View>
   )
 }
@@ -626,10 +504,17 @@ const makeStyles = (c: ThemeColors, type: TypeScale) =>
     tiles: { flexDirection: 'row', gap: spacing.md, paddingTop: spacing.md },
     // `flex: 1` on both, so the pair always divides the gutter exactly — a fixed
     // width would leave a ragged edge on every screen that isn't 390pt wide.
-    tile: { flex: 1, gap: spacing.xs },
+    tile: { flex: 1, minWidth: 0, marginHorizontal: 0, marginBottom: spacing.xl, gap: spacing.sm },
+    gridRow: { paddingHorizontal: spacing.gutter, gap: spacing.md },
+    gridCell: { flex: 1, minWidth: 0, maxWidth: '50%' },
+    singleCell: { marginHorizontal: spacing.gutter, maxWidth: '100%' },
+    tileDetail: { gap: spacing.sm, flex: 1 },
+    save: { minHeight: sizes.hitMin, paddingHorizontal: spacing.sm, paddingVertical: spacing.sm, borderWidth: 1, borderColor: c.borderStrong, borderRadius: radius.thumb, alignItems: 'center', justifyContent: 'center' },
+    saved: { backgroundColor: c.surfaceSunken, borderColor: c.surfaceSunken },
+    saveLabel: { ...type.recipeMetadata, color: c.text, textAlign: 'center' },
     tilePressed: { opacity: 0.7 },
     tilePhoto: {
-      height: TILE_HEIGHT,
+      aspectRatio: 4 / 3,
       borderRadius: radius.card,
       backgroundColor: c.surfaceSunken,
     },
@@ -674,7 +559,7 @@ const makeStyles = (c: ThemeColors, type: TypeScale) =>
     skeletonSearch: { height: 48, borderRadius: radius.card },
     skeletonChips: { flexDirection: 'row', gap: spacing.sm },
     skeletonChip: { width: 64, height: 34, borderRadius: radius.pill },
-    skeletonTile: { flex: 1, height: TILE_HEIGHT, borderRadius: radius.card },
+    skeletonTile: { flex: 1, aspectRatio: 4 / 3, borderRadius: radius.card },
     skeletonRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
     skeletonThumb: { width: 46, height: 46, borderRadius: radius.thumb },
     skeletonText: { flex: 1 },
