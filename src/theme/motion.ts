@@ -1,7 +1,7 @@
 /**
  * Motion, transcribed from the design system's `tokens/motion.css`.
  *
- * The app has no decorative animation. Everything that moves is either an
+ * Routine motion stays restrained. Apart from the mortar loading loop, motion is an
  * entrance stagger, a press response, or a control tracking a finger. Nothing
  * bounces for fun; the one spring in the system is the release of a press, and
  * it is short.
@@ -60,11 +60,12 @@ export const spring = {
  * Durations in milliseconds.
  *
  * Split into two groups because the reduced-motion contract treats them
- * differently — see `DECORATIVE` below. The split is `motion.css`'s, not one
- * invented here: its `prefers-reduced-motion` block collapses exactly the
- * seven listed there and leaves everything else alone.
+ * differently — see `DECORATIVE` below. The design system's seven decorative
+ * timings and the mortar loop collapse for Reduced Motion; feedback survives.
  */
 export const duration = {
+  /** Hold a dinner before lifting it; ordinary scrolling stays immediate. */
+  dinnerDragHold: 350,
   // Press. In fast, out springy.
   pressIn: 90,
   pressOut: 260,
@@ -91,6 +92,8 @@ export const duration = {
    * still working, so removing it removes information rather than decoration.
    */
   pulse: 700,
+  /** Wooden mortar grinding during an initial data load. Decorative; skip when reduced. */
+  mortarGrind: 2000,
 } as const
 
 export type DurationKey = keyof typeof duration
@@ -101,7 +104,7 @@ export type DurationKey = keyof typeof duration
 
 /**
  * The durations `prefers-reduced-motion` collapses, straight from the media
- * query at the bottom of `motion.css`.
+ * query at the bottom of `motion.css`, plus the mortar loading illustration.
  *
  * Note what is *not* here: press, state, sheet, reveal, image and pulse all
  * survive. Reduced motion is a request to stop things moving for effect, not a
@@ -116,6 +119,7 @@ const DECORATIVE = [
   'float',
   'sheen',
   'dotWave',
+  'mortarGrind',
 ] as const satisfies readonly DurationKey[]
 
 const REDUCED_DURATION = Object.fromEntries(
@@ -145,3 +149,6 @@ export function useMotion(): { duration: typeof duration; reduced: boolean } {
     [reduced],
   )
 }
+
+/** Finger-following dinner lift and edge-scroll measurements. */
+export const dinnerDrag = { liftScale: 1.025, edge: 64, scrollSpeed: 360 } as const

@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
+import { clearRecipeCache } from '@/lib/recipeCache'
 import { supabase } from '@/lib/supabase'
 
 interface AuthContextType {
@@ -55,7 +56,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false)
     })
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, newSession) => {
+      if (event === 'SIGNED_OUT') clearRecipeCache()
       setSession(newSession)
     })
 

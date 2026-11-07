@@ -138,6 +138,8 @@ const paper = {
   // not do this: white on that green was 2.1:1, which is why its buttons had to
   // carry ink instead. Chronicle's accent needs no such workaround.
   primary: '#b4522a',
+  /** Shaded end grain on the wooden mortar loading illustration. */
+  woodEnd: '#854126',
   /**
    * INVENTED — the design system specifies no pressed state, and the motion
    * section allows only four transitions in the product (none of them a button

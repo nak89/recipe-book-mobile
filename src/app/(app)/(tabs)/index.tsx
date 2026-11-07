@@ -3,7 +3,7 @@ import { useFocusEffect, useNavigation, useRouter } from 'expo-router'
 import { FlatList, RefreshControl, StyleSheet, View } from 'react-native'
 import { Text } from '@/components/ui/Text'
 import { useAuth } from '@/context/AuthContext'
-import { deleteRecipe, getPlan, getRecipes, setFavourite } from '@/lib/api'
+import { deleteRecipe, getCachedRecipes, getPlan, getRecipes, setFavourite } from '@/lib/api'
 import { useDebounce } from '@/hooks/useDebounce'
 import { favouriteFeedback, openMenuFeedback, refreshFeedback } from '@/lib/haptics'
 import { foldForCompare } from '@/lib/text'
@@ -23,10 +23,10 @@ import Masthead, { MastheadAction } from '@/components/ui/Masthead'
 import PrimaryButton from '@/components/ui/PrimaryButton'
 import ProfileButton from '@/components/ui/ProfileButton'
 import SectionHeader from '@/components/ui/SectionHeader'
-import Skeleton, { usePulse } from '@/components/ui/Skeleton'
+import MortarLoader from '@/components/ui/MortarLoader'
 import TextLink from '@/components/ui/TextLink'
 import type { SwipeTabsNavigationProp } from '@/navigation/SwipeTabs'
-import { radius, sized, sizes, spacing, useScreenTopPad, useTheme, useThemedStyles } from '@/theme'
+import { sized, spacing, useScreenTopPad, useTheme, useThemedStyles } from '@/theme'
 import type { ThemeColors, TypeScale } from '@/theme'
 import { MEALTIMES } from '@/types/recipe'
 import type { Mealtime, PlanSlot, Recipe } from '@/types/recipe'
@@ -42,9 +42,6 @@ type Filter = 'All' | Mealtime
  */
 const TODAY_PRIORITY: Mealtime[] = ['Dinner', 'Lunch', 'Breakfast', 'Snack']
 
-/** Six rows fills a phone below the masthead without running far past the fold. */
-const SKELETON_KEYS = ['s0', 's1', 's2', 's3', 's4', 's5']
-
 export default function RecipesIndexScreen() {
   const { colors: c } = useTheme()
   const styles = useThemedStyles(makeStyles)
@@ -57,9 +54,9 @@ export default function RecipesIndexScreen() {
   const navigation = useNavigation<SwipeTabsNavigationProp>()
   const listRef = useRef<FlatList<Recipe>>(null)
 
-  const [recipes, setRecipes] = useState<Recipe[]>([])
+  const [recipes, setRecipes] = useState<Recipe[]>(() => getCachedRecipes(token) ?? [])
   const [todaySlots, setTodaySlots] = useState<PlanSlot[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(() => getCachedRecipes(token) === undefined)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<StringKey | null>(null)
   const [query, setQuery] = useState('')
@@ -327,16 +324,7 @@ export default function RecipesIndexScreen() {
   // rather than passing underneath it.
   const topPad = useScreenTopPad()
 
-  if (loading) {
-    return (
-      <View style={styles.container}>
-        <View style={{ paddingTop: topPad }}>
-          {masthead}
-          <IndexSkeleton />
-        </View>
-      </View>
-    )
-  }
+  if (loading) return <MortarLoader />
 
   return (
     <View style={styles.container}>
@@ -478,33 +466,6 @@ function Empty({
   )
 }
 
-/**
- * Placeholder rows that copy the recipe variant's image and type measurements,
- * so content lands where
- * the placeholder was instead of the page jumping when data arrives.
- *
- * `usePulse()` is called once and the value shared, never per block: independent
- * animations drift out of phase within seconds, and a page of separately
- * blinking boxes reads as broken rather than as loading.
- */
-function IndexSkeleton() {
-  const styles = useThemedStyles(makeStyles)
-  const pulse = usePulse()
-  return (
-    <View style={styles.skeleton}>
-      {SKELETON_KEYS.map((key) => (
-        <View key={key} style={styles.skeletonRow}>
-          <Skeleton pulse={pulse} style={styles.skeletonThumb} />
-          <View style={styles.skeletonText}>
-            <Skeleton pulse={pulse} style={styles.skeletonTitle} />
-            <Skeleton pulse={pulse} style={styles.skeletonValue} />
-          </View>
-        </View>
-      ))}
-    </View>
-  )
-}
-
 const makeStyles = (c: ThemeColors, type: TypeScale) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: c.bg },
@@ -541,14 +502,4 @@ const makeStyles = (c: ThemeColors, type: TypeScale) =>
     emptyTitle: { ...type.emptyTitle, color: c.text, textAlign: 'center' },
     emptyBody: { ...type.bodyRead, color: c.textMuted, textAlign: 'center' },
     emptyButton: { alignSelf: 'stretch', marginTop: spacing.sm },
-
-    skeleton: { paddingHorizontal: spacing.gutter, paddingTop: spacing.xxl, gap: spacing.lg },
-    skeletonRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg, paddingVertical: spacing.lg },
-    // The real row's measurements, copied — that is the whole point of a
-    // skeleton. Content lands where the placeholder was instead of the page
-    // jumping the moment data arrives.
-    skeletonThumb: { width: sizes.recipeThumb, height: sizes.recipeThumb, borderRadius: radius.card },
-    skeletonText: { flex: 1, gap: spacing.xs },
-    skeletonTitle: { width: '85%', height: type.recipeTitle.lineHeight },
-    skeletonValue: { width: '35%', height: type.recipeMetadata.lineHeight },
   })

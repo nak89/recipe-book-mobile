@@ -1,12 +1,14 @@
+import Animated, { useAnimatedRef, useSharedValue } from 'react-native-reanimated'
 import { useCallback, useMemo, useState } from 'react'
 import { useFocusEffect, useRouter } from 'expo-router'
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { Pressable, StyleSheet, View } from 'react-native'
 import { Text } from '@/components/ui/Text'
 import { useAuth } from '@/context/AuthContext'
 import { useWeek } from '@/context/WeekContext'
 import { clearPlanSlot, getPlan, getRecipes, setPlanSlot } from '@/lib/api'
 import { addDays, toDateKey, weekDays } from '@/lib/week'
 import { openMenuFeedback, selectionFeedback } from '@/lib/haptics'
+import WeekGenerator from '@/components/planner/WeekGenerator'
 import DayStrip from '@/components/planner/DayStrip'
 import RecipePicker from '@/components/planner/RecipePicker'
 import ActionSheet from '@/components/ui/ActionSheet'
@@ -15,12 +17,12 @@ import LedgerRow from '@/components/ui/LedgerRow'
 import Masthead from '@/components/ui/Masthead'
 import ProfileButton from '@/components/ui/ProfileButton'
 import SectionHeader from '@/components/ui/SectionHeader'
-import Skeleton, { usePulse } from '@/components/ui/Skeleton'
+import BlankLoadingState from '@/components/ui/BlankLoadingState'
 import { useNum, useT } from '@/i18n'
 import { apiErrorKey } from '@/i18n/errors'
 import { useMealtimeLabel, useMonthLabel } from '@/i18n/labels'
 import type { StringKey } from '@/i18n/strings'
-import { radius, spacing, useScreenTopPad, useThemedStyles } from '@/theme'
+import { spacing, useScreenTopPad, useThemedStyles } from '@/theme'
 import type { ThemeColors, TypeScale } from '@/theme'
 import { MEALTIMES } from '@/types/recipe'
 import type { Mealtime, PlanSlot, Recipe } from '@/types/recipe'
@@ -47,7 +49,9 @@ export default function PlannerScreen() {
   const { token } = useAuth()
   const topPad = useScreenTopPad()
   const router = useRouter()
-  const pulse = usePulse()
+  const generatorScroll = useAnimatedRef<Animated.ScrollView>()
+  const generatorContentHeight = useSharedValue(0)
+  const [draggingDinner, setDraggingDinner] = useState(false)
 
   // The week is shared with the grocery list rather than held here: the two are
   // views of one thing, and the shopping happens *before* the week it is for, so
@@ -181,7 +185,10 @@ export default function PlannerScreen() {
 
   return (
     <View style={styles.container}>
-      <ScrollView
+      <Animated.ScrollView
+        ref={generatorScroll}
+        scrollEnabled={!draggingDinner}
+        onContentSizeChange={(_width, height) => generatorContentHeight.set(height)}
         contentContainerStyle={[
           styles.content,
           { paddingTop: topPad, paddingBottom: spacing.xxl },
@@ -213,6 +220,8 @@ export default function PlannerScreen() {
 
         <DayStrip days={days} selected={selected} plannedKeys={plannedKeys} onSelect={setSelected} />
 
+        {!loading && token && <WeekGenerator key={`${token}:${from}`} from={from} to={to} token={token} onApplied={setSlots} scrollRef={generatorScroll} contentHeight={generatorContentHeight} onDragChange={setDraggingDinner} />}
+
         {/* The design's day summary ("3 dishes planned" left, total time in
             tamarind mono right) is deliberately gone. On an empty day it said
             "Nothing planned yet." directly above the empty block saying the
@@ -223,14 +232,7 @@ export default function PlannerScreen() {
         {error && <Text style={styles.error}>{t(error)}</Text>}
 
         {loading ? (
-          <View style={styles.slots}>
-            {MEALTIMES.map((mealtime) => (
-              <View key={mealtime} style={styles.section}>
-                <Skeleton pulse={pulse} style={styles.headingSkeleton} />
-                <Skeleton pulse={pulse} style={styles.slotSkeleton} />
-              </View>
-            ))}
-          </View>
+          <BlankLoadingState />
         ) : recipes.length === 0 ? (
           /* No recipes at all is a different state from an unplanned week, and
              it needs a different answer: planning is impossible until something
@@ -283,7 +285,7 @@ export default function PlannerScreen() {
                 data model does on its own implies the list can be stale. */}
           </View>
         )}
-      </ScrollView>
+      </Animated.ScrollView>
 
       <RecipePicker
         visible={pickerFor !== null}
@@ -422,8 +424,6 @@ const makeStyles = (c: ThemeColors, type: TypeScale) =>
 
     slots: { gap: spacing.sectionSpacing },
     section: { paddingHorizontal: spacing.gutter },
-    headingSkeleton: { height: 12, width: 96, borderRadius: 4, marginBottom: spacing.sectionGap },
-    slotSkeleton: { height: 70, borderRadius: radius.thumb },
 
     error: { ...type.body, color: c.danger, paddingHorizontal: spacing.gutter },
 

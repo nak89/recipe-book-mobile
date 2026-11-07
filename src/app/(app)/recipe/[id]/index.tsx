@@ -6,9 +6,9 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import { Text } from '@/components/ui/Text'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useAuth } from '@/context/AuthContext'
-import { deleteRecipe, getRecipe, setFavourite } from '@/lib/api'
+import { deleteRecipe, getCachedRecipe, getRecipe, setFavourite } from '@/lib/api'
 import { favouriteFeedback } from '@/lib/haptics'
-import RecipeDetailSkeleton from '@/components/RecipeDetailSkeleton'
+import BlankLoadingState from '@/components/ui/BlankLoadingState'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import LedgerRow from '@/components/ui/LedgerRow'
 import PrimaryButton from '@/components/ui/PrimaryButton'
@@ -49,8 +49,8 @@ export default function RecipeDetailScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
 
-  const [recipe, setRecipe] = useState<Recipe | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [recipe, setRecipe] = useState<Recipe | null>(() => getCachedRecipe(id, token) ?? null)
+  const [loading, setLoading] = useState(() => getCachedRecipe(id, token) === undefined)
   // The *key*, not the translated sentence — so an error already on screen
   // re-renders in the new language when the toggle moves, and `t` never becomes
   // a dependency of the fetch effect.
@@ -111,7 +111,7 @@ export default function RecipeDetailScreen() {
     }
   }
 
-  if (loading) return <RecipeDetailSkeleton />
+  if (loading) return <BlankLoadingState />
   if (!recipe) {
     return (
       <View style={styles.centered}>

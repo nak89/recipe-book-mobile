@@ -1,5 +1,5 @@
 import { Redirect, Stack } from 'expo-router'
-import { ActivityIndicator, View } from 'react-native'
+import BlankLoadingState from '@/components/ui/BlankLoadingState'
 import { useAuth } from '@/context/AuthContext'
 import { useTheme } from '@/theme'
 
@@ -22,11 +22,7 @@ export default function OnboardingLayout() {
   const { session, loading, onboarded } = useAuth()
 
   if (loading) {
-    return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: c.bg }}>
-        <ActivityIndicator color={c.primary} />
-      </View>
-    )
+    return <BlankLoadingState />
   }
 
   if (!session) {

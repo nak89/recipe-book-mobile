@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { ActivityIndicator, Dimensions, Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { Dimensions, Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import BlankLoadingState from '@/components/ui/BlankLoadingState'
 import { Text } from '@/components/ui/Text'
 import type { LayoutChangeEvent, NativeScrollEvent, NativeSyntheticEvent } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -13,14 +14,14 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated'
 import { useAuth } from '@/context/AuthContext'
-import { getRecipe } from '@/lib/api'
+import { getCachedRecipe, getRecipe } from '@/lib/api'
 import { selectionFeedback, favouriteFeedback } from '@/lib/haptics'
 import { formatDuration, timerProgress } from '@/lib/timer'
 import TextLink from '@/components/ui/TextLink'
 import { useNum, useT } from '@/i18n'
 import type { StringKey } from '@/i18n'
 import { apiErrorKey } from '@/i18n/errors'
-import { contentType, fonts, radius, sized, spacing, useScreenTopPad, useTheme, useThemedStyles } from '@/theme'
+import { contentType, fonts, radius, sized, spacing, useScreenTopPad, useThemedStyles } from '@/theme'
 import type { ThemeColors, TypeScale } from '@/theme'
 import type { Recipe, Step } from '@/types/recipe'
 
@@ -60,7 +61,6 @@ import type { Recipe, Step } from '@/types/recipe'
  * SCREENS.md § 8, so the root layout's derivation is simply correct here too.
  */
 export default function CookModeScreen() {
-  const { colors: c } = useTheme()
   const styles = useThemedStyles(makeStyles)
   const t = useT()
   const n = useNum()
@@ -70,8 +70,8 @@ export default function CookModeScreen() {
   const insets = useSafeAreaInsets()
   const topPad = useScreenTopPad()
 
-  const [recipe, setRecipe] = useState<Recipe | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [recipe, setRecipe] = useState<Recipe | null>(() => getCachedRecipe(id, token) ?? null)
+  const [loading, setLoading] = useState(() => getCachedRecipe(id, token) === undefined)
   const [error, setError] = useState<StringKey | null>(null)
   const [index, setIndex] = useState(0)
 
@@ -193,13 +193,7 @@ export default function CookModeScreen() {
     if (width > 0 && width !== pageWidth) setPageWidth(width)
   }
 
-  if (loading) {
-    return (
-      <View style={[styles.container, styles.centred]}>
-        <ActivityIndicator color={c.primary} />
-      </View>
-    )
-  }
+  if (loading) return <BlankLoadingState />
 
   if (!recipe || steps.length === 0) {
     return (

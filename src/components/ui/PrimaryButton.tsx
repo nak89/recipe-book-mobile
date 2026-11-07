@@ -58,6 +58,8 @@ export default function PrimaryButton({
       onPress={onPress}
       disabled={inactive}
       accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: inactive, busy: loading }}
       style={({ pressed }) => [
         styles.base,
         variant === 'solid' && styles.solid,

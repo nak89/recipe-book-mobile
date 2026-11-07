@@ -16,7 +16,7 @@ export type { ThemeColors } from './palettes'
 export { ThemeProvider, useTheme } from './ThemeContext'
 export { contentType, fonts, inputType, moulType, sized, type, typeKm } from './typography'
 export type { TextToken, TypeScale } from './typography'
-export { curve, duration, ease, spring, useMotion } from './motion'
+export { curve, dinnerDrag, duration, ease, spring, useMotion } from './motion'
 export type { DurationKey } from './motion'
 
 /**

@@ -4,7 +4,7 @@ import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Vie
 import { Image } from 'expo-image'
 import { Text } from '@/components/ui/Text'
 import { useAuth } from '@/context/AuthContext'
-import { copyLibraryRecipe, getLibrary, LIBRARY_SUBJECTS } from '@/lib/api'
+import { copyLibraryRecipe, getCachedLibrary, getLibrary, LIBRARY_SUBJECTS } from '@/lib/api'
 import type { LibrarySubject, LibrarySummary } from '@/lib/api'
 import { useDebounce } from '@/hooks/useDebounce'
 import { refreshFeedback } from '@/lib/haptics'
@@ -20,7 +20,7 @@ import PrimaryButton from '@/components/ui/PrimaryButton'
 import ProfileButton from '@/components/ui/ProfileButton'
 import SearchBar from '@/components/ui/SearchBar'
 import SectionHeader from '@/components/ui/SectionHeader'
-import Skeleton, { usePulse } from '@/components/ui/Skeleton'
+import MortarLoader from '@/components/ui/MortarLoader'
 import TextLink from '@/components/ui/TextLink'
 import type { SwipeTabsNavigationProp } from '@/navigation/SwipeTabs'
 import { contentType, radius, sized, sizes, spacing, useScreenTopPad, useTheme, useThemedStyles } from '@/theme'
@@ -61,9 +61,9 @@ export default function ExploreScreen() {
   const navigation = useNavigation<SwipeTabsNavigationProp>()
   const listRef = useRef<FlatList<LibrarySummary>>(null)
 
-  const [recipes, setRecipes] = useState<LibrarySummary[]>([])
-  const [savedIds, setSavedIds] = useState<string[]>([])
-  const [loading, setLoading] = useState(true)
+  const [recipes, setRecipes] = useState<LibrarySummary[]>(() => getCachedLibrary(token)?.recipes ?? [])
+  const [savedIds, setSavedIds] = useState<string[]>(() => getCachedLibrary(token)?.savedIds ?? [])
+  const [loading, setLoading] = useState(() => getCachedLibrary(token) === undefined)
   // Separate from `loading`, for the reason the dashboard's is: reusing it would
   // replace the list you are looking at with skeletons on every pull. `loading`
   // is only ever true for the first fetch.
@@ -97,8 +97,7 @@ export default function ExploreScreen() {
   /**
    * The library is static content, so this could fetch once and never again —
    * but `savedIds` is not static, and it changes on the *other* screens. Copy a
-   * recipe, then come back: without a refocus refetch the CTA still offers to
-   * copy something already in the book.
+   * recipe, then come back: a refocus refetch removes it from Explore.
    *
    * Same compare-before-commit bail-out every focus refetch in this app uses:
    * a screen regains focus while its transition is still running, and an
@@ -150,6 +149,11 @@ export default function ExploreScreen() {
     [navigation]
   )
 
+  const available = useMemo(() => {
+    const saved = new Set(savedIds)
+    return recipes.filter(recipe => !saved.has(recipe.id))
+  }, [recipes, savedIds])
+
   const visible = useMemo(() => {
     // Folded on both sides, as everywhere: Khmer keyboards emit zero-width
     // spaces that survive trim/lowercase/NFC, so folding only the query finds
@@ -161,7 +165,7 @@ export default function ExploreScreen() {
     // Latin finds nothing. If it ever needs solving, the fix is a romanised
     // search key on each row, not a second English copy of the recipe.
     const q = foldForCompare(debouncedQuery)
-    return recipes.filter((r) => {
+    return available.filter((r) => {
       if (filter !== 'All' && r.subject !== filter) return false
       if (!q) return true
       return (
@@ -170,7 +174,7 @@ export default function ExploreScreen() {
         foldForCompare(r.cuisine).includes(q)
       )
     })
-  }, [recipes, debouncedQuery, filter])
+  }, [available, debouncedQuery, filter])
 
   const searching = debouncedQuery.trim().length > 0
   /**
@@ -253,16 +257,7 @@ export default function ExploreScreen() {
 
   const topPad = useScreenTopPad()
 
-  if (loading) {
-    return (
-      <View style={styles.container}>
-        <View style={{ paddingTop: topPad }}>
-          {masthead}
-          <ExploreSkeleton />
-        </View>
-      </View>
-    )
-  }
+  if (loading) return <MortarLoader />
 
   // SCREENS.md § 195. Only when the failure left us with *nothing* — a stale
   // list is more use than an apology, so a refetch that fails over content
@@ -322,7 +317,9 @@ export default function ExploreScreen() {
         )}
         ListEmptyComponent={
           <NoResults
-            suggestions={recipes.slice(0, 2)}
+            allSaved={recipes.length > 0 && available.length === 0}
+            onOpenBook={() => navigation.navigate('index')}
+            suggestions={available.slice(0, 2)}
             onWrite={() => router.push('/recipe/new')}
             onPick={(id) => router.push(`/library/${id}`)}
             onClear={() => {
@@ -416,11 +413,15 @@ function Tile({ recipe, saved, saving, onSave, onPress }: {
  * showing two of them is more use than guessing at the typo.
  */
 function NoResults({
+  allSaved,
+  onOpenBook,
   suggestions,
   onWrite,
   onPick,
   onClear,
 }: {
+  allSaved: boolean
+  onOpenBook: () => void
   suggestions: LibrarySummary[]
   onWrite: () => void
   onPick: (id: string) => void
@@ -428,6 +429,21 @@ function NoResults({
 }) {
   const styles = useThemedStyles(makeStyles)
   const t = useT()
+
+  if (allSaved) {
+    return (
+      <View style={styles.empty}>
+        <Text style={styles.emptyTitle}>{t('explore.allSavedTitle')}</Text>
+        <Text style={styles.emptyBody}>{t('explore.allSavedBody')}</Text>
+        <PrimaryButton
+          label={t('explore.openMyBook')}
+          variant="outline"
+          onPress={onOpenBook}
+          style={styles.emptyButton}
+        />
+      </View>
+    )
+  }
 
   return (
     <View style={styles.empty}>
@@ -459,32 +475,6 @@ function NoResults({
           ))}
         </View>
       )}
-    </View>
-  )
-}
-
-/**
- * Copies the real screen's measurements — the chip row's height, the 118pt
- * tiles, the 46pt row thumbnails — so nothing jumps when the fetch lands.
- * `usePulse()` once, shared: independent animations drift out of phase within
- * seconds and read as broken rather than as loading.
- */
-function ExploreSkeleton() {
-  const styles = useThemedStyles(makeStyles)
-  const pulse = usePulse()
-  return (
-    <View style={styles.skeleton}>
-      <Skeleton pulse={pulse} style={styles.skeletonSearch} />
-      <View style={styles.skeletonChips}>
-        {['c0', 'c1', 'c2'].map((key) => (
-          <Skeleton key={key} pulse={pulse} style={styles.skeletonChip} />
-        ))}
-      </View>
-      <View style={styles.tiles}>
-        <Skeleton pulse={pulse} style={styles.skeletonTile} />
-        <Skeleton pulse={pulse} style={styles.skeletonTile} />
-      </View>
-
     </View>
   )
 }
@@ -554,15 +544,4 @@ const makeStyles = (c: ThemeColors, type: TypeScale) =>
     emptyBody: { ...type.bodyRead, color: c.textMuted, textAlign: 'center' },
     emptyButton: { alignSelf: 'stretch', marginTop: spacing.sm },
     suggestions: { alignSelf: 'stretch', marginTop: spacing.xl },
-
-    skeleton: { paddingHorizontal: spacing.gutter, paddingTop: spacing.xl, gap: spacing.lg },
-    skeletonSearch: { height: 48, borderRadius: radius.card },
-    skeletonChips: { flexDirection: 'row', gap: spacing.sm },
-    skeletonChip: { width: 64, height: 34, borderRadius: radius.pill },
-    skeletonTile: { flex: 1, aspectRatio: 4 / 3, borderRadius: radius.card },
-    skeletonRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-    skeletonThumb: { width: 46, height: 46, borderRadius: radius.thumb },
-    skeletonText: { flex: 1 },
-    skeletonTitle: { width: '70%', height: 15 },
-    skeletonValue: { width: 44, height: 11 },
   })

@@ -105,7 +105,7 @@ export default function TodaysDish({
 
 const makeStyles = (c: ThemeColors, type: TypeScale) =>
   StyleSheet.create({
-    wrap: { marginBottom: spacing.sectionSpacing },
+    wrap: { marginBottom: spacing.xl },
     pressed: { opacity: 0.9 },
     photo: { height: IMAGE_HEIGHT, width: '100%', backgroundColor: c.oat },
     card: {
@@ -113,8 +113,12 @@ const makeStyles = (c: ThemeColors, type: TypeScale) =>
       // the spacing between them, and setting both opens a cream gap.
       marginTop: -CARD_LIFT,
       marginHorizontal: spacing.gutter,
-      backgroundColor: c.bg,
+      // A complete oat panel keeps the lower corners visible on the paper.
+      backgroundColor: c.oat,
+      borderWidth: 1,
+      borderColor: c.borderStrong,
       borderRadius: radius.card,
+      borderCurve: 'continuous',
       padding: spacing.xl,
       gap: spacing.xs,
     },

@@ -36,7 +36,7 @@ import LedgerRow from '@/components/ui/LedgerRow'
 import Masthead, { MastheadAction, mastheadGlyphScale } from '@/components/ui/Masthead'
 import ProfileButton from '@/components/ui/ProfileButton'
 import SectionHeader from '@/components/ui/SectionHeader'
-import Skeleton, { usePulse } from '@/components/ui/Skeleton'
+import BlankLoadingState from '@/components/ui/BlankLoadingState'
 import { ShareIcon } from '@/components/ui/icons'
 import { parseNumeric, useLanguage, useNum, useT } from '@/i18n'
 import { apiErrorKey } from '@/i18n/errors'
@@ -155,7 +155,6 @@ export default function GroceryScreen() {
   const { token } = useAuth()
   const { weekStart, weekStartKey, weekEndKey } = useWeek()
   const topPad = useScreenTopPad()
-  const pulse = usePulse()
 
   const [list, setList] = useState<GroceryList | null>(null)
   const [loading, setLoading] = useState(true)
@@ -736,15 +735,7 @@ export default function GroceryScreen() {
         )}
 
         {loading ? (
-          <View style={styles.groups}>
-            {[0, 1, 2].map((i) => (
-              <View key={i} style={styles.group}>
-                <Skeleton pulse={pulse} style={styles.headingSkeleton} />
-                <Skeleton pulse={pulse} style={styles.rowSkeleton} />
-                <Skeleton pulse={pulse} style={styles.rowSkeleton} />
-              </View>
-            ))}
-          </View>
+          <BlankLoadingState />
         ) : empty || nothingMissing || nothingForDish || nothingToday ? (
           <View style={styles.empty}>
             {/* SCREENS.md § 21's ghost: two stacked short rules, 78 and 52.
@@ -1106,11 +1097,7 @@ const makeStyles = (c: ThemeColors, type: TypeScale) => StyleSheet.create({
     justifyContent: 'center',
   },
 
-  // The skeleton's shape, and now only the skeleton's: while the list is
-  // loading there is nothing to reorder, so those three placeholder sections
-  // stay ordinary nested Views.
-  groups: { gap: spacing.sectionSpacing },
-  group: { paddingHorizontal: spacing.gutter },
+
 
   /**
    * The real list is **one flat parent** — every header and every row a direct
@@ -1154,10 +1141,8 @@ const makeStyles = (c: ThemeColors, type: TypeScale) => StyleSheet.create({
 
   pressed: { opacity: 0.7 },
 
-  headingSkeleton: { height: 12, width: 96, borderRadius: 4, marginBottom: spacing.sectionGap },
   // Copies the ingredient row's own metrics — `rowYTight` above and below a
   // 20pt line box — so the real rows land where the placeholders were.
-  rowSkeleton: { height: 20, borderRadius: 4, marginVertical: spacing.rowYTight },
 
   empty: {
     alignItems: 'center',

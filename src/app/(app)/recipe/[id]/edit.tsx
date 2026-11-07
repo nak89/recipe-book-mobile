@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { ActivityIndicator, StyleSheet, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
+import BlankLoadingState from '@/components/ui/BlankLoadingState'
 import { Text } from '@/components/ui/Text'
 import { useAuth } from '@/context/AuthContext'
-import { getRecipe, updateRecipe } from '@/lib/api'
+import { getCachedRecipe, getRecipe, updateRecipe } from '@/lib/api'
 import RecipeForm from '@/components/RecipeForm'
-import { spacing, useTheme, useThemedStyles } from '@/theme'
+import { spacing, useThemedStyles } from '@/theme'
 import type { ThemeColors, TypeScale } from '@/theme'
 import { useT } from '@/i18n'
 import type { StringKey } from '@/i18n'
@@ -13,14 +14,13 @@ import { apiErrorKey } from '@/i18n/errors'
 import type { Recipe, RecipeInput } from '@/types/recipe'
 
 export default function EditRecipeScreen() {
-  const { colors: c } = useTheme()
   const styles = useThemedStyles(makeStyles)
   const t = useT()
   const { id } = useLocalSearchParams<{ id: string }>()
   const { token } = useAuth()
   const router = useRouter()
-  const [recipe, setRecipe] = useState<Recipe | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [recipe, setRecipe] = useState<Recipe | null>(() => getCachedRecipe(id, token) ?? null)
+  const [loading, setLoading] = useState(() => getCachedRecipe(id, token) === undefined)
   // The *key*, not the translated sentence — so an error already on screen
   // re-renders in the new language when the toggle moves, and `t` never
   // becomes a dependency of the fetch effect.
@@ -52,13 +52,7 @@ export default function EditRecipeScreen() {
     router.back()
   }
 
-  if (loading) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator color={c.primary} />
-      </View>
-    )
-  }
+  if (loading) return <BlankLoadingState />
   if (error || !recipe) {
     return (
       <View style={styles.centered}>

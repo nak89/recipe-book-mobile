@@ -35,6 +35,27 @@
  */
 
 export const en = {
+"generate.dragHint": "Hold a recipe, then drag it to another day to move or swap. You can also tap Move.",
+"generate.move": "Move",
+"generate.moveTo": "Move to day",
+"generate.moved": "Moved",
+
+  "generate.open": "Generate week",
+  "generate.title": "Dinner preview",
+  "generate.description": "Fill empty dinners from your recipes. Existing dinners stay in place unless you move them. Nothing is saved until you apply.",
+  "generate.untagged": "Include untagged recipes",
+  "generate.repeats": "Allow repeats",
+  "generate.full": "Every dinner is already planned. Nothing to fill.",
+  "generate.shortage": "{n} dinners still need recipes. Include untagged recipes, allow repeats, or add more dinner recipes.",
+  "generate.noChoice": "No suitable recipe",
+  "generate.kept": "Kept",
+  "generate.swap": "Swap",
+  "generate.apply": "Apply to week",
+  "generate.shuffle": "Reshuffle suggestions",
+  "generate.refresh": "Refresh preview",
+  "generate.changed": "This week changed on another device. Refresh the preview to keep its latest plans.",
+  "generate.applied": "Dinners saved. Your grocery list will reflect this plan.",
+
   // ---------------------------------------------------------------- common
   'common.save': 'Save',
   'common.cancel': 'Cancel',
@@ -575,6 +596,8 @@ export const en = {
   'explore.collectionKroeung': 'Begins with kroeung',
   'explore.collectionQuick': 'Done inside an hour',
   'explore.noResultsTitle': 'Nothing under that name yet.',
+  'explore.allSavedTitle': 'Every dish is in your book.',
+  'explore.allSavedBody': 'You’ve saved all the recipes currently in Explore.',
   'explore.noResultsBody': 'Not in your book, and not in the shared collections.',
   'explore.writeYourself': 'WRITE IT YOURSELF',
   'explore.didYouMean': 'DID YOU MEAN',
@@ -618,6 +641,27 @@ export type StringKey = keyof typeof en
 export type Strings = Record<StringKey, string>
 
 export const km: Strings = {
+"generate.dragHint": "ចុចជាប់លើម្ហូប រួចអូសទៅថ្ងៃផ្សេង ដើម្បីផ្លាស់ទីឬប្តូរម្ហូប។ អ្នកក៏អាចចុច ផ្លាស់ទី បានដែរ។",
+"generate.move": "ផ្លាស់ទី",
+"generate.moveTo": "ផ្លាស់ទីទៅថ្ងៃ",
+"generate.moved": "បានផ្លាស់ទី",
+
+  "generate.open": "បង្កើតផែនការមួយសប្ដាហ៍",
+  "generate.title": "ពិនិត្យផែនការអាហារពេលល្ងាច",
+  "generate.description": "ជ្រើសរើសរូបមន្តសម្រាប់ពេលល្ងាចដែលនៅទំនេរ។ ផែនការដែលមានស្រាប់នឹងរក្សាទុកដដែល លើកលែងតែអ្នកផ្លាស់ទីវា។ មិនទាន់រក្សាទុកទេ រហូតដល់អ្នកយល់ព្រម។",
+  "generate.untagged": "រួមបញ្ចូលរូបមន្តមិនទាន់កំណត់ពេលអាហារ",
+  "generate.repeats": "អនុញ្ញាតឱ្យម្ហូបដដែលម្តងទៀត",
+  "generate.full": "ពេលល្ងាចទាំងអស់មានផែនការរួចហើយ។",
+  "generate.shortage": "នៅខ្វះរូបមន្តសម្រាប់អាហារពេលល្ងាច {n} ពេល។ រួមបញ្ចូលរូបមន្តមិនទាន់កំណត់ពេលអាហារ អនុញ្ញាតម្ហូបដដែល ឬបន្ថែមរូបមន្តអាហារពេលល្ងាច។",
+  "generate.noChoice": "មិនមានរូបមន្តសមស្រប",
+  "generate.kept": "រក្សាដដែល",
+  "generate.swap": "ប្តូរ",
+  "generate.apply": "រក្សាទុកផែនការសប្ដាហ៍",
+  "generate.shuffle": "ជ្រើសរើសម្ហូបស្នើឡើងវិញ",
+  "generate.refresh": "ផ្ទុកផែនការពិនិត្យឡើងវិញ",
+  "generate.changed": "ផែនការសប្ដាហ៍បានផ្លាស់ប្តូរនៅឧបករណ៍ផ្សេង។ ផ្ទុកផែនការឡើងវិញ ដើម្បីរក្សាការផ្លាស់ប្តូរចុងក្រោយ។",
+  "generate.applied": "រក្សាទុកអាហារពេលល្ងាចរួចហើយ។ បញ្ជីទិញគ្រឿងនឹងឆ្លុះបញ្ចាំងផែនការនេះ។",
+
   // ---------------------------------------------------------------- common
   'common.save': 'រក្សាទុក',
   'common.cancel': 'បោះបង់',
@@ -1072,6 +1116,8 @@ export const km: Strings = {
   'explore.collectionKroeung': 'ចាប់ផ្ដើមដោយគ្រឿង', // ⚠
   'explore.collectionQuick': 'រួចរាល់ក្នុងមួយម៉ោង', // ⚠
   'explore.noResultsTitle': 'មិនទាន់មានឈ្មោះនេះទេ។', // ✓
+  'explore.allSavedTitle': 'ម្ហូបទាំងអស់មានក្នុងសៀវភៅរបស់អ្នកហើយ។',
+  'explore.allSavedBody': 'អ្នកបានរក្សាទុករូបមន្តទាំងអស់ដែលមានក្នុងទំព័ររុករកហើយ។',
   'explore.noResultsBody': 'គ្មានក្នុងសៀវភៅរបស់អ្នក ហើយក៏គ្មានក្នុងចង្កោមរួមដែរ។', // ⚠
   'explore.writeYourself': 'សរសេរដោយខ្លួនឯង', // ✓
   'explore.didYouMean': 'ប្រហែលជា', // ✓

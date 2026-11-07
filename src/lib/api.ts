@@ -6,6 +6,9 @@ import type { Difficulty, Mealtime, PlanSlot, Recipe, RecipeInput } from '@/type
 import type { LinePart } from '@/lib/grocery'
 import { createPhotoResolver, type SignedPhoto } from '@/lib/photoAccess'
 
+import { clearRecipeCache, getCachedRecipe, libraryResource, recipesResource } from '@/lib/recipeCache'
+export { getCachedRecipes, getCachedRecipe, getCachedLibrary } from '@/lib/recipeCache'
+
 const API_URL = process.env.EXPO_PUBLIC_API_URL
 
 export interface FieldIssue {
@@ -47,12 +50,18 @@ async function request<T>(path: string, token: string, options: RequestInit = {}
     const body = await res.json().catch(() => null)
     throw new ApiError(body?.error ?? 'Request failed', res.status, body?.details ?? [])
   }
+  // Recipe writes and library copies change the snapshots shown on return.
+  // Invalidate only after success, preserving useful data after a failed save.
+  if (options.method && options.method !== 'GET' && (
+    path === '/recipes' || path.startsWith('/recipes/') ||
+    path === '/library/import' || /^\/library\/[^/]+\/copy$/.test(path)
+  )) clearRecipeCache()
   if (res.status === 204) return undefined as T
   return res.json()
 }
 
 export function getRecipes(token: string) {
-  return request<Recipe[]>('/recipes', token)
+  return recipesResource.load(token, () => request<Recipe[]>('/recipes', token))
 }
 
 export const resolvePhoto = createPhotoResolver(async (urls, token) => {
@@ -63,7 +72,8 @@ export const resolvePhoto = createPhotoResolver(async (urls, token) => {
 })
 
 export function getRecipe(id: string, token: string) {
-  return request<Recipe>(`/recipes/${id}`, token)
+  const cached = getCachedRecipe(id, token)
+  return cached ? Promise.resolve(cached) : request<Recipe>(`/recipes/${id}`, token)
 }
 
 export function createRecipe(data: RecipeInput, token: string) {
@@ -330,7 +340,7 @@ export interface LibraryRecipe extends LibrarySummary {
 }
 
 export function getLibrary(token: string) {
-  return request<{ recipes: LibrarySummary[]; savedIds: string[] }>('/library', token)
+  return libraryResource.load(token, () => request<{ recipes: LibrarySummary[]; savedIds: string[] }>('/library', token))
 }
 
 export function getLibraryRecipe(id: string, token: string) {
@@ -421,4 +431,11 @@ export async function uploadPhoto(uri: string, token: string): Promise<string> {
   }
   const data = await res.json()
   return data.url
+}
+
+/** Apply proposed dinners against their original slots; conflicting edits roll back atomically. */
+export function applyDinnerWeek(weekStart: string, entries: { date: string; recipeId: string; expectedRecipeId?: string | null }[], token: string) {
+  return request<PlanSlot[]>('/meal-plan/week/dinners', token, {
+    method: 'PUT', body: JSON.stringify({ weekStart, entries }),
+  })
 }

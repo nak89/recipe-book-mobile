@@ -1,5 +1,5 @@
 import { Redirect, Stack } from 'expo-router'
-import { ActivityIndicator, View } from 'react-native'
+import BlankLoadingState from '@/components/ui/BlankLoadingState'
 import { useAuth } from '@/context/AuthContext'
 import { useT } from '@/i18n'
 import { useTheme, useTypeScale } from '@/theme'
@@ -18,11 +18,7 @@ export default function AppLayout() {
   // Without this guard you get a redirect flash to /login on cold start,
   // before the persisted session has been read back out of AsyncStorage.
   if (loading) {
-    return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: c.bg }}>
-        <ActivityIndicator color={c.primary} />
-      </View>
-    )
+    return <BlankLoadingState />
   }
 
   if (!session) {
