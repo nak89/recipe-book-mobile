@@ -41,8 +41,8 @@ export default function LanguageScreen() {
       <View style={styles.masthead}>
         {/* Moul at 40. The Khmer wordmark leads because this is the screen where
             a Khmer reader has to find themselves first. */}
-        <Text style={styles.wordmarkKm}>ចង្ក្រាន</Text>
-        <Text style={styles.wordmarkEn}>HEARTH</Text>
+        <Text style={styles.wordmarkKm}>គ្រឿងផ្សំ</Text>
+        <Text style={styles.wordmarkEn}>KROUENG PSOM</Text>
         <View style={styles.rule} />
         <Text style={styles.promiseEn}>
           A cookbook for the dishes your family already knows.
@@ -104,7 +104,7 @@ const makeStyles = (c: ThemeColors, type: TypeScale) =>
     screen: { flex: 1, backgroundColor: c.bg, paddingHorizontal: 34 },
     masthead: { alignItems: 'center', gap: spacing.sm },
     // Both wordmarks are written against a fixed family rather than the active
-    // scale: `useThemedStyles` would otherwise set `HEARTH` in Kantumruy for a
+    // scale: `useThemedStyles` would otherwise set `KROUENG PSOM` in Kantumruy for a
     // Khmer reader, which is a Latin word in a Khmer face.
     // 56 was 17pt short — the worst of the four, on the first screen a Khmer
     // reader ever sees.

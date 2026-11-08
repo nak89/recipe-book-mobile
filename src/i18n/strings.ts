@@ -474,7 +474,7 @@ export const en = {
   // spread through comments.
 
   // ------------------------------------------------------ masthead & wordmark
-  'brand.wordmark': 'Hearth',
+  'brand.wordmark': 'Kroueng Psom',
 
   // ------------------------------------------------------------ recipes index
   'index.todaysDish': 'TODAY’S DISH',
@@ -1029,7 +1029,7 @@ export const km: Strings = {
   // ⚠ = written here because the handoff gave English only. Owed a reader; the
   //     full list is `KHMER_NEEDS_REVIEW` in `tests/strings.test.ts`.
 
-  'brand.wordmark': 'ចង្ក្រាន', // ✓
+  'brand.wordmark': 'គ្រឿងផ្សំ', // ✓
 
   'index.todaysDish': 'ម្ហូបថ្ងៃនេះ', // ✓
   'index.index': 'បញ្ជី', // ✓
@@ -1088,7 +1088,7 @@ export const km: Strings = {
   'empty.noMatchBody': 'គ្មានក្នុងសៀវភៅរបស់អ្នក ហើយក៏គ្មានក្នុងបណ្ដុំរួមដែរ។', // ⚠
   'empty.writeItYourself': 'សរសេរដោយខ្លួនឯង', // ✓
 
-  'about.title': 'ចង្ក្រានធ្វើអ្វីខ្លះ', // ✓
+  'about.title': 'គ្រឿងផ្សំធ្វើអ្វីខ្លះ', // ✓
   'about.skip': 'រំលង', // ✓
   'about.carryOn': 'បន្ត', // ✓
   'about.oneTitle': 'រក្សារូបមន្តទុក', // ✓

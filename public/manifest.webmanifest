@@ -1,6 +1,6 @@
 {
-  "name": "Recipe Book",
-  "short_name": "Recipes",
+  "name": "Kroueng Psom",
+  "short_name": "Kroueng Psom",
   "description": "Save recipes, plan meals, and build a grocery list from one place.",
   "start_url": "/",
   "scope": "/",
