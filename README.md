@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/images/banner.svg" alt="Kroueng Psom — a little book for everyday cooking" width="100%" />
+  <img src="docs/images/kroueng-psom-banner.svg" alt="Kroueng Psom — a little book for everyday cooking" width="100%" />
 </p>
 
 <p align="center">
@@ -34,7 +34,7 @@
 <table>
   <tr>
     <td align="center" width="33%"><img src="docs/images/explore.png" alt="Explore Cambodian recipes in Kroueng Psom" width="240" /><br /><strong>Discover</strong><br /><sub>Cambodian dishes to make your own.</sub></td>
-    <td align="center" width="33%"><img src="docs/images/recipes.png" alt="Personal recipe collection with search and favourites" width="240" /><br /><strong>Keep</strong><br /><sub>Your everyday cooking, in one place.</sub></td>
+    <td align="center" width="33%"><img src="docs/images/recipes-kroueng-psom.png" alt="Personal recipe collection with search and favourites" width="240" /><br /><strong>Keep</strong><br /><sub>Your everyday cooking, in one place.</sub></td>
     <td align="center" width="33%"><img src="docs/images/recipe-detail.png" alt="Recipe detail with a food photo and ingredients" width="240" /><br /><strong>Cook</strong><br /><sub>Ingredients and a method worth keeping.</sub></td>
   </tr>
   <tr>

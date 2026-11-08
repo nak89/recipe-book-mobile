@@ -42,6 +42,7 @@ for name in ["explore", "recipes", "recipe-detail", "planner", "grocery", "khmer
     guard let png = bitmap.representation(using: .png, properties: [:]) else {
         fatalError("Could not encode \(name)")
     }
-    try png.write(to: output.appendingPathComponent("\(name).png"))
+    let outputName = name == "recipes" ? "recipes-kroueng-psom" : name
+    try png.write(to: output.appendingPathComponent("\(outputName).png"))
     print("Framed \(name): \(canvasWidth)×\(canvasHeight)")
 }

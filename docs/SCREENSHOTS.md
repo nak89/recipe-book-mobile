@@ -27,4 +27,6 @@ swift tools/frame-screenshots.swift /path/to/raw-captures docs/images
 
 5. Inspect every PNG, check the gallery on GitHub, and restore any language preference changed for the capture.
 
-The banner is a repository-owned SVG in `docs/images/banner.svg`. Food imagery shown inside the app belongs to the recipe sources credited in the app and README.
+The banner is a repository-owned SVG in `docs/images/kroueng-psom-banner.svg`. Food imagery shown inside the app belongs to the recipe sources credited in the app and README.
+
+The recipe-index capture is saved as `recipes-kroueng-psom.png` to keep the rebranded image separate from older cached gallery assets.
