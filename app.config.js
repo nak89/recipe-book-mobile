@@ -5,7 +5,7 @@ module.exports = ({ config: base }) => {
   const csp = [
     "default-src 'self'", "script-src 'self'", "style-src 'self' 'unsafe-inline'",
     `connect-src 'self' ${[...origins, ...images].join(' ')}`,
-    `img-src 'self' data: blob: ${[...origins.filter(origin => origin.includes('.supabase.co')), ...images].join(' ')}`,
+    `img-src 'self' data: blob: ${[...origins, ...images].join(' ')}`,
     "font-src 'self' data:", "worker-src 'self' blob:", "object-src 'none'",
     "base-uri 'none'", "frame-ancestors 'none'", "form-action 'self'",
   ].join('; ')

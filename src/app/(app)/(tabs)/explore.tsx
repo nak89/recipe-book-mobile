@@ -1,19 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useFocusEffect, useNavigation, useRouter } from 'expo-router'
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, View, useWindowDimensions } from 'react-native'
+import { useFocusEffect, useIsFocused, useNavigation, useRouter } from 'expo-router'
+import { ActivityIndicator, AppState, FlatList, Pressable, RefreshControl, StyleSheet, View, useWindowDimensions } from 'react-native'
 import { Image } from 'expo-image'
 import { Text } from '@/components/ui/Text'
 import { useAuth } from '@/context/AuthContext'
-import { copyLibraryRecipe, getCachedLibrary, getLibrary, LIBRARY_SUBJECTS } from '@/lib/api'
-import type { LibrarySubject, LibrarySummary } from '@/lib/api'
+import { copyLibraryRecipe, getCachedLibrary, getLibrary } from '@/lib/api'
+import type { LibrarySummary } from '@/lib/api'
 import { useDebounce } from '@/hooks/useDebounce'
 import { refreshFeedback } from '@/lib/haptics'
 import { foldForCompare } from '@/lib/text'
 import { padded, useLanguage, useNum, useT } from '@/i18n'
 import type { StringKey } from '@/i18n'
 import { apiErrorKey } from '@/i18n/errors'
-import { useSubjectLabel } from '@/i18n/labels'
-import Chip from '@/components/ui/Chip'
 import LedgerRow from '@/components/ui/LedgerRow'
 import Masthead from '@/components/ui/Masthead'
 import PrimaryButton from '@/components/ui/PrimaryButton'
@@ -25,9 +23,6 @@ import TextLink from '@/components/ui/TextLink'
 import type { SwipeTabsNavigationProp } from '@/navigation/SwipeTabs'
 import { contentType, radius, sized, sizes, spacing, useScreenTopPad, useTheme, useThemedStyles } from '@/theme'
 import type { ThemeColors, TypeScale } from '@/theme'
-
-type Filter = 'All' | LibrarySubject
-
 
 /**
  * Explore — the shared library, and the tab the app opens onto.
@@ -55,7 +50,7 @@ export default function ExploreScreen() {
   const styles = useThemedStyles(makeStyles)
   const t = useT()
   const { language } = useLanguage()
-  const subjectLabel = useSubjectLabel()
+  const focused = useIsFocused()
   const { token } = useAuth()
   const router = useRouter()
   const navigation = useNavigation<SwipeTabsNavigationProp>()
@@ -70,7 +65,8 @@ export default function ExploreScreen() {
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<StringKey | null>(null)
   const [query, setQuery] = useState('')
-  const [filter, setFilter] = useState<Filter>('All')
+  const [featuredIds, setFeaturedIds] = useState(() => getCachedLibrary(token)?.featuredIds)
+  const [nextChangeAt, setNextChangeAt] = useState(() => getCachedLibrary(token)?.nextChangeAt)
 
   const [savingIds, setSavingIds] = useState<string[]>([])
   const pending = useRef(new Set<string>())
@@ -95,9 +91,7 @@ export default function ExploreScreen() {
   const debouncedQuery = useDebounce(query)
 
   /**
-   * The library is static content, so this could fetch once and never again —
-   * but `savedIds` is not static, and it changes on the *other* screens. Copy a
-   * recipe, then come back: a refocus refetch removes it from Explore.
+   * Refetch the daily selection and saved state when Explore regains focus.
    *
    * Same compare-before-commit bail-out every focus refetch in this app uses:
    * a screen regains focus while its transition is still running, and an
@@ -110,6 +104,8 @@ export default function ExploreScreen() {
       return getLibrary(token)
         .then((data) => {
           if (signal?.cancelled) return
+          setFeaturedIds(data.featuredIds)
+          setNextChangeAt(data.nextChangeAt)
           setRecipes((prev) =>
             JSON.stringify(prev) === JSON.stringify(data.recipes) ? prev : data.recipes
           )
@@ -131,7 +127,11 @@ export default function ExploreScreen() {
     useCallback(() => {
       const signal = { cancelled: false }
       load(signal)
+      const subscription = AppState.addEventListener('change', state => {
+        if (state === 'active') load(signal)
+      })
       return () => {
+        subscription.remove()
         signal.cancelled = true
       }
     }, [load])
@@ -149,47 +149,43 @@ export default function ExploreScreen() {
     [navigation]
   )
 
-  const available = useMemo(() => {
-    const saved = new Set(savedIds)
-    return recipes.filter(recipe => !saved.has(recipe.id))
-  }, [recipes, savedIds])
+  useEffect(() => {
+    if (!focused || !nextChangeAt) return
+    const delay = Date.parse(nextChangeAt) - Date.now()
+    if (!Number.isFinite(delay) || delay <= 0) return
+    const signal = { cancelled: false }
+    const timer = setTimeout(() => load(signal), delay + 250)
+    return () => {
+      signal.cancelled = true
+      clearTimeout(timer)
+    }
+  }, [focused, nextChangeAt, load])
+
+  const featured = useMemo(() => {
+    if (!featuredIds) return recipes.slice(0, 6)
+    const byId = new Map(recipes.map(recipe => [recipe.id, recipe]))
+    return featuredIds.flatMap(id => {
+      const recipe = byId.get(id)
+      return recipe ? [recipe] : []
+    })
+  }, [featuredIds, recipes])
 
   const visible = useMemo(() => {
-    // Folded on both sides, as everywhere: Khmer keyboards emit zero-width
-    // spaces that survive trim/lowercase/NFC, so folding only the query finds
-    // nothing when it is the stored string carrying the ZWSP.
-    //
-    // **One language to search.** The library used to carry an English title
-    // beside the Khmer one and this read both, so "amok" found អាម៉ុកត្រី. It is
-    // Khmer only now, and that cost is real and was accepted — a reader typing
-    // Latin finds nothing. If it ever needs solving, the fix is a romanised
-    // search key on each row, not a second English copy of the recipe.
     const q = foldForCompare(debouncedQuery)
-    return available.filter((r) => {
-      if (filter !== 'All' && r.subject !== filter) return false
-      if (!q) return true
-      return (
-        foldForCompare(r.title).includes(q) ||
-        foldForCompare(r.description).includes(q) ||
-        foldForCompare(r.cuisine).includes(q)
-      )
-    })
-  }, [available, debouncedQuery, filter])
+    if (!q) return featured
+    return recipes.filter(recipe => [recipe.title, recipe.description, recipe.cuisine, recipe.searchText ?? '']
+      .some(value => foldForCompare(value).includes(q)))
+  }, [debouncedQuery, featured, recipes])
 
-  const searching = debouncedQuery.trim().length > 0
-  /**
-   * The index's range, `០១–០៨`, exactly as the Recipes index computes it — the
-   * header names the rows beneath it, so while a chip or a query is narrowing
-   * the list it describes what survived rather than what the library holds.
-   */
+  const searching = foldForCompare(debouncedQuery).length > 0
   const indexRange =
     visible.length === 0
       ? undefined
       : `${padded(1, 2, language)}–${padded(visible.length, 2, language)}`
 
   /**
-   * The library itself is static, so this is really a refresh of `savedIds` —
-   * and of the connection. It is the only recovery a reader has when a refetch
+   * Refresh the catalogue, saved state, and daily selection. Pull to refresh
+   * also lets a reader recover when a refetch
    * failed over content already on screen, since that case deliberately keeps
    * the stale list rather than replacing it with the offline notice.
    *
@@ -227,27 +223,10 @@ export default function ExploreScreen() {
 
       {error && <Text accessibilityRole="alert" style={styles.error}>{t(error)}</Text>}
 
-      <View style={styles.section}>
-        <SectionHeader label={t('explore.bySubject')} />
-        {/* `flex-wrap: wrap`, straight from the mockup's own `BY SUBJECT` row.
-            This is the band the design draws chips in, so it is the one that
-            settles how a chip row behaves when it runs out of gutter. */}
-        <View style={styles.chips}>
-          {(['All', ...LIBRARY_SUBJECTS] as Filter[]).map((option) => (
-            <Chip
-              key={option}
-              label={subjectLabel(option)}
-              active={filter === option}
-              onPress={() => setFilter(option)}
-            />
-          ))}
-        </View>
-      </View>
-
       {visible.length > 0 && (
         <SectionHeader
           variant="recipe"
-          label={t(searching ? 'dashboard.results' : 'explore.title')}
+          label={t(searching ? 'dashboard.results' : 'explore.today')}
           count={indexRange}
           style={styles.indexHeader}
         />
@@ -317,15 +296,10 @@ export default function ExploreScreen() {
         )}
         ListEmptyComponent={
           <NoResults
-            allSaved={recipes.length > 0 && available.length === 0}
-            onOpenBook={() => navigation.navigate('index')}
-            suggestions={available.slice(0, 2)}
+            suggestions={featured.slice(0, 2)}
             onWrite={() => router.push('/recipe/new')}
             onPick={(id) => router.push(`/library/${id}`)}
-            onClear={() => {
-              setQuery('')
-              setFilter('All')
-            }}
+            onClear={() => setQuery('')}
           />
         }
       />
@@ -390,7 +364,10 @@ function Tile({ recipe, saved, saving, onSave, onPress }: {
         style={({ pressed }) => [styles.tileDetail, pressed && styles.tilePressed]}>
         <Image source={recipe.photoUrl} style={styles.tilePhoto} contentFit="cover" />
         <Text style={[styles.tileTitle, contentType('recipeTitle', recipe.title)]}>{recipe.title}</Text>
-        <Text style={styles.tileCaption}>{`${n(recipe.totalMinutes)} ${t('detail.minutes')}`}</Text>
+        <Text style={styles.tileCaption}>
+          {recipe.localPreview ? `${t('explore.localPreview')} · ` : ''}
+          {`${n(recipe.totalMinutes)} ${t('detail.minutes')}`}
+        </Text>
       </Pressable>
       <Pressable onPress={onSave} disabled={saved || saving} accessibilityRole="button"
         accessibilityLabel={`${t(saved ? 'explore.inYourBook' : 'common.save')} · ${recipe.title}`}
@@ -406,22 +383,14 @@ function Tile({ recipe, saved, saving, onSave, onPress }: {
 /**
  * SCREENS.md § 12 — Explore's own no-results, which is not the Recipes index's.
  *
- * The difference is the second line: a search that misses here has missed in two
- * places, the user's book *and* the shared collections, and saying so is what
- * stops the screen reading as though the library were broken. `DID YOU MEAN`
- * then offers real rows rather than spell-corrections — with eight recipes,
- * showing two of them is more use than guessing at the typo.
+ * A search miss offers two of today's dishes and a way to clear the query.
  */
 function NoResults({
-  allSaved,
-  onOpenBook,
   suggestions,
   onWrite,
   onPick,
   onClear,
 }: {
-  allSaved: boolean
-  onOpenBook: () => void
   suggestions: LibrarySummary[]
   onWrite: () => void
   onPick: (id: string) => void
@@ -429,21 +398,6 @@ function NoResults({
 }) {
   const styles = useThemedStyles(makeStyles)
   const t = useT()
-
-  if (allSaved) {
-    return (
-      <View style={styles.empty}>
-        <Text style={styles.emptyTitle}>{t('explore.allSavedTitle')}</Text>
-        <Text style={styles.emptyBody}>{t('explore.allSavedBody')}</Text>
-        <PrimaryButton
-          label={t('explore.openMyBook')}
-          variant="outline"
-          onPress={onOpenBook}
-          style={styles.emptyButton}
-        />
-      </View>
-    )
-  }
 
   return (
     <View style={styles.empty}>
@@ -485,8 +439,6 @@ const makeStyles = (c: ThemeColors, type: TypeScale) =>
     list: { paddingBottom: spacing.xxl },
     header: { gap: spacing.sectionSpacing },
     controls: { paddingHorizontal: spacing.gutter },
-    section: { paddingHorizontal: spacing.gutter },
-    chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, paddingTop: spacing.sm },
     indexHeader: { paddingHorizontal: spacing.gutter, marginTop: spacing.sm },
     row: { marginHorizontal: spacing.gutter },
     error: { ...type.body, color: c.danger, paddingHorizontal: spacing.gutter },

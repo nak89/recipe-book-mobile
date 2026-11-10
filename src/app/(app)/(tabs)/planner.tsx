@@ -1,28 +1,28 @@
-import Animated, { useAnimatedRef, useSharedValue } from 'react-native-reanimated'
-import { useCallback, useMemo, useState } from 'react'
+import { Ionicons } from '@expo/vector-icons'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { useFocusEffect, useRouter } from 'expo-router'
-import { Pressable, StyleSheet, View } from 'react-native'
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import { Text } from '@/components/ui/Text'
 import { useAuth } from '@/context/AuthContext'
 import { useWeek } from '@/context/WeekContext'
-import { clearPlanSlot, getPlan, getRecipes, setPlanSlot } from '@/lib/api'
+import { clearPlanRange, clearPlanSlot, getPlan, getRecipes, setPlanSlot } from '@/lib/api'
 import { addDays, toDateKey, weekDays } from '@/lib/week'
 import { openMenuFeedback, selectionFeedback } from '@/lib/haptics'
-import WeekGenerator from '@/components/planner/WeekGenerator'
+import PrimaryButton from '@/components/ui/PrimaryButton'
 import DayStrip from '@/components/planner/DayStrip'
 import RecipePicker from '@/components/planner/RecipePicker'
 import ActionSheet from '@/components/ui/ActionSheet'
 import AddRow from '@/components/ui/AddRow'
 import LedgerRow from '@/components/ui/LedgerRow'
-import Masthead from '@/components/ui/Masthead'
+import Masthead, { MastheadAction } from '@/components/ui/Masthead'
 import ProfileButton from '@/components/ui/ProfileButton'
 import SectionHeader from '@/components/ui/SectionHeader'
 import BlankLoadingState from '@/components/ui/BlankLoadingState'
 import { useNum, useT } from '@/i18n'
 import { apiErrorKey } from '@/i18n/errors'
-import { useMealtimeLabel, useMonthLabel } from '@/i18n/labels'
+import { useDayLabel, useMealtimeLabel, useMonthLabel } from '@/i18n/labels'
 import type { StringKey } from '@/i18n/strings'
-import { spacing, useScreenTopPad, useThemedStyles } from '@/theme'
+import { sizes, spacing, useScreenTopPad, useTheme, useThemedStyles } from '@/theme'
 import type { ThemeColors, TypeScale } from '@/theme'
 import { MEALTIMES } from '@/types/recipe'
 import type { Mealtime, PlanSlot, Recipe } from '@/types/recipe'
@@ -44,15 +44,13 @@ export default function PlannerScreen() {
   const styles = useThemedStyles(makeStyles)
   const t = useT()
   const n = useNum()
+  const { colors: c } = useTheme()
+  const dayLabel = useDayLabel()
   const mealtimeLabel = useMealtimeLabel()
   const monthLabel = useMonthLabel()
   const { token } = useAuth()
   const topPad = useScreenTopPad()
   const router = useRouter()
-  const generatorScroll = useAnimatedRef<Animated.ScrollView>()
-  const generatorContentHeight = useSharedValue(0)
-  const [draggingDinner, setDraggingDinner] = useState(false)
-
   // The week is shared with the grocery list rather than held here: the two are
   // views of one thing, and the shopping happens *before* the week it is for, so
   // planning next week and then swiping across has to reach next week's list.
@@ -66,6 +64,8 @@ export default function PlannerScreen() {
   // freezes in the language that raised it and `t` becomes a fetch dependency.
   const [error, setError] = useState<StringKey | null>(null)
   const [pickerFor, setPickerFor] = useState<Mealtime | null>(null)
+  const writing = useRef(false)
+  const [resetMenu, setResetMenu] = useState<'choose' | 'day' | 'week' | null>(null)
   const [sheetFor, setSheetFor] = useState<Mealtime | null>(null)
 
   const days = useMemo(() => weekDays(weekStart), [weekStart])
@@ -109,6 +109,7 @@ export default function PlannerScreen() {
   const plannedKeys = useMemo(() => new Set(slots.map((s) => s.date)), [slots])
 
   function shiftWeek(by: number) {
+    if (writing.current) return
     shiftSharedWeek(by)
     // Move the selection with the week rather than leaving it on a day no longer
     // shown. Landing on the same weekday is what makes "next week" feel like a
@@ -118,7 +119,8 @@ export default function PlannerScreen() {
   }
 
   async function assign(mealtime: Mealtime, recipe: Recipe) {
-    if (!token) return
+    if (!token || writing.current) return
+    writing.current = true
     setPickerFor(null)
     setSheetFor(null)
     const previous = slots
@@ -150,11 +152,14 @@ export default function PlannerScreen() {
       // when an optimistic row snaps back is which action failed.
       setSlots(previous)
       setError('error.savePlan')
+    } finally {
+      writing.current = false
     }
   }
 
   async function clear(mealtime: Mealtime) {
-    if (!token) return
+    if (!token || writing.current) return
+    writing.current = true
     setSheetFor(null)
     const previous = slots
     setSlots((prev) => prev.filter((s) => !(s.date === selectedKey && s.mealtime === mealtime)))
@@ -163,6 +168,25 @@ export default function PlannerScreen() {
     } catch {
       setSlots(previous)
       setError('error.clearPlan')
+    } finally {
+      writing.current = false
+    }
+  }
+
+  async function reset(scope: 'day' | 'week') {
+    if (!token || writing.current) return
+    const first = scope === 'day' ? selectedKey : from
+    const last = scope === 'day' ? selectedKey : to
+    if (first < from || last > to) return
+    writing.current = true
+    setError(null)
+    try {
+      await clearPlanRange(first, last, token)
+      setSlots(current => current.filter(slot => slot.date < first || slot.date > last))
+    } catch {
+      setError('error.clearPlan')
+    } finally {
+      writing.current = false
     }
   }
 
@@ -185,22 +209,27 @@ export default function PlannerScreen() {
 
   return (
     <View style={styles.container}>
-      <Animated.ScrollView
-        ref={generatorScroll}
-        scrollEnabled={!draggingDinner}
-        onContentSizeChange={(_width, height) => generatorContentHeight.set(height)}
+      <ScrollView
         contentContainerStyle={[
           styles.content,
           { paddingTop: topPad, paddingBottom: spacing.xxl },
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <Masthead title={t('week.masthead')} actions={<ProfileButton />} />
+        <Masthead title={t('week.masthead')} actions={<>
+          {token && <MastheadAction accessibilityLabel={t('planner.reset')} onPress={() => {
+            if (!writing.current) setResetMenu('choose')
+          }}>
+            <Ionicons name="refresh-outline" size={sizes.hitMin / 2} color={c.text} />
+          </MastheadAction>}
+          <ProfileButton />
+        </>} />
 
         <View style={styles.weekNav}>
           <Arrow direction="back" label={t('planner.previousWeek')} onPress={() => shiftWeek(-1)} />
           <Pressable
             onPress={() => {
+              if (writing.current) return
               goToToday()
               setSelected(new Date())
               selectionFeedback()
@@ -220,7 +249,12 @@ export default function PlannerScreen() {
 
         <DayStrip days={days} selected={selected} plannedKeys={plannedKeys} onSelect={setSelected} />
 
-        {!loading && token && <WeekGenerator key={`${token}:${from}`} from={from} to={to} token={token} onApplied={setSlots} scrollRef={generatorScroll} contentHeight={generatorContentHeight} onDragChange={setDraggingDinner} />}
+        {!loading && token && (
+          <View style={{ paddingHorizontal: spacing.gutter }}>
+            <PrimaryButton label={t('generate.open')} variant="outline"
+              onPress={() => { if (!writing.current) router.push({ pathname: '/generate-week', params: { week: from } }) }} />
+          </View>
+        )}
 
         {/* The design's day summary ("3 dishes planned" left, total time in
             tamarind mono right) is deliberately gone. On an empty day it said
@@ -285,7 +319,28 @@ export default function PlannerScreen() {
                 data model does on its own implies the list can be stale. */}
           </View>
         )}
-      </Animated.ScrollView>
+      </ScrollView>
+
+      <ActionSheet
+        visible={resetMenu !== null}
+        title={resetMenu === 'day'
+          ? t('planner.confirmDay').replace('{day}', dayLabel(selected)).replace('{date}', n(selected.getDate()))
+          : resetMenu === 'week' ? t('planner.confirmWeek').replace('{week}', weekLabel) : t('planner.reset')}
+        onClose={() => setResetMenu(null)}
+        actions={resetMenu === 'day' || resetMenu === 'week' ? [{
+          label: t(resetMenu === 'day' ? 'planner.clearDay' : 'planner.clearWeek'),
+          icon: 'trash-outline',
+          destructive: true,
+          onPress: () => void reset(resetMenu),
+        }] : [
+          ...(selectedKey >= from && selectedKey <= to ? [{
+            label: t('planner.clearDay'),
+            icon: 'today-outline' as const,
+            onPress: () => setResetMenu('day'),
+          }] : []),
+          { label: t('planner.clearWeek'), icon: 'calendar-outline', onPress: () => setResetMenu('week') },
+        ]}
+      />
 
       <RecipePicker
         visible={pickerFor !== null}

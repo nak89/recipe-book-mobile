@@ -118,6 +118,10 @@ export function setPlanSlot(date: string, mealtime: Mealtime, recipeId: string, 
   })
 }
 
+export function clearPlanRange(from: string, to: string, token: string) {
+  return request<void>(`/meal-plan?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`, token, { method: 'DELETE' })
+}
+
 export function clearPlanSlot(date: string, mealtime: Mealtime, token: string) {
   return request<void>(`/meal-plan/${date}/${mealtime}`, token, { method: 'DELETE' })
 }
@@ -296,6 +300,9 @@ export function importStarterPacks(packIds: string[], token: string) {
  * reading "បង្អែម" still filters on `'Sweets'`.
  */
 export interface LibrarySummary {
+  localPreview?: true
+  illustrated?: true
+  searchText?: string
   id: string
   /** Khmer. There is no English title. */
   title: string
@@ -339,8 +346,15 @@ export interface LibraryRecipe extends LibrarySummary {
   savedRecipeId: string | null
 }
 
+export interface LibraryFeed {
+  recipes: LibrarySummary[]
+  savedIds: string[]
+  featuredIds?: string[]
+  nextChangeAt?: string
+}
+
 export function getLibrary(token: string) {
-  return libraryResource.load(token, () => request<{ recipes: LibrarySummary[]; savedIds: string[] }>('/library', token))
+  return libraryResource.load(token, () => request<LibraryFeed>('/library', token))
 }
 
 export function getLibraryRecipe(id: string, token: string) {
@@ -433,9 +447,9 @@ export async function uploadPhoto(uri: string, token: string): Promise<string> {
   return data.url
 }
 
-/** Apply proposed dinners against their original slots; conflicting edits roll back atomically. */
-export function applyDinnerWeek(weekStart: string, entries: { date: string; recipeId: string; expectedRecipeId?: string | null }[], token: string) {
-  return request<PlanSlot[]>('/meal-plan/week/dinners', token, {
+/** Apply proposed meals against their original slots; conflicting edits roll back atomically. */
+export function applyMealWeek(weekStart: string, entries: { date: string; mealtime: 'Breakfast' | 'Lunch' | 'Dinner'; recipeId: string | null; expectedRecipeId?: string | null }[], token: string) {
+  return request<PlanSlot[]>('/meal-plan/week/meals', token, {
     method: 'PUT', body: JSON.stringify({ weekStart, entries }),
   })
 }

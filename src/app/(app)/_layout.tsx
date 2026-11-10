@@ -47,6 +47,7 @@ export default function AppLayout() {
     >
       {/* The tab group draws its own chrome. */}
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="generate-week" options={{ headerShown: false, gestureEnabled: false }} />
       {/* Add is a modal, not a tab — it's an action, not a destination.
 
           These titles are translated here rather than on the screens themselves
@@ -83,7 +84,11 @@ export default function AppLayout() {
       {/* A library recipe, pushed from Explore. It draws its own header for the
           same reason the recipe page does — the photograph runs under the status
           bar, and a navigation bar over it would cut the hero in half. */}
-      <Stack.Screen name="library/[id]" options={{ headerShown: false }} />
+      <Stack.Screen name="library/[id]/index" options={{ headerShown: false }} />
+      <Stack.Screen
+        name="library/[id]/cook"
+        options={{ headerShown: false, presentation: 'fullScreenModal' }}
+      />
       {/* headerBackTitle is explicit because iOS labels the back button with the previous
           screen's title, and the detail screen draws its own header (headerShown: false,
           no title) — leaving it to fall back to the raw route name, "recipe/[id]/index". */}

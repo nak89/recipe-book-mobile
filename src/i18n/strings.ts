@@ -35,18 +35,40 @@
  */
 
 export const en = {
-"generate.dragHint": "Hold a recipe, then drag it to another day to move or swap. You can also tap Move.",
+"generate.dragHint": "Hold a recipe, then drag it to another day in the same mealtime to move or swap. You can also tap Move.",
 "generate.move": "Move",
 "generate.moveTo": "Move to day",
 "generate.moved": "Moved",
 
   "generate.open": "Generate week",
-  "generate.title": "Dinner preview",
-  "generate.description": "Fill empty dinners from your recipes. Existing dinners stay in place unless you move them. Nothing is saved until you apply.",
+  "generate.whichMeals": "Which meals?",
+  "generate.mealHelp": "Choose at least one mealtime for this week.",
+  "generate.variety": "How much variety?",
+  "generate.varietyHelp": "Choose which recipes can go into this week.",
+  "generate.repeatHelp": "Use a recipe again when choices run short.",
+  "generate.untaggedHelp": "Use recipes that don’t have a mealtime label.",
+  "generate.fridge": "What’s in your fridge?",
+  "generate.fridgeHelp": "Optional. We’ll prioritize recipes that use what you already have.",
+  "generate.fridgeSearch": "Find an ingredient",
+  "generate.addIngredient": "Add “{name}”",
+  "generate.preview": "Preview week",
+  "generate.review": "Review your week",
+  "generate.reviewHelp": "Tap a meal to edit it. Your changes are saved when you apply the week.",
+  "generate.openSlots": "Open slots: {n}. You can still apply this week.",
+  "generate.uses": "Uses {names}",
+  "generate.replace": "Replace meal",
+  "generate.removeMeal": "Remove meal",
+  "generate.addMeal": "Add a recipe",
+  "generate.swapWith": "Swap with {day}",
+  "generate.step": "Step {n} of 4",
+  "generate.noChanges": "No changes to apply.",
+  "generate.loading": "Loading your recipes and week…",
+  "generate.title": "Lunch & dinner preview",
+  "generate.description": "Fill empty lunches and dinners from your recipes. Existing meals stay in place unless you move them. Nothing is saved until you apply.",
   "generate.untagged": "Include untagged recipes",
   "generate.repeats": "Allow repeats",
-  "generate.full": "Every dinner is already planned. Nothing to fill.",
-  "generate.shortage": "{n} dinners still need recipes. Include untagged recipes, allow repeats, or add more dinner recipes.",
+  "generate.full": "Every lunch and dinner is already planned. Nothing to fill.",
+  "generate.shortage": "{n} meals still need recipes. Include untagged recipes, allow repeats, or add more lunch and dinner recipes.",
   "generate.noChoice": "No suitable recipe",
   "generate.kept": "Kept",
   "generate.swap": "Swap",
@@ -54,7 +76,7 @@ export const en = {
   "generate.shuffle": "Reshuffle suggestions",
   "generate.refresh": "Refresh preview",
   "generate.changed": "This week changed on another device. Refresh the preview to keep its latest plans.",
-  "generate.applied": "Dinners saved. Your grocery list will reflect this plan.",
+  "generate.applied": "Lunches and dinners saved. Your grocery list will reflect this plan.",
 
   // ---------------------------------------------------------------- common
   'common.save': 'Save',
@@ -288,6 +310,11 @@ export const en = {
   'planner.addSlot': 'Add {meal}',
   'planner.change': 'Change recipe',
   'planner.clear': 'Clear this slot',
+  'planner.reset': 'Reset meal plan',
+  'planner.clearDay': 'Clear selected day',
+  'planner.clearWeek': 'Clear whole week',
+  'planner.confirmDay': 'Clear all meals for {day} {date}?',
+  'planner.confirmWeek': 'Clear all meals for {week}?',
   'planner.pickTitle': 'Plan {meal}',
   'planner.pickSearch': 'Search your recipes',
   'planner.emptyTitle': 'Nothing planned yet',
@@ -579,8 +606,13 @@ export const en = {
   // -------------------------------------------------------------------- explore
   'tabs.explore': 'Explore',
   'explore.title': 'Explore',
-  'explore.searchPlaceholder': 'Search dishes, ingredients, people',
+  'explore.searchPlaceholder': 'Search all recipes',
+  'explore.today': 'Today in Explore',
+  'explore.illustrated': 'AI ILLUSTRATION',
+  'explore.recipeSource': 'Recipe source',
   'explore.bySubject': 'BY SUBJECT',
+  'explore.localPreview': 'LOCAL PREVIEW',
+  'explore.previewNote': 'Recipe notes',
   'explore.subjectAll': 'All',
   // ⚠ SCREENS.md §11 titles this band `AT THE MARKET NOW` with a month label,
   // over two tiles captioned like "TAMARIND · 45′". The caption is derivable —
@@ -598,7 +630,7 @@ export const en = {
   'explore.noResultsTitle': 'Nothing under that name yet.',
   'explore.allSavedTitle': 'Every dish is in your book.',
   'explore.allSavedBody': 'You’ve saved all the recipes currently in Explore.',
-  'explore.noResultsBody': 'Not in your book, and not in the shared collections.',
+  'explore.noResultsBody': 'We couldn’t find a match in the shared library.',
   'explore.writeYourself': 'WRITE IT YOURSELF',
   'explore.didYouMean': 'DID YOU MEAN',
   'explore.inYourBook': 'IN YOUR BOOK',
@@ -641,18 +673,40 @@ export type StringKey = keyof typeof en
 export type Strings = Record<StringKey, string>
 
 export const km: Strings = {
-"generate.dragHint": "ចុចជាប់លើម្ហូប រួចអូសទៅថ្ងៃផ្សេង ដើម្បីផ្លាស់ទីឬប្តូរម្ហូប។ អ្នកក៏អាចចុច ផ្លាស់ទី បានដែរ។",
+"generate.dragHint": "ចុចជាប់លើម្ហូប រួចអូសទៅថ្ងៃផ្សេងក្នុងពេលអាហារដូចគ្នា ដើម្បីផ្លាស់ទីឬប្តូរម្ហូប។ អ្នកក៏អាចចុច ផ្លាស់ទី បានដែរ។",
 "generate.move": "ផ្លាស់ទី",
 "generate.moveTo": "ផ្លាស់ទីទៅថ្ងៃ",
 "generate.moved": "បានផ្លាស់ទី",
 
   "generate.open": "បង្កើតផែនការមួយសប្ដាហ៍",
-  "generate.title": "ពិនិត្យផែនការអាហារពេលល្ងាច",
-  "generate.description": "ជ្រើសរើសរូបមន្តសម្រាប់ពេលល្ងាចដែលនៅទំនេរ។ ផែនការដែលមានស្រាប់នឹងរក្សាទុកដដែល លើកលែងតែអ្នកផ្លាស់ទីវា។ មិនទាន់រក្សាទុកទេ រហូតដល់អ្នកយល់ព្រម។",
+  "generate.whichMeals": "តើអ្នកចង់រៀបចំអាហារពេលណា?",
+  "generate.mealHelp": "ជ្រើសរើសពេលអាហារយ៉ាងហោចណាស់មួយសម្រាប់សប្ដាហ៍នេះ។",
+  "generate.variety": "តើអ្នកចង់បានម្ហូបចម្រុះប៉ុណ្ណា?",
+  "generate.varietyHelp": "ជ្រើសរើសរូបមន្តដែលអាចប្រើសម្រាប់សប្ដាហ៍នេះ។",
+  "generate.repeatHelp": "ប្រើរូបមន្តដដែលម្តងទៀតពេលជម្រើសមិនគ្រប់។",
+  "generate.untaggedHelp": "ប្រើរូបមន្តដែលមិនទាន់កំណត់ពេលអាហារ។",
+  "generate.fridge": "តើអ្នកមានគ្រឿងផ្សំអ្វីខ្លះក្នុងទូទឹកកក?",
+  "generate.fridgeHelp": "មិនចាំបាច់បំពេញទេ។ យើងនឹងផ្ដល់អាទិភាពដល់រូបមន្តដែលប្រើគ្រឿងផ្សំដែលអ្នកមាន។",
+  "generate.fridgeSearch": "ស្វែងរកគ្រឿងផ្សំ",
+  "generate.addIngredient": "បន្ថែម «{name}»",
+  "generate.preview": "មើលផែនការសប្ដាហ៍",
+  "generate.review": "ពិនិត្យផែនការសប្ដាហ៍",
+  "generate.reviewHelp": "ចុចលើម្ហូបដើម្បីកែសម្រួល។ ការផ្លាស់ប្ដូរនឹងត្រូវរក្សាទុកពេលអ្នកអនុវត្តផែនការ។",
+  "generate.openSlots": "នៅទំនេរ {n} ពេល។ អ្នកនៅតែអាចរក្សាទុកផែនការនេះបាន។",
+  "generate.uses": "ប្រើ {names}",
+  "generate.replace": "ប្តូរម្ហូប",
+  "generate.removeMeal": "ដកម្ហូបចេញ",
+  "generate.addMeal": "បន្ថែមរូបមន្ត",
+  "generate.swapWith": "ប្តូរជាមួយ {day}",
+  "generate.step": "ជំហានទី {n} ក្នុងចំណោម ៤",
+  "generate.noChanges": "មិនមានការផ្លាស់ប្ដូរដែលត្រូវរក្សាទុកទេ។",
+  "generate.loading": "កំពុងផ្ទុករូបមន្ត និងផែនការសប្ដាហ៍…",
+  "generate.title": "ពិនិត្យផែនការអាហារថ្ងៃត្រង់ និងពេលល្ងាច",
+  "generate.description": "ជ្រើសរើសរូបមន្តសម្រាប់អាហារថ្ងៃត្រង់ និងពេលល្ងាចដែលនៅទំនេរ។ ផែនការដែលមានស្រាប់នឹងរក្សាទុកដដែល លើកលែងតែអ្នកផ្លាស់ទីវា។ មិនទាន់រក្សាទុកទេ រហូតដល់អ្នកយល់ព្រម។",
   "generate.untagged": "រួមបញ្ចូលរូបមន្តមិនទាន់កំណត់ពេលអាហារ",
   "generate.repeats": "អនុញ្ញាតឱ្យម្ហូបដដែលម្តងទៀត",
-  "generate.full": "ពេលល្ងាចទាំងអស់មានផែនការរួចហើយ។",
-  "generate.shortage": "នៅខ្វះរូបមន្តសម្រាប់អាហារពេលល្ងាច {n} ពេល។ រួមបញ្ចូលរូបមន្តមិនទាន់កំណត់ពេលអាហារ អនុញ្ញាតម្ហូបដដែល ឬបន្ថែមរូបមន្តអាហារពេលល្ងាច។",
+  "generate.full": "អាហារថ្ងៃត្រង់ និងពេលល្ងាចទាំងអស់មានផែនការរួចហើយ។",
+  "generate.shortage": "នៅខ្វះរូបមន្តសម្រាប់អាហារ {n} ពេល។ រួមបញ្ចូលរូបមន្តមិនទាន់កំណត់ពេលអាហារ អនុញ្ញាតម្ហូបដដែល ឬបន្ថែមរូបមន្តអាហារថ្ងៃត្រង់ និងពេលល្ងាច។",
   "generate.noChoice": "មិនមានរូបមន្តសមស្រប",
   "generate.kept": "រក្សាដដែល",
   "generate.swap": "ប្តូរ",
@@ -660,7 +714,7 @@ export const km: Strings = {
   "generate.shuffle": "ជ្រើសរើសម្ហូបស្នើឡើងវិញ",
   "generate.refresh": "ផ្ទុកផែនការពិនិត្យឡើងវិញ",
   "generate.changed": "ផែនការសប្ដាហ៍បានផ្លាស់ប្តូរនៅឧបករណ៍ផ្សេង។ ផ្ទុកផែនការឡើងវិញ ដើម្បីរក្សាការផ្លាស់ប្តូរចុងក្រោយ។",
-  "generate.applied": "រក្សាទុកអាហារពេលល្ងាចរួចហើយ។ បញ្ជីទិញគ្រឿងនឹងឆ្លុះបញ្ចាំងផែនការនេះ។",
+  "generate.applied": "រក្សាទុកអាហារថ្ងៃត្រង់ និងពេលល្ងាចរួចហើយ។ បញ្ជីទិញគ្រឿងនឹងឆ្លុះបញ្ចាំងផែនការនេះ។",
 
   // ---------------------------------------------------------------- common
   'common.save': 'រក្សាទុក',
@@ -866,6 +920,11 @@ export const km: Strings = {
   'planner.addSlot': 'បញ្ចូល{meal}',
   'planner.change': 'ប្តូររូបមន្ត',
   'planner.clear': 'សម្អាតប្រអប់នេះ',
+  'planner.reset': 'កំណត់ផែនការអាហារឡើងវិញ',
+  'planner.clearDay': 'លុបផែនការថ្ងៃដែលបានជ្រើស',
+  'planner.clearWeek': 'លុបផែនការពេញមួយសប្ដាហ៍',
+  'planner.confirmDay': 'លុបអាហារទាំងអស់សម្រាប់ {day} ទី {date}?',
+  'planner.confirmWeek': 'លុបអាហារទាំងអស់សម្រាប់ {week}?',
   'planner.pickTitle': 'គ្រោង{meal}',
   'planner.pickSearch': 'ស្វែងរករូបមន្តរបស់អ្នក',
   'planner.emptyTitle': 'មិនទាន់មានការគ្រោងទេ',
@@ -1108,8 +1167,13 @@ export const km: Strings = {
 
   'tabs.explore': 'រុករក', // ✓
   'explore.title': 'រុករក', // ✓
-  'explore.searchPlaceholder': 'ស្វែងរកម្ហូប គ្រឿងផ្សំ អ្នកចម្អិន', // ✓
+  'explore.searchPlaceholder': 'ស្វែងរករូបមន្តទាំងអស់',
+  'explore.today': 'មុខម្ហូបថ្ងៃនេះ',
+  'explore.illustrated': 'រូបភាពបង្កើតដោយ AI',
+  'explore.recipeSource': 'ប្រភពរូបមន្ត',
   'explore.bySubject': 'តាមប្រភេទ', // ✓
+  'explore.localPreview': 'សាកល្បង',
+  'explore.previewNote': 'កំណត់ចំណាំ',
   'explore.subjectAll': 'ទាំងអស់', // ✓
   'explore.twoToTry': 'ពីរមុខគួរសាកល្បង', // ⚠
   'explore.collections': 'ចង្កោមម្ហូប', // ✓
@@ -1118,7 +1182,7 @@ export const km: Strings = {
   'explore.noResultsTitle': 'មិនទាន់មានឈ្មោះនេះទេ។', // ✓
   'explore.allSavedTitle': 'ម្ហូបទាំងអស់មានក្នុងសៀវភៅរបស់អ្នកហើយ។',
   'explore.allSavedBody': 'អ្នកបានរក្សាទុករូបមន្តទាំងអស់ដែលមានក្នុងទំព័ររុករកហើយ។',
-  'explore.noResultsBody': 'គ្មានក្នុងសៀវភៅរបស់អ្នក ហើយក៏គ្មានក្នុងចង្កោមរួមដែរ។', // ⚠
+  'explore.noResultsBody': 'រកមិនឃើញរូបមន្តដែលត្រូវគ្នាក្នុងបណ្ណាល័យរួមទេ។',
   'explore.writeYourself': 'សរសេរដោយខ្លួនឯង', // ✓
   'explore.didYouMean': 'ប្រហែលជា', // ✓
   'explore.inYourBook': 'មានក្នុងសៀវភៅ', // ⚠

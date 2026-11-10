@@ -1,9 +1,9 @@
 import type { Recipe } from '@/types/recipe'
-import type { LibrarySummary } from './api'
+import type { LibraryFeed } from './api'
 import { createSessionResource } from './sessionResource'
 
 export const recipesResource = createSessionResource<Recipe[]>()
-export const libraryResource = createSessionResource<{ recipes: LibrarySummary[]; savedIds: string[] }>()
+export const libraryResource = createSessionResource<LibraryFeed>()
 
 export const getCachedRecipes = (token: string | null) => recipesResource.peek(token)
 export const getCachedLibrary = (token: string | null) => libraryResource.peek(token)

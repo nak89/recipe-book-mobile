@@ -38,6 +38,8 @@ interface LedgerRowProps {
   emoji?: string
   /** Checkable variant — a 13px tamarind circle in place of the thumbnail. */
   checked?: boolean
+  /** Selection highlights the row. The default marks a completed checklist item. */
+  checkedAppearance?: 'complete' | 'selected'
   onToggle?: (next: boolean) => void
   onPress?: () => void
   /**
@@ -97,6 +99,7 @@ export default function LedgerRow({
   photoUrl,
   emoji,
   checked,
+  checkedAppearance = 'complete',
   onToggle,
   onPress,
   onLongPress,
@@ -124,6 +127,7 @@ export default function LedgerRow({
         recipe && styles.rowRecipe,
         ingredient && styles.rowIngredient,
         !last && styles.ruled,
+        checked === true && checkedAppearance === 'selected' && styles.selected,
         pressed && handlePress != null && styles.pressed,
         style,
       ]}
@@ -160,8 +164,8 @@ export default function LedgerRow({
           style={[
             styles.title,
             contentType(recipe ? 'recipeTitle' : ingredient ? 'ingredientName' : 'rowTitle', title),
-            checked === true && styles.titleDone,
-            checked === true && styles.struck,
+            checked === true && checkedAppearance === 'complete' && styles.titleDone,
+            checked === true && checkedAppearance === 'complete' && styles.struck,
           ]}
         >
           {title}
@@ -233,6 +237,7 @@ const makeStyles = (c: ThemeColors, type: TypeScale) =>
     content: { flex: 1, minWidth: 0, gap: spacing.xs },
     title: { color: c.text },
     titleDone: { opacity: 0.34 },
+    selected: { backgroundColor: c.accentSoft },
     struck: { textDecorationLine: 'line-through' },
 
     value: { ...type.metadata, color: c.textPlaceholder },

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { dinnerAlternatives, generateDinners, swapDinner, moveDinnerBetweenDays, reshuffleDinners, dinnerDropTarget } from '@/lib/dinnerDraft'
+import { dinnerAlternatives, generateDinners, swapDinner, moveDinnerBetweenDays, reshuffleDinners, dinnerDropTarget, generateMealWeek, reshuffleMealWeek } from '@/lib/dinnerDraft'
 const dates = ['2026-11-09','2026-11-10','2026-11-11','2026-11-12','2026-11-13','2026-11-14','2026-11-15']
 const options = {includeUntagged:false,allowRepeats:false}
 const recipes = Array.from({length:8}, (_,i)=>({id:String(i),mealtime:'Dinner'}))
@@ -69,4 +69,61 @@ test('moving back restores original kept state without changing either baseline'
  const restored=moveDinnerBetweenDays(dates[1],dates[0],moveDinnerBetweenDays(dates[0],dates[1],draft))
  assert.equal(restored[0].kept,true);assert.equal(restored[1].kept,true)
  assert.equal(restored[0].originalRecipeId,'0');assert.equal(restored[1].originalRecipeId,'1')
+})
+
+
+test('lunch generation preserves lunches, uses lunch recipes and excludes breakfast and dinner', () => {
+  const lunches = Array.from({ length: 8 }, (_, i) => ({ id: `l${i}`, mealtime: 'Lunch' }))
+  const plan = [
+    { date: dates[0], recipeId: 'l0', mealtime: 'Lunch' },
+    { date: dates[1], recipeId: '0', mealtime: 'Dinner' },
+    { date: dates[2], recipeId: 'breakfast', mealtime: 'Breakfast' },
+  ]
+  const opts = { ...options, mealtime: 'Lunch' as const }
+  const pool = [...recipes, ...lunches, { id: 'breakfast', mealtime: 'Breakfast' }]
+  const draft = generateDinners(dates, pool, plan, opts, () => 0)
+  assert.equal(draft.length, 7)
+  assert.equal(new Set(draft.map(entry => entry.recipeId)).size, 7)
+  assert.ok(draft.every(entry => entry.recipeId?.startsWith('l')))
+  assert.equal(draft[0].kept, true)
+  assert.equal(draft[1].kept, false)
+  const swapped = swapDinner(dates[1], draft, pool, opts, () => 0)
+  assert.notEqual(swapped[1].recipeId, draft[1].recipeId)
+  assert.ok(swapped[1].recipeId?.startsWith('l'))
+  const moved = moveDinnerBetweenDays(dates[0], dates[6], swapped)
+  const shuffled = reshuffleDinners(moved, pool, opts, () => 0.99)
+  assert.equal(shuffled[6].recipeId, 'l0')
+  assert.equal(shuffled[0].recipeId, moved[0].recipeId)
+  assert.ok(shuffled.every(entry => entry.recipeId?.startsWith('l')))
+  assert.equal(plan[1].recipeId, '0')
+})
+
+test('lunch shortages, untagged fallback and repeats stay explicit', () => {
+  const pool = [{ id: 'lunch', mealtime: 'Lunch' }, { id: 'untagged' }, ...recipes]
+  const opts = { ...options, mealtime: 'Lunch' as const }
+  assert.equal(generateDinners(dates, pool, [], opts).filter(entry => entry.recipeId).length, 1)
+  const fallback = generateDinners(dates, pool, [], { ...opts, includeUntagged: true }, () => 0)
+  assert.equal(fallback[0].recipeId, 'lunch')
+  assert.equal(fallback[1].recipeId, 'untagged')
+  assert.equal(fallback.filter(entry => entry.recipeId).length, 2)
+  assert.ok(generateDinners(dates, pool, [], { ...opts, allowRepeats: true }).every(entry => entry.recipeId === 'lunch'))
+})
+
+
+test('lunch and dinner share the no-repeat rule, including untagged recipes and existing meals', () => {
+  const pool = Array.from({ length: 16 }, (_, i) => ({ id: `any${i}` }))
+  const opts = { ...options, includeUntagged: true }
+  const plan = [{ date: dates[0], mealtime: 'Dinner', recipeId: 'any0' }]
+  const draft = generateMealWeek(dates, pool, plan, opts, () => 0)
+  assert.equal(draft.Dinner[0].recipeId, 'any0')
+  assert.equal(new Set([...draft.Lunch, ...draft.Dinner].map(entry => entry.recipeId)).size, 14)
+  const shuffled = reshuffleMealWeek(draft, pool, opts, () => 0.99)
+  assert.equal(shuffled.Dinner[0].recipeId, 'any0')
+  assert.equal(new Set([...shuffled.Lunch, ...shuffled.Dinner].map(entry => entry.recipeId)).size, 14)
+  const choices = dinnerAlternatives(draft.Lunch[0], draft.Lunch, pool, { ...opts, mealtime: 'Lunch', reservedRecipeIds: draft.Dinner.map(entry => entry.recipeId!) })
+  assert.ok(choices.every(choice => !draft.Dinner.some(entry => entry.recipeId === choice.id)))
+  const short = generateMealWeek(dates, pool.slice(0, 10), [], opts, () => 0)
+  assert.equal([...short.Lunch, ...short.Dinner].filter(entry => entry.recipeId).length, 10)
+  const repeats = generateMealWeek(dates, pool.slice(0, 1), [], { ...opts, allowRepeats: true }, () => 0)
+  assert.ok([...repeats.Lunch, ...repeats.Dinner].every(entry => entry.recipeId === 'any0'))
 })
