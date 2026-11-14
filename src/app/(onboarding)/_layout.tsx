@@ -1,6 +1,7 @@
 import { Redirect, Stack } from 'expo-router'
 import BlankLoadingState from '@/components/ui/BlankLoadingState'
 import { useAuth } from '@/context/AuthContext'
+import { pendingRecipeShareDestination } from '@/lib/incomingRecipeShare'
 import { useTheme } from '@/theme'
 
 /**
@@ -34,7 +35,7 @@ export default function OnboardingLayout() {
   // in this guard to allow that. Both are gone: Chronicle teaches through the
   // "what it does" screen before sign-up rather than through a replayable tour.
   if (onboarded) {
-    return <Redirect href="/" />
+    return <Redirect href={pendingRecipeShareDestination() ?? '/'} />
   }
 
   return (

@@ -12,6 +12,9 @@ describe('auth feedback', () => {
     assert.equal(authErrorKey({ code: 'email_not_confirmed' }), 'error.auth.emailNotConfirmed')
     assert.equal(authErrorKey({ code: 'invalid_credentials' }), 'error.auth.invalidCredentials')
   })
+  it('recognises when development email delivery is restricted', () => {
+    assert.equal(authErrorKey({ code: 'email_address_not_authorized' }), 'error.auth.emailDeliveryUnavailable')
+  })
   it('recognises fetch failures instead of showing a generic failure', () => {
     assert.equal(authErrorKey(new TypeError('Failed to fetch')), 'error.network')
     assert.equal(authErrorKey(new Error('Network request failed')), 'error.network')

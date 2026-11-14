@@ -9,6 +9,7 @@ import { MAX_NAME_LENGTH, useAuth } from '@/context/AuthContext'
 import { getRecipes } from '@/lib/api'
 import { resetSeenIntro } from '@/lib/onboarding'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
+import GoogleAuthButton from '@/components/GoogleAuthButton'
 import LedgerRow from '@/components/ui/LedgerRow'
 import PrimaryButton from '@/components/ui/PrimaryButton'
 import SectionHeader from '@/components/ui/SectionHeader'
@@ -16,6 +17,7 @@ import SettingRow from '@/components/ui/SettingRow'
 import StatTile from '@/components/ui/StatTile'
 import { initials } from '@/components/ui/ProfileButton'
 import { useLanguage, useNum, useT } from '@/i18n'
+import { googleAuthEnabled } from '@/lib/googleAuth'
 import { contentType, inputType, minHeights, radius, sized, sizes, spacing, useTheme, useThemedStyles } from '@/theme'
 import type { ThemeColors, TypeScale } from '@/theme'
 import type { Recipe } from '@/types/recipe'
@@ -26,7 +28,7 @@ export default function ProfileScreen() {
   const t = useT()
   const n = useNum()
   const { language, setLanguage } = useLanguage()
-  const { token, displayName, email, memberSince, logout, updateDisplayName, resetOnboarding } =
+  const { session, token, displayName, email, memberSince, logout, updateDisplayName, resetOnboarding } =
     useAuth()
   const insets = useSafeAreaInsets()
   const mark = initials(displayName)
@@ -238,6 +240,17 @@ export default function ProfileScreen() {
             last
           />
         </View>
+
+        {googleAuthEnabled && session && (
+          <View style={styles.section}>
+            <SectionHeader label={t('auth.google.methods')} />
+            {session.user.identities?.some(identity => identity.provider === 'google') ? (
+              <LedgerRow title="Google" value={t('auth.google.connected')} last />
+            ) : (
+              <GoogleAuthButton intent={{ destination: '/profile', userId: session.user.id }} />
+            )}
+          </View>
+        )}
 
         {memberSince && (
           <View style={styles.section}>

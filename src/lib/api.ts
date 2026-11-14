@@ -1,6 +1,8 @@
-import { File as FsFile } from 'expo-file-system'
+import { File as FsFile, Paths } from 'expo-file-system'
 import { Platform } from 'react-native'
-import type { Difficulty, Mealtime, PlanSlot, Recipe, RecipeInput } from '@/types/recipe'
+import type { Difficulty, Mealtime, PlanSlot, Recipe, RecipeDraft, RecipeInput, VideoFrame } from '@/types/recipe'
+import type { ImagePickerAsset } from 'expo-image-picker'
+import type { Language } from '@/i18n'
 // Type-only, so the i18n barrel — and the React context inside it — never enters
 // this module's runtime graph. `api.ts` is imported by every screen.
 import type { LinePart } from '@/lib/grocery'
@@ -9,7 +11,17 @@ import { createPhotoResolver, type SignedPhoto } from '@/lib/photoAccess'
 import { clearRecipeCache, getCachedRecipe, libraryResource, recipesResource } from '@/lib/recipeCache'
 export { getCachedRecipes, getCachedRecipe, getCachedLibrary } from '@/lib/recipeCache'
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL
+const configuredApiUrl = process.env.EXPO_PUBLIC_API_URL
+const isLocalWeb = __DEV__ && Platform.OS === 'web' &&
+  typeof window !== 'undefined' && window.location.hostname === 'localhost'
+// The phone needs the Mac's Wi-Fi address. On the Mac itself, loopback works
+// even when Wi-Fi changes or disconnects.
+const API_URL = isLocalWeb
+  ? configuredApiUrl?.replace(
+      /^http:\/\/(?:10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(?:1[6-9]|2\d|3[01])\.\d+\.\d+)(?=[:/]|$)/,
+      'http://localhost',
+    )
+  : configuredApiUrl
 
 export interface FieldIssue {
   /** Dotted path from the server's zod error, e.g. `title`, `ingredients.0.name`. */
@@ -41,7 +53,7 @@ async function request<T>(path: string, token: string, options: RequestInit = {}
   const res = await fetch(`${API_URL}${path}`, {
     ...options,
     headers: {
-      'Content-Type': 'application/json',
+      ...(!(options.body instanceof FormData) && { 'Content-Type': 'application/json' }),
       Authorization: `Bearer ${token}`,
       ...options.headers,
     },
@@ -78,6 +90,49 @@ export function getRecipe(id: string, token: string) {
 
 export function createRecipe(data: RecipeInput, token: string) {
   return request<Recipe>('/recipes', token, { method: 'POST', body: JSON.stringify(data) })
+}
+
+export function importRecipeText(text: string, language: Language, token: string, signal: AbortSignal) {
+  return request<RecipeDraft>(`/recipe-drafts/from-text?language=${language}`, token, {
+    method: 'POST', body: JSON.stringify({ text }), signal,
+  })
+}
+
+export function generateRecipePhoto(title: string, ingredients: string[], token: string, signal: AbortSignal) {
+  return request<{ jpeg: string }>('/recipe-drafts/photo', token, {
+    method: 'POST', body: JSON.stringify({ title, ingredients: ingredients.slice(0, 12) }), signal,
+  })
+}
+
+export async function importRecipeFromPhoto(uri: string, language: Language, token: string, signal: AbortSignal) {
+  return request<RecipeDraft>(`/recipe-drafts/from-photo?language=${language}`, token, {
+    method: 'POST', body: await photoFormData(uri), signal,
+  })
+}
+
+export const MAX_IMPORT_VIDEO_BYTES = 20 * 1024 * 1024
+
+export async function importRecipeVideo(video: ImagePickerAsset, caption: string, frames: VideoFrame[], language: Language, token: string, signal: AbortSignal) {
+  const form = new FormData()
+  if (caption) form.append('caption', caption)
+  if (frames.length) form.append('frames', JSON.stringify(frames.map(frame => frame.jpeg)))
+  if (Platform.OS === 'web') {
+    const file = video.file ?? await fetch(video.uri, { signal }).then(response => response.blob())
+    if (!file) throw new Error('Could not read selected video')
+    if (file.size > MAX_IMPORT_VIDEO_BYTES) throw new ApiError('Video is too large', 413)
+    form.append('video', file, video.fileName ?? 'recipe.mp4')
+  } else {
+    const file = new FsFile(video.uri)
+    if (file.size > MAX_IMPORT_VIDEO_BYTES) throw new ApiError('Video is too large', 413)
+    form.append('video', {
+      name: video.fileName || file.name || 'recipe.mp4',
+      type: video.mimeType || file.type || 'video/mp4',
+      bytes: () => file.bytes(),
+    } as unknown as Blob)
+  }
+  return request<RecipeDraft & { recommendedFrame?: number | null }>(`/recipe-drafts/from-video?language=${language}`, token, {
+    method: 'POST', body: form, signal,
+  })
 }
 
 export function updateRecipe(id: string, data: RecipeInput, token: string) {
@@ -398,9 +453,10 @@ export function importLibrary(token: string) {
 // Uploads a picked photo (local file uri) to the backend, which stores it
 // and returns a hosted URL to save as the recipe's photoUrl.
 export async function uploadPhoto(uri: string, token: string): Promise<string> {
-  if (!API_URL) {
-    throw new Error('Missing EXPO_PUBLIC_API_URL — set it in .env')
-  }
+  return sendPhoto(await photoFormData(uri), token)
+}
+
+async function photoFormData(uri: string) {
   const formData = new FormData()
 
   if (Platform.OS === 'web') {
@@ -433,6 +489,33 @@ export async function uploadPhoto(uri: string, token: string): Promise<string> {
     } as unknown as Blob)
   }
 
+  return formData
+}
+
+export async function uploadGeneratedRecipePhoto(jpeg: string, token: string): Promise<string> {
+  if (Platform.OS === 'web') {
+    const bytes = Uint8Array.from(atob(jpeg), byte => byte.charCodeAt(0))
+    const form = new FormData()
+    form.append('photo', new Blob([bytes], { type: 'image/jpeg' }), 'recipe.jpg')
+    return sendPhoto(form, token)
+  }
+  const file = new FsFile(Paths.cache, `recipe-photo-${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`)
+  try {
+    await file.write(jpeg, { encoding: 'base64' })
+    return await uploadPhoto(file.uri, token)
+  } finally {
+    try {
+      if (file.exists) file.delete()
+    } catch {
+      // The cache can be reclaimed by the OS. Preserve the upload result.
+    }
+  }
+}
+
+async function sendPhoto(formData: FormData, token: string): Promise<string> {
+  if (!API_URL) {
+    throw new Error('Missing EXPO_PUBLIC_API_URL — set it in .env')
+  }
   const res = await fetch(`${API_URL}/upload`, {
     method: 'POST',
     // No Content-Type — the runtime sets it with the multipart boundary.

@@ -17,6 +17,7 @@ import type {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useAuth } from '@/context/AuthContext'
 import { ApiError, getRecipes, uploadPhoto } from '@/lib/api'
+import { prepareRecipePhoto, releaseRecipePhoto } from '@/lib/foodPhoto'
 import {
   fieldForServerIssue,
   ingredientKey,
@@ -64,10 +65,13 @@ import type { ThemeColors, TypeScale } from '@/theme'
 import { DIFFICULTIES, MEALTIMES } from '@/types/recipe'
 import type {
   Difficulty,
+  DraftPhoto,
+  DraftPhotoSource,
   FormIngredient,
   FormStep,
   Mealtime,
   Recipe,
+  RecipeDraft,
   RecipeInput,
 } from '@/types/recipe'
 
@@ -151,23 +155,23 @@ function genId() {
   return Math.random().toString(36).slice(2)
 }
 
-function toFormIngredients(recipe?: Recipe): FormIngredient[] {
-  if (!recipe || recipe.ingredients.length === 0) {
+function toFormIngredients(ingredients?: RecipeDraft['ingredients']): FormIngredient[] {
+  if (!ingredients?.length) {
     return [{ id: genId(), name: '', quantity: '', unit: '' }]
   }
-  return recipe.ingredients.map((i) => ({
+  return ingredients.map((i) => ({
     id: i.id ?? genId(),
     name: i.name,
-    quantity: String(i.quantity),
+    quantity: toFormNumber(i.quantity),
     unit: i.unit,
   }))
 }
 
-function toFormSteps(recipe?: Recipe): FormStep[] {
-  if (!recipe || recipe.steps.length === 0) {
+function toFormSteps(steps?: Recipe['steps']): FormStep[] {
+  if (!steps?.length) {
     return [{ id: genId(), instruction: '', durationSeconds: null }]
   }
-  return [...recipe.steps]
+  return [...steps]
     .sort((a, b) => a.stepNumber - b.stepNumber)
     .map((s) => ({
       id: s.id ?? genId(),
@@ -192,11 +196,15 @@ function toFormSteps(recipe?: Recipe): FormStep[] {
  */
 export default function RecipeForm({
   initial,
+  draft,
+  draftPhoto,
   onSubmit,
   submitLabel,
 }: {
   initial?: Recipe
-  onSubmit: (data: RecipeInput) => Promise<void>
+  draft?: RecipeDraft
+  draftPhoto?: DraftPhoto
+  onSubmit: (data: RecipeInput, photo?: DraftPhotoSource) => Promise<void>
   // A key, not a sentence. As a `string` this quietly accepted raw English
   // from both call sites and shipped an untranslated button.
   submitLabel: StringKey
@@ -240,22 +248,35 @@ export default function RecipeForm({
   )
 
   const [step, setStep] = useState(0)
-  const [title, setTitle] = useState(initial?.title ?? '')
-  const [description, setDescription] = useState(initial?.description ?? '')
-  const [difficulty, setDifficulty] = useState<Difficulty>(initial?.difficulty ?? 'Beginner')
-  const [mealtime, setMealtime] = useState<Mealtime | undefined>(initial?.mealtime)
-  const [cuisine, setCuisine] = useState(initial?.cuisine ?? '')
-  const [totalMinutes, setTotalMinutes] = useState(initial ? String(initial.totalMinutes) : '')
-  const [servings, setServings] = useState(initial ? String(initial.servings) : '')
-  const [tools, setTools] = useState(initial?.tools.join(', ') ?? '')
+  const [title, setTitle] = useState(initial?.title ?? draft?.title ?? '')
+  const [description, setDescription] = useState(initial?.description ?? draft?.description ?? '')
+  const [difficulty, setDifficulty] = useState<Difficulty | null>(initial?.difficulty ?? (draft ? draft.difficulty : 'Beginner'))
+  const [mealtime, setMealtime] = useState<Mealtime | undefined>(initial?.mealtime ?? draft?.mealtime ?? undefined)
+  const [cuisine, setCuisine] = useState(initial?.cuisine ?? draft?.cuisine ?? '')
+  const [totalMinutes, setTotalMinutes] = useState(toFormNumber(initial?.totalMinutes ?? draft?.totalMinutes))
+  const [servings, setServings] = useState(toFormNumber(initial?.servings ?? draft?.servings))
+  const [tools, setTools] = useState((initial?.tools ?? draft?.tools)?.join(', ') ?? '')
   const [photoUrl, setPhotoUrl] = useState<string | undefined>(initial?.photoUrl)
+  const [selectedFrame, setSelectedFrame] = useState<number | null>(null)
+  const videoPhoto = draftPhoto?.status === 'video' ? draftPhoto : undefined
+  const currentFrameIndex = selectedFrame ?? videoPhoto?.recommendedFrame
+  const currentFrame = currentFrameIndex == null ? undefined : videoPhoto?.frames[currentFrameIndex]
+  const sourcePhoto: DraftPhotoSource | undefined = draftPhoto?.status === 'ready' ? draftPhoto.source
+    : currentFrame ? { kind: 'selected', uri: currentFrame.uri } : undefined
+  const isFoodPhotoDraft = draftPhoto?.status === 'ready' && draftPhoto.source.kind === 'selected'
+  const usingDraftPhoto = !photoUrl && !!sourcePhoto
+  const photoPreview = photoUrl ?? (sourcePhoto?.kind === 'generated'
+    ? `data:image/jpeg;base64,${sourcePhoto.jpeg}`
+    : sourcePhoto?.uri)
   const [uploading, setUploading] = useState(false)
-  const [ingredients, setIngredients] = useState<FormIngredient[]>(toFormIngredients(initial))
-  const [steps, setSteps] = useState<FormStep[]>(toFormSteps(initial))
-  const [calories, setCalories] = useState(toFormNumber(initial?.calories))
-  const [protein, setProtein] = useState(toFormNumber(initial?.protein))
-  const [carbs, setCarbs] = useState(toFormNumber(initial?.carbs))
-  const [fat, setFat] = useState(toFormNumber(initial?.fat))
+  const [ingredients, setIngredients] = useState(() => toFormIngredients(initial?.ingredients ?? draft?.ingredients))
+  const [steps, setSteps] = useState(() => toFormSteps(initial?.steps ?? draft?.steps.map((entry, index) => ({
+    ...entry, stepNumber: index + 1,
+  }))))
+  const [calories, setCalories] = useState(toFormNumber(initial?.calories ?? draft?.calories))
+  const [protein, setProtein] = useState(toFormNumber(initial?.protein ?? draft?.protein))
+  const [carbs, setCarbs] = useState(toFormNumber(initial?.carbs ?? draft?.carbs))
+  const [fat, setFat] = useState(toFormNumber(initial?.fat ?? draft?.fat))
   // Per-field messages, shown under the input they belong to. Separate from
   // `submitError`, which is for failures with no field to blame (offline, 500).
   const [errors, setErrors] = useState<FieldErrors>({})
@@ -492,14 +513,17 @@ export default function RecipeForm({
 
     setUploading(true)
     clearError('photoUrl')
+    let preparedPhoto: string | undefined
     try {
-      setPhotoUrl(await uploadPhoto(result.assets[0].uri, token))
+      preparedPhoto = await prepareRecipePhoto(result.assets[0], 2048)
+      setPhotoUrl(await uploadPhoto(preparedPhoto, token))
     } catch (err) {
       setErrors((prev) => ({
         ...prev,
         photoUrl: err instanceof Error ? err.message : t('form.photoFailed'),
       }))
     } finally {
+      if (preparedPhoto) releaseRecipePhoto(preparedPhoto)
       setUploading(false)
     }
   }
@@ -610,9 +634,10 @@ export default function RecipeForm({
 
   function currentValues() {
     return {
-      photoUrl,
+      photoUrl: photoPreview,
       title,
       description,
+      difficulty,
       totalMinutes,
       servings,
       cuisine,
@@ -700,6 +725,7 @@ export default function RecipeForm({
       showErrors(all, firstBadStep)
       return
     }
+    if (!difficulty) return
 
     const submittedIngredients = usedIngredients(ingredients).filter((i) => i.name.trim())
     const submittedSteps = usedSteps(steps)
@@ -707,7 +733,7 @@ export default function RecipeForm({
     const data: RecipeInput = {
       title: title.trim(),
       description: description.trim() || undefined,
-      photoUrl: photoUrl as string,
+      photoUrl: photoUrl ?? '',
       difficulty,
       mealtime,
       cuisine: cuisine.trim() || undefined,
@@ -754,7 +780,7 @@ export default function RecipeForm({
     setErrors({})
     setSubmitError(null)
     try {
-      await onSubmit(data)
+      await onSubmit(data, usingDraftPhoto ? sourcePhoto : undefined)
     } catch (err) {
       handleSaveError(
         err,
@@ -799,11 +825,14 @@ export default function RecipeForm({
   }
 
   const onLastStep = step === STEP_KEYS.length - 1
+  const visibleErrors = usingDraftPhoto && errors.photoUrl === ''
+    ? Object.fromEntries(Object.entries(errors).filter(([field]) => field !== 'photoUrl'))
+    : errors
   // Key presence, not truthiness: most entries are '' because the outline is
   // the whole message.
-  const invalid = (field: string) => field in errors
-  const stepsWithErrors = new Set(Object.keys(errors).map(stepForField))
-  const footerMessage = submitError ?? summarise(errors, loc)
+  const invalid = (field: string) => field in visibleErrors
+  const stepsWithErrors = new Set(Object.keys(visibleErrors).map(stepForField))
+  const footerMessage = submitError ?? summarise(visibleErrors, loc)
 
   // The bar has three states, brightest first: the page you're on, a step that
   // passes validation, a step that doesn't. Position has to be the loudest of
@@ -815,6 +844,15 @@ export default function RecipeForm({
   // That's the rule working, not a bug: the bar says this step won't stop you
   // saving, and nutrition never can.
   const stepValues = currentValues()
+  const draftMissing = draft ? [
+    !title.trim() && t('form.title'),
+    !difficulty && t('form.difficulty'),
+    !totalMinutes.trim() && t('form.totalMinutes'),
+    !servings.trim() && t('form.servings'),
+    !ingredients.some(ingredient => ingredient.name.trim()) && t('form.step.ingredients'),
+    ingredients.some(ingredient => ingredient.name.trim() && !ingredient.quantity.trim()) && t('import.quantities'),
+    !usedSteps(steps).length && t('form.step.steps'),
+  ].filter(Boolean) : []
   const completeSteps = new Set(
     STEP_KEYS.map((_, index) => index).filter(
       (index) => Object.keys(validateStep(index, stepValues, loc)).length === 0
@@ -894,24 +932,43 @@ export default function RecipeForm({
             scrollEventThrottle={16}
           >
             <Page ref={pageRefs[0]} width={pageWidth} contentStyle={styles.content}>
+              {draft && (
+                <View style={styles.draftNotice}>
+                  <Text style={styles.draftTitle}>{t(isFoodPhotoDraft ? 'import.foodPhotoReview' : 'import.review')}</Text>
+                  <Text style={styles.draftText}>{t(isFoodPhotoDraft ? 'import.foodPhotoReviewBody' : videoPhoto ? 'import.videoReviewBody' : 'import.reviewBody')}</Text>
+                  {draftMissing.length > 0 && (
+                    <Text style={styles.draftText}>{t('import.missing').replace('{fields}', draftMissing.join(', '))}</Text>
+                  )}
+                </View>
+              )}
               <View onLayout={registerField('photoUrl')}>
                 <Pressable
                   style={[styles.photoPicker, invalid('photoUrl') && styles.photoPickerInvalid]}
                   onPress={handlePickPhoto}
-                  disabled={uploading}
+                  disabled={uploading || submitting}
                   accessibilityRole="button"
-                  accessibilityLabel={photoUrl ? t('form.changePhoto') : t('form.addPhoto')}
+                  accessibilityLabel={photoPreview ? t('form.changePhoto') : t('form.addPhoto')}
                 >
                   {uploading ? (
                     <ActivityIndicator color={c.primary} />
-                  ) : photoUrl ? (
+                  ) : photoPreview ? (
                     <>
-                      <Image source={{ uri: photoUrl }} style={StyleSheet.absoluteFill} contentFit="cover" />
+                      <Image
+                        source={{ uri: photoPreview }}
+                        style={StyleSheet.absoluteFill}
+                        contentFit="cover"
+                        cachePolicy={usingDraftPhoto ? 'memory' : undefined}
+                      />
                       <View style={styles.photoChange}>
                         <Ionicons name="camera" size={14} color={c.onPrimary} />
                         <Text style={styles.photoChangeText}>{t('form.change')}</Text>
                       </View>
                     </>
+                  ) : draftPhoto?.status === 'generating' ? (
+                    <View style={styles.photoPickerRow} accessibilityLiveRegion="polite">
+                      <ActivityIndicator color={c.primary} />
+                      <Text style={styles.photoPickerText}>{t('import.creatingPhoto')}</Text>
+                    </View>
                   ) : (
                     /* One line: a circled + and the label, per § 15. The
                        "Required" hint that used to sit under it is gone — the
@@ -932,6 +989,48 @@ export default function RecipeForm({
                     </View>
                   )}
                 </Pressable>
+                {usingDraftPhoto && sourcePhoto?.kind === 'generated' && (
+                  <Text style={styles.draftPhotoHint}>{t('import.generatedPhoto')}</Text>
+                )}
+                {videoPhoto && !photoUrl && (
+                  videoPhoto.frames.length > 0 ? (
+                    <View style={styles.videoFrames}>
+                      <Text style={styles.draftTitle}>{t('import.videoFrameHeading')}</Text>
+                      {videoPhoto.recommendedFrame === null && (
+                        <Text style={styles.draftText}>{t('import.videoFrameNoSuggestion')}</Text>
+                      )}
+                      <View style={styles.videoFrameRow} accessibilityRole="group" accessibilityLabel={t('import.videoFrameHeading')}>
+                        {videoPhoto.frames.map((frame, index) => {
+                          const label = t('import.videoFrameAt').replace('{time}', n(formatDuration(frame.seconds)))
+                          const recommended = index === videoPhoto.recommendedFrame
+                          const selected = index === currentFrameIndex
+                          return (
+                            <Pressable
+                              key={index}
+                              accessibilityRole="button"
+                              accessibilityLabel={recommended ? `${label}. ${t('import.videoFrameSuggested')}` : label}
+                              accessibilityState={{ selected, disabled: uploading || submitting }}
+                              aria-pressed={selected}
+                              disabled={uploading || submitting}
+                              onPress={() => {
+                                setSelectedFrame(index)
+                                clearError('photoUrl')
+                              }}
+                              style={[styles.videoFrame, selected && styles.videoFrameSelected]}
+                            >
+                              <Image source={{ uri: frame.uri }} style={styles.videoFrameImage} contentFit="contain" cachePolicy="memory" />
+                              <Text style={styles.videoFrameLabel}>{n(formatDuration(frame.seconds))}{selected ? ' ✓' : ''}</Text>
+                              {recommended && <Text style={styles.videoFrameLabel}>{t('import.videoFrameSuggested')}</Text>}
+                            </Pressable>
+                          )
+                        })}
+                      </View>
+                    </View>
+                  ) : <Text style={styles.draftPhotoHint}>{t('import.videoFramesUnavailable')}</Text>
+                )}
+                {!photoUrl && draftPhoto?.status === 'unavailable' && (
+                  <Text style={styles.draftPhotoHint}>{t('import.photoUnavailable')}</Text>
+                )}
               </View>
 
               <View onLayout={registerField('title')}>
@@ -980,7 +1079,7 @@ export default function RecipeForm({
                   thirds rather than content-sized: the mockup draws them that
                   way, and it stops "Intermediate" being visibly the widest
                   option on a row where width means nothing. */}
-              <View style={styles.group}>
+              <View onLayout={registerField('difficulty')} style={styles.group}>
                 <Text style={styles.label}>{t('form.difficulty')}</Text>
                 <View style={styles.segmented}>
                   {DIFFICULTIES.map((option) => (
@@ -988,11 +1087,15 @@ export default function RecipeForm({
                       key={option}
                       label={difficultyLabel(option)}
                       active={difficulty === option}
-                      onPress={() => setDifficulty(option)}
+                      onPress={() => {
+                        setDifficulty(option)
+                        clearError('difficulty')
+                      }}
                       style={styles.segment}
                     />
                   ))}
                 </View>
+                {errors.difficulty && <Text style={styles.error}>{errors.difficulty}</Text>}
               </View>
 
               {/* Registered as one block: the two fields sit side by side, so a
@@ -1534,6 +1637,16 @@ const makeStyles = (c: ThemeColors, type: TypeScale) => StyleSheet.create({
     paddingBottom: spacing.xxl,
   },
   stepHeading: { ...type.screenTitle, color: c.text, marginBottom: spacing.xs },
+  draftNotice: { gap: spacing.xs, padding: spacing.md, borderRadius: radius.notice, backgroundColor: c.accentSoft },
+  draftTitle: { ...type.bodyStrong, color: c.text },
+  draftText: { ...type.body, color: c.text },
+  draftPhotoHint: { ...type.caption, color: c.text, marginTop: spacing.xs },
+  videoFrames: { gap: spacing.sm, marginTop: spacing.md },
+  videoFrameRow: { flexDirection: 'row', gap: spacing.sm },
+  videoFrame: { flex: 1, padding: spacing.xs, borderRadius: radius.card, borderWidth: 1, borderColor: c.borderStrong },
+  videoFrameSelected: { backgroundColor: c.accentSoft, borderColor: c.primary },
+  videoFrameImage: { width: '100%', aspectRatio: 1, backgroundColor: c.surfaceAlt, borderRadius: radius.notice },
+  videoFrameLabel: { ...type.caption, color: c.text, textAlign: 'center', marginTop: spacing.xs },
   /**
    * A dashed edge and no fill, per SCREENS.md § 15 — but tall enough to be a
    * preview slot as well as a drop target.

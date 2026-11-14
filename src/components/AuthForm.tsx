@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useRouter } from 'expo-router'
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import { Text } from '@/components/ui/Text'
+import GoogleAuthButton from '@/components/GoogleAuthButton'
 import Field from '@/components/ui/Field'
 import PrimaryButton from '@/components/ui/PrimaryButton'
 import TextLink from '@/components/ui/TextLink'
@@ -9,6 +10,7 @@ import LanguageToggle from '@/components/ui/LanguageToggle'
 import { MAX_NAME_LENGTH } from '@/context/AuthContext'
 import { useT } from '@/i18n'
 import { authErrorKey } from '@/i18n/errors'
+import { googleAuthEnabled } from '@/lib/googleAuth'
 import { spacing, useScreenTopPad, useThemedStyles } from '@/theme'
 import type { ThemeColors, TypeScale } from '@/theme'
 
@@ -60,6 +62,7 @@ export default function AuthForm({
   const [error, setError] = useState<ReturnType<typeof authErrorKey> | null>(null)
   const [confirmationEmail, setConfirmationEmail] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [googlePending, setGooglePending] = useState(false)
 
   /**
    * Three segments, filled by length alone.
@@ -71,7 +74,7 @@ export default function AuthForm({
   const strength = password.length === 0 ? 0 : password.length < 6 ? 1 : password.length < MIN_PASSWORD ? 2 : 3
 
   async function handleSubmit() {
-    if (submitting || confirmationEmail) return
+    if (submitting || googlePending || confirmationEmail) return
     if (!email.trim() || !password || (collectName && !name.trim())) {
       setError(collectName ? 'auth.missingSignupFields' : 'auth.missingFields')
       return
@@ -199,8 +202,16 @@ export default function AuthForm({
             label={submitLabel}
             onPress={handleSubmit}
             loading={submitting}
+            disabled={googlePending}
             style={styles.submit}
           />
+          {googleAuthEnabled && (
+            <GoogleAuthButton
+              intent={{ destination: collectName ? '/signup' : '/login' }}
+              disabled={submitting}
+              onPendingChange={setGooglePending}
+            />
+          )}
         </View>}
 
         {!confirmationEmail && <View style={styles.footer}>

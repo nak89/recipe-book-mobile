@@ -1,12 +1,13 @@
 import { Redirect, Stack, usePathname } from 'expo-router'
 import BlankLoadingState from '@/components/ui/BlankLoadingState'
 import { useAuth } from '@/context/AuthContext'
+import { pendingRecipeShareDestination } from '@/lib/incomingRecipeShare'
 import { useSeenIntro } from '@/lib/onboarding'
 import { useTheme } from '@/theme'
 
 export default function AuthLayout() {
   const { colors: c } = useTheme()
-  const { session, loading } = useAuth()
+  const { session, loading, onboarded } = useAuth()
   const { seen } = useSeenIntro()
   const pathname = usePathname()
 
@@ -20,7 +21,7 @@ export default function AuthLayout() {
   }
 
   if (session) {
-    return <Redirect href="/" />
+    return <Redirect href={(onboarded && pendingRecipeShareDestination()) || '/'} />
   }
 
   // First run on this device. **Both** pre-auth screens are exempt, not just

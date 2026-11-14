@@ -17,7 +17,7 @@ import { foldForCompare } from '@/lib/text'
 // import below is a type and erases to nothing.
 import { toLatinDigits } from '@/lib/numerals'
 import type { StringKey } from '@/i18n'
-import type { FormIngredient, FormStep } from '@/types/recipe'
+import type { Difficulty, FormIngredient, FormStep } from '@/types/recipe'
 
 /**
  * The translator, passed in rather than pulled from a hook.
@@ -83,6 +83,7 @@ export interface RecipeFormValues {
   photoUrl?: string
   title: string
   description: string
+  difficulty?: Difficulty | null
   totalMinutes: string
   servings: string
   cuisine: string
@@ -268,6 +269,8 @@ export function validateStep(
         n: LIMITS.description.toLocaleString(),
       })
     }
+
+    if (values.difficulty === null) errors.difficulty = t('import.chooseDifficulty')
 
     const minutes = wholeNumber(values.totalMinutes, t('form.totalMinutes'), LIMITS.totalMinutes, loc)
     if (minutes !== null) errors.totalMinutes = minutes

@@ -107,6 +107,38 @@ export interface RecipeInput {
   steps: Step[]
 }
 
+export interface RecipeDraft {
+  title: string | null
+  description: string | null
+  difficulty: Difficulty | null
+  totalMinutes: number | null
+  servings: number | null
+  cuisine: string | null
+  mealtime: Mealtime | null
+  calories: number | null
+  protein: number | null
+  carbs: number | null
+  fat: number | null
+  tools: string[]
+  ingredients: (Omit<Ingredient, 'quantity'> & { quantity: number | null })[]
+  steps: Pick<Step, 'instruction'>[]
+}
+
+export type DraftPhotoSource =
+  | { kind: 'generated'; jpeg: string }
+  | { kind: 'selected'; uri: string }
+
+export interface VideoFrame {
+  uri: string
+  jpeg: string
+  seconds: number
+}
+
+export type DraftPhoto =
+  | { status: 'generating' | 'unavailable' }
+  | { status: 'ready'; source: DraftPhotoSource }
+  | { status: 'video'; frames: VideoFrame[]; recommendedFrame: number | null }
+
 // Form-local shapes: string-typed and always-present so they bind directly
 // to controlled TextInputs, converted to RecipeInput on submit.
 export interface FormIngredient {

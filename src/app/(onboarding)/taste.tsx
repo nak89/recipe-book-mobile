@@ -8,6 +8,7 @@ import { useAuth } from '@/context/AuthContext'
 import { useT } from '@/i18n'
 import { importLibrary } from '@/lib/api'
 import { selectionFeedback } from '@/lib/haptics'
+import { pendingRecipeShareDestination } from '@/lib/incomingRecipeShare'
 import { radius, spacing, useScreenTopPad, useTheme, useThemedStyles } from '@/theme'
 import type { ThemeColors, TypeScale } from '@/theme'
 
@@ -55,7 +56,7 @@ export default function TasteScreen() {
    */
   async function writeOne() {
     await completeOnboarding()
-    router.replace('/recipe/new')
+    router.replace(pendingRecipeShareDestination() ?? '/recipe/new')
   }
 
   // Both exits write `onboardedAt` and land on the app. Skipping is a decision,
@@ -63,7 +64,7 @@ export default function TasteScreen() {
   // nothing after this to defer *to*.
   async function skip() {
     await completeOnboarding()
-    router.replace('/')
+    router.replace(pendingRecipeShareDestination() ?? '/')
   }
 
   /**
@@ -81,7 +82,7 @@ export default function TasteScreen() {
     try {
       await importLibrary(token)
       await completeOnboarding()
-      router.replace('/')
+      router.replace(pendingRecipeShareDestination() ?? '/')
     } catch {
       // A network or backend failure. The server's English text is no use to a
       // Khmer reader, and the error carries nothing actionable beyond "it
