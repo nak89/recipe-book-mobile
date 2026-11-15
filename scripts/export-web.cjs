@@ -15,4 +15,15 @@ const router = config.plugins.find(plugin => Array.isArray(plugin) && plugin[0] 
 if (!router?.[1]?.headers?.['Content-Security-Policy']) throw new Error('Missing security headers')
 fs.mkdirSync(path.join(output, '_expo'), { recursive: true })
 fs.writeFileSync(path.join(output, '_expo', '.routes.json'), JSON.stringify({ headers: router[1].headers, redirects: [] }, null, 2))
+if (env.APP_VARIANT === 'development' && env.RECIPE_SHARE_IOS_TEAM_ID) {
+  const team = env.RECIPE_SHARE_IOS_TEAM_ID
+  if (!/^[A-Z0-9]{10}$/.test(team) || new URL(env.EXPO_PUBLIC_RECIPE_SHARE_ORIGIN).protocol !== 'https:') {
+    throw new Error('Set a valid Apple team ID and HTTPS development share origin')
+  }
+  const directory = path.join(output, '.well-known')
+  fs.mkdirSync(directory, { recursive: true })
+  fs.writeFileSync(path.join(directory, 'apple-app-site-association'), JSON.stringify({
+    applinks: { details: [{ appIDs: [`${team}.${config.ios.bundleIdentifier}`], components: [{ '/': '/share/*' }] }] },
+  }))
+}
 console.log('Security header manifest exported.')

@@ -57,6 +57,8 @@ export interface Recipe {
   steps: Step[]
 }
 
+export type SharedRecipe = Omit<Recipe, 'id' | 'isFavourite'>
+
 /**
  * One planned meal. `date` is a plain `YYYY-MM-DD` calendar day, never a
  * timestamp — a plan is "Tuesday's dinner", not an instant, and parsing it into

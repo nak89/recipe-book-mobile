@@ -32,12 +32,14 @@ interface RecipeReadingPageProps {
   actions: HeroAction[]
   error: StringKey | null
   onBack: () => void
-  onCook: () => void
+  onCook?: () => void
+  onSaveCopy?: () => void
+  savingCopy?: boolean
   footer?: ReactNode
   note?: { heading: string; text: string }
 }
 
-export default function RecipeReadingPage({ recipe, actions, error, onBack, onCook, footer, note }: RecipeReadingPageProps) {
+export default function RecipeReadingPage({ recipe, actions, error, onBack, onCook, onSaveCopy, savingCopy, footer, note }: RecipeReadingPageProps) {
   const { colors: c } = useTheme()
   const styles = useThemedStyles(makeStyles)
   const t = useT()
@@ -71,6 +73,7 @@ export default function RecipeReadingPage({ recipe, actions, error, onBack, onCo
             source={recipe.photoUrl ? { uri: recipe.photoUrl } : undefined}
             style={StyleSheet.absoluteFill}
             contentFit="cover"
+            cachePolicy={onSaveCopy ? 'none' : undefined}
             transition={200}
             accessibilityIgnoresInvertColors
           />
@@ -90,7 +93,7 @@ export default function RecipeReadingPage({ recipe, actions, error, onBack, onCo
               onPress={onBack}
               hitSlop={12}
               accessibilityRole="button"
-              accessibilityLabel={t('detail.back')}
+              accessibilityLabel={t(onSaveCopy ? 'common.close' : 'detail.back')}
               style={({ pressed }) => [styles.back, pressed && styles.pressed]}
             >
               {/* A chevron drawn from two rules, at the same 1.4px as every
@@ -185,7 +188,7 @@ export default function RecipeReadingPage({ recipe, actions, error, onBack, onCo
                   value={amount}
                   ingredient
                   checked={checked[key] === true}
-                  onToggle={(next) => setChecked((prev) => ({ ...prev, [key]: next }))}
+                  onToggle={onSaveCopy ? undefined : (next) => setChecked((prev) => ({ ...prev, [key]: next }))}
                   last={index === recipe.ingredients.length - 1}
                 />
               )
@@ -230,11 +233,11 @@ export default function RecipeReadingPage({ recipe, actions, error, onBack, onCo
           style={styles.ctaFade}
           pointerEvents="none"
         />
-        <PrimaryButton
-          label={t('detail.startCooking')}
-          onPress={onCook}
-          disabled={steps.length === 0}
-        />
+        {onSaveCopy ? (
+          <PrimaryButton label={t('recipeShare.saveCopy')} onPress={onSaveCopy} loading={savingCopy} />
+        ) : onCook && (
+          <PrimaryButton label={t('detail.startCooking')} onPress={onCook} disabled={steps.length === 0} />
+        )}
       </View>
 
     </View>

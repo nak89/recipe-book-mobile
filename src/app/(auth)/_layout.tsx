@@ -3,6 +3,7 @@ import BlankLoadingState from '@/components/ui/BlankLoadingState'
 import { useAuth } from '@/context/AuthContext'
 import { pendingRecipeShareDestination } from '@/lib/incomingRecipeShare'
 import { useSeenIntro } from '@/lib/onboarding'
+import { pendingSharedRecipe } from '@/lib/sharedRecipeLink'
 import { useTheme } from '@/theme'
 
 export default function AuthLayout() {
@@ -21,7 +22,7 @@ export default function AuthLayout() {
   }
 
   if (session) {
-    return <Redirect href={(onboarded && pendingRecipeShareDestination()) || '/'} />
+    return <Redirect href={(onboarded && (pendingSharedRecipe() ?? pendingRecipeShareDestination())) || '/'} />
   }
 
   // First run on this device. **Both** pre-auth screens are exempt, not just
@@ -29,7 +30,7 @@ export default function AuthLayout() {
   // `/about` in this list, choosing a language would redirect straight back to
   // the picker. That is a two-screen trap with no way into the app, and it is
   // the other half of the reason `markIntroSeen` publishes before it persists.
-  if (!seen && pathname !== '/language' && pathname !== '/about') {
+  if (!seen && !pendingSharedRecipe() && pathname !== '/language' && pathname !== '/about') {
     return <Redirect href="/language" />
   }
 

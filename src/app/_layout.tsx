@@ -7,6 +7,7 @@ import { Stack } from 'expo-router'
 import * as SplashScreen from 'expo-splash-screen'
 import { StatusBar } from 'expo-status-bar'
 import { useEffect } from 'react'
+import { Platform } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { AuthProvider } from '@/context/AuthContext'
@@ -90,7 +91,9 @@ function RootStack() {
           content on a light bar. Cook mode is the one screen that will need to
           override this locally rather than derive it. */}
       <StatusBar style="dark" />
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: c.bg } }} />
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: c.bg } }}>
+        <Stack.Screen name="share/[code]" options={{ presentation: Platform.OS === 'ios' ? 'modal' : 'card' }} />
+      </Stack>
     </>
   )
 }

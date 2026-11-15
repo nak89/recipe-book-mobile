@@ -1,6 +1,6 @@
 import { File as FsFile, Paths } from 'expo-file-system'
 import { Platform } from 'react-native'
-import type { Difficulty, Mealtime, PlanSlot, Recipe, RecipeDraft, RecipeInput, VideoFrame } from '@/types/recipe'
+import type { Difficulty, Mealtime, PlanSlot, Recipe, RecipeDraft, RecipeInput, SharedRecipe, VideoFrame } from '@/types/recipe'
 import type { ImagePickerAsset } from 'expo-image-picker'
 import type { Language } from '@/i18n'
 // Type-only, so the i18n barrel — and the React context inside it — never enters
@@ -46,7 +46,7 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, token: string, options: RequestInit = {}): Promise<T> {
+async function request<T>(path: string, token: string | null, options: RequestInit = {}): Promise<T> {
   if (!API_URL) {
     throw new Error('Missing EXPO_PUBLIC_API_URL — set it in .env')
   }
@@ -54,7 +54,7 @@ async function request<T>(path: string, token: string, options: RequestInit = {}
     ...options,
     headers: {
       ...(!(options.body instanceof FormData) && { 'Content-Type': 'application/json' }),
-      Authorization: `Bearer ${token}`,
+      ...(token && { Authorization: `Bearer ${token}` }),
       ...options.headers,
     },
   })
@@ -74,6 +74,30 @@ async function request<T>(path: string, token: string, options: RequestInit = {}
 
 export function getRecipes(token: string) {
   return recipesResource.load(token, () => request<Recipe[]>('/recipes', token))
+}
+
+export function getRecipeShare(id: string, token: string, signal: AbortSignal) {
+  return request<{ active: boolean }>(`/recipe-shares/owner/${encodeURIComponent(id)}`, token, { signal })
+}
+
+export function createRecipeShare(id: string, token: string) {
+  return request<{ token: string }>(`/recipe-shares/owner/${encodeURIComponent(id)}`, token, { method: 'PUT' })
+}
+
+export function revokeRecipeShare(id: string, token: string) {
+  return request<void>(`/recipe-shares/owner/${encodeURIComponent(id)}`, token, { method: 'DELETE' })
+}
+
+export async function getSharedRecipe(code: string, signal: AbortSignal): Promise<SharedRecipe> {
+  const path = `/recipe-shares/${encodeURIComponent(code)}`
+  const { hasPrivatePhoto, ...recipe } = await request<SharedRecipe & { hasPrivatePhoto: boolean }>(path, null, { signal })
+  return { ...recipe, photoUrl: hasPrivatePhoto ? `${API_URL}${path}/photo` : recipe.photoUrl }
+}
+
+export async function copySharedRecipe(code: string, token: string) {
+  const saved = await request<{ id: string }>(`/recipe-shares/${encodeURIComponent(code)}/copy`, token, { method: 'POST' })
+  clearRecipeCache()
+  return saved
 }
 
 export const resolvePhoto = createPhotoResolver(async (urls, token) => {

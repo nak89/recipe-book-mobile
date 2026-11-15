@@ -7,6 +7,7 @@ import { deleteRecipe, getCachedRecipe, getRecipe, setFavourite } from '@/lib/ap
 import { favouriteFeedback } from '@/lib/haptics'
 import BlankLoadingState from '@/components/ui/BlankLoadingState'
 import RecipeReadingPage from '@/components/RecipeReadingPage'
+import RecipeShareDialog from '@/components/RecipeShareDialog'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import TextLink from '@/components/ui/TextLink'
 import { useT } from '@/i18n'
@@ -30,6 +31,7 @@ export default function RecipeDetailScreen() {
   // a dependency of the fetch effect.
   const [error, setError] = useState<StringKey | null>(null)
   const [confirming, setConfirming] = useState(false)
+  const [sharing, setSharing] = useState(false)
   useFocusEffect(
     useCallback(() => {
       if (!token || !id) return
@@ -99,6 +101,9 @@ export default function RecipeDetailScreen() {
         onBack={goBack}
         onCook={() => router.push(`/recipe/${recipe.id}/cook`)}
         actions={[
+          ...((__DEV__ || process.env.EXPO_PUBLIC_RECIPE_SHARE_ENABLED === 'true') ? [
+            { label: t('recipeShare.action'), onPress: () => setSharing(true) },
+          ] : []),
           { label: t('detail.edit'), onPress: () => router.push(`/recipe/${recipe.id}/edit`) },
           {
             label: `${recipe.isFavourite ? '◆' : '◇'} ${t(recipe.isFavourite ? 'detail.saved' : 'detail.save')}`,
@@ -109,6 +114,7 @@ export default function RecipeDetailScreen() {
         ]}
         footer={<TextLink label={t('common.delete')} onPress={() => setConfirming(true)} />}
       />
+      {sharing && token && <RecipeShareDialog id={recipe.id} token={token} onClose={() => setSharing(false)} />}
       <ConfirmDialog
         visible={confirming}
         title={t('dashboard.deleteTitle')}

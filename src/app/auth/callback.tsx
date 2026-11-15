@@ -5,6 +5,7 @@ import PrimaryButton from '@/components/ui/PrimaryButton'
 import { Text } from '@/components/ui/Text'
 import { useT } from '@/i18n'
 import { finishGoogleAuth, googleAuthEnabled } from '@/lib/googleAuth'
+import { pendingSharedRecipe } from '@/lib/sharedRecipeLink'
 import { spacing, useScreenTopPad, useTheme, useThemedStyles } from '@/theme'
 import type { ThemeColors, TypeScale } from '@/theme'
 
@@ -31,7 +32,9 @@ export default function AuthCallback() {
   }, [])
 
   if (!googleAuthEnabled) return <Redirect href="/login" />
-  if (result && (!result.error || leaving)) return <Redirect href={result.destination} />
+  if (result && (!result.error || leaving)) {
+    return <Redirect href={(!result.error && result.destination === '/' && pendingSharedRecipe()) || result.destination} />
+  }
 
   return (
     <ScrollView contentContainerStyle={[styles.content, { paddingTop: topPad }]}>

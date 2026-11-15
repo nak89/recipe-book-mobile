@@ -21,11 +21,19 @@ module.exports = ({ config: base }) => {
   if (process.env.APP_VARIANT !== 'development') return config
 
   const id = 'com.nak89.krouengpsom.dev'
+  const shareOrigin = process.env.EXPO_PUBLIC_RECIPE_SHARE_ORIGIN
+  const shareUrl = shareOrigin && new URL(shareOrigin)
   return {
     ...config,
     name: 'Recipe Book Dev',
     scheme: 'recipebookdev',
-    ios: { ...config.ios, bundleIdentifier: id },
+    ios: {
+      ...config.ios,
+      bundleIdentifier: id,
+      ...(shareUrl?.protocol === 'https:' && {
+        associatedDomains: [`applinks:${shareUrl.hostname}`],
+      }),
+    },
     android: { ...config.android, package: id },
     extra: { ...config.extra, recipeBookDevShare: true },
     plugins: [
