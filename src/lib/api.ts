@@ -6,6 +6,7 @@ import type { Language } from '@/i18n'
 // Type-only, so the i18n barrel — and the React context inside it — never enters
 // this module's runtime graph. `api.ts` is imported by every screen.
 import type { LinePart } from '@/lib/grocery'
+import type { GroceryImportItem } from '@/lib/groceryImport'
 import { createPhotoResolver, type SignedPhoto } from '@/lib/photoAccess'
 
 import { clearRecipeCache, getCachedRecipe, libraryResource, recipesResource } from '@/lib/recipeCache'
@@ -38,7 +39,11 @@ export class ApiError extends Error {
   status: number
   details: FieldIssue[]
 
-  constructor(message: string, status: number, details: FieldIssue[] = []) {
+  constructor(
+    message: string, status: number, details: FieldIssue[] = [],
+    readonly code?: string,
+    readonly retryAt?: string,
+  ) {
     super(message)
     this.name = 'ApiError'
     this.status = status
@@ -60,7 +65,13 @@ async function request<T>(path: string, token: string | null, options: RequestIn
   })
   if (!res.ok) {
     const body = await res.json().catch(() => null)
-    throw new ApiError(body?.error ?? 'Request failed', res.status, body?.details ?? [])
+    throw new ApiError(
+      body?.error ?? 'Request failed',
+      res.status,
+      body?.details ?? [],
+      typeof body?.code === 'string' ? body.code : undefined,
+      typeof body?.retryAt === 'string' ? body.retryAt : undefined,
+    )
   }
   // Recipe writes and library copies change the snapshots shown on return.
   // Invalidate only after success, preserving useful data after a failed save.
@@ -116,9 +127,9 @@ export function createRecipe(data: RecipeInput, token: string) {
   return request<Recipe>('/recipes', token, { method: 'POST', body: JSON.stringify(data) })
 }
 
-export function importRecipeText(text: string, language: Language, token: string, signal: AbortSignal) {
+export function importRecipeText(text: string, language: Language, token: string, signal: AbortSignal, tiktokUrl?: string) {
   return request<RecipeDraft>(`/recipe-drafts/from-text?language=${language}`, token, {
-    method: 'POST', body: JSON.stringify({ text }), signal,
+    method: 'POST', body: JSON.stringify({ text: text || undefined, tiktokUrl }), signal,
   })
 }
 
@@ -136,9 +147,10 @@ export async function importRecipeFromPhoto(uri: string, language: Language, tok
 
 export const MAX_IMPORT_VIDEO_BYTES = 20 * 1024 * 1024
 
-export async function importRecipeVideo(video: ImagePickerAsset, caption: string, frames: VideoFrame[], language: Language, token: string, signal: AbortSignal) {
+export async function importRecipeVideo(video: ImagePickerAsset, caption: string, frames: VideoFrame[], language: Language, token: string, signal: AbortSignal, tiktokUrl?: string) {
   const form = new FormData()
   if (caption) form.append('caption', caption)
+  if (tiktokUrl) form.append('tiktokUrl', tiktokUrl)
   if (frames.length) form.append('frames', JSON.stringify(frames.map(frame => frame.jpeg)))
   if (Platform.OS === 'web') {
     const file = video.file ?? await fetch(video.uri, { signal }).then(response => response.blob())
@@ -249,6 +261,8 @@ export interface GroceryItem {
   amount: number
   unit: string
   ticked: boolean
+  destination?: 'manual' | 'day' | 'week'
+  shoppingDate?: string | null
 }
 
 export interface GroceryList {
@@ -304,6 +318,16 @@ export function addGroceryItem(
   return request<GroceryItem>('/grocery/items', token, {
     method: 'POST',
     body: JSON.stringify({ weekStart, ...item }),
+  })
+}
+
+export function importGroceryItems(
+  payload: { weekStart: string; shoppingDate: string | null; importId: string; items: GroceryImportItem[] },
+  token: string,
+) {
+  return request<GroceryItem[]>('/grocery/items/import', token, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
   })
 }
 

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useFocusEffect, useIsFocused, useNavigation, useRouter } from 'expo-router'
 import { ActivityIndicator, AppState, FlatList, Pressable, RefreshControl, StyleSheet, View, useWindowDimensions } from 'react-native'
 import { Image } from 'expo-image'
+import BlankLoadingState from '@/components/ui/BlankLoadingState'
 import { Text } from '@/components/ui/Text'
 import { useAuth } from '@/context/AuthContext'
 import { copyLibraryRecipe, getCachedLibrary, getLibrary } from '@/lib/api'
@@ -18,7 +19,6 @@ import PrimaryButton from '@/components/ui/PrimaryButton'
 import ProfileButton from '@/components/ui/ProfileButton'
 import SearchBar from '@/components/ui/SearchBar'
 import SectionHeader from '@/components/ui/SectionHeader'
-import MortarLoader from '@/components/ui/MortarLoader'
 import TextLink from '@/components/ui/TextLink'
 import type { SwipeTabsNavigationProp } from '@/navigation/SwipeTabs'
 import { contentType, radius, sized, sizes, spacing, useScreenTopPad, useTheme, useThemedStyles } from '@/theme'
@@ -236,7 +236,7 @@ export default function ExploreScreen() {
 
   const topPad = useScreenTopPad()
 
-  if (loading) return <MortarLoader />
+  if (loading) return <BlankLoadingState />
 
   // SCREENS.md § 195. Only when the failure left us with *nothing* — a stale
   // list is more use than an apology, so a refetch that fails over content

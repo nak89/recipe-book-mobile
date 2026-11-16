@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useFocusEffect, useNavigation, useRouter } from 'expo-router'
 import { FlatList, RefreshControl, StyleSheet, View } from 'react-native'
+import BlankLoadingState from '@/components/ui/BlankLoadingState'
 import { Text } from '@/components/ui/Text'
 import { useAuth } from '@/context/AuthContext'
 import { deleteRecipe, getCachedRecipes, getPlan, getRecipes, setFavourite } from '@/lib/api'
@@ -23,7 +24,6 @@ import Masthead, { MastheadAction } from '@/components/ui/Masthead'
 import PrimaryButton from '@/components/ui/PrimaryButton'
 import ProfileButton from '@/components/ui/ProfileButton'
 import SectionHeader from '@/components/ui/SectionHeader'
-import MortarLoader from '@/components/ui/MortarLoader'
 import TextLink from '@/components/ui/TextLink'
 import type { SwipeTabsNavigationProp } from '@/navigation/SwipeTabs'
 import { sized, spacing, useScreenTopPad, useTheme, useThemedStyles } from '@/theme'
@@ -221,7 +221,7 @@ export default function RecipesIndexScreen() {
 
   const masthead = (
     <Masthead
-      title={t('brand.wordmark')}
+      title={t('tabs.recipes')}
       // No language toggle here. Language is a setting, and settings live in
       // one place — the profile screen, reached from the avatar at the end of
       // this same row. A control that changes the whole app's chrome does not
@@ -324,7 +324,7 @@ export default function RecipesIndexScreen() {
   // rather than passing underneath it.
   const topPad = useScreenTopPad()
 
-  if (loading) return <MortarLoader />
+  if (loading) return <BlankLoadingState />
 
   return (
     <View style={styles.container}>

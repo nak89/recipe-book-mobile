@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { Dimensions, Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import BlankLoadingState from '@/components/ui/BlankLoadingState'
+import NavigationButton from '@/components/ui/NavigationButton'
 import { Text } from '@/components/ui/Text'
 import type { LayoutChangeEvent, NativeScrollEvent, NativeSyntheticEvent } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -18,7 +19,6 @@ import { getCachedRecipe, getLibraryRecipe, getRecipe } from '@/lib/api'
 import { numberLibrarySteps } from '@/lib/libraryRecipe'
 import { selectionFeedback, favouriteFeedback } from '@/lib/haptics'
 import { formatDuration, timerProgress } from '@/lib/timer'
-import TextLink from '@/components/ui/TextLink'
 import { useNum, useT } from '@/i18n'
 import type { StringKey } from '@/i18n'
 import { apiErrorKey } from '@/i18n/errors'
@@ -208,7 +208,7 @@ export default function CookModeScreen({ source = 'book' }: { source?: 'book' | 
     return (
       <View style={[styles.container, styles.centred]}>
         <Text style={styles.emptyTitle}>{t(error ?? 'cook.noSteps')}</Text>
-        <TextLink label={t('cook.exit')} onPress={exitCook} />
+        <NavigationButton action="close" accessibilityLabel={t('cook.exit')} onPress={exitCook} />
       </View>
     )
   }
@@ -228,16 +228,7 @@ export default function CookModeScreen({ source = 'book' }: { source?: 'book' | 
           </Text>
           {` · ${t('cook.cooking')}`}
         </Text>
-        <Pressable
-          onPress={exitCook}
-          hitSlop={12}
-          accessibilityRole="button"
-          accessibilityLabel={t('cook.exit')}
-          style={({ pressed }) => [styles.close, pressed && styles.pressed]}
-        >
-          <View style={styles.closeA} />
-          <View style={styles.closeB} />
-        </Pressable>
+        <NavigationButton action="close" accessibilityLabel={t('cook.exit')} onPress={exitCook} />
       </View>
 
       {/* One 3px segment per step: completed and current in tamarind, the rest
@@ -298,22 +289,12 @@ export default function CookModeScreen({ source = 'book' }: { source?: 'book' | 
         )}
 
         <View style={styles.nav}>
-          <Pressable
+          <NavigationButton
+            action="back"
             onPress={() => goTo(index - 1)}
             disabled={index === 0}
-            hitSlop={10}
-            accessibilityRole="button"
             accessibilityLabel={t('cook.previous')}
-            style={({ pressed }) => [
-              styles.navButton,
-              styles.navBack,
-              index === 0 && styles.navDisabled,
-              pressed && styles.pressed,
-            ]}
-          >
-            <View style={[styles.arrowTop, styles.arrowCentred]} />
-            <View style={[styles.arrowBottom, styles.arrowCentred]} />
-          </Pressable>
+          />
 
           <Text style={styles.count}>
             {`${n(index + 1)} ${t('cook.ofSteps')} ${n(steps.length)}`}
@@ -530,22 +511,6 @@ const makeStyles = (c: ThemeColors, type: TypeScale) =>
       paddingBottom: spacing.md,
     },
     headerTitle: { ...type.metadataSmall, color: c.text, opacity: 0.5, flex: 1, minWidth: 0 },
-    close: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
-    // A ✕ from two 1.4px rules, matching every other icon in the product.
-    closeA: {
-      position: 'absolute',
-      width: 15,
-      height: 1.4,
-      backgroundColor: c.text,
-      transform: [{ rotate: '45deg' }],
-    },
-    closeB: {
-      position: 'absolute',
-      width: 15,
-      height: 1.4,
-      backgroundColor: c.text,
-      transform: [{ rotate: '-45deg' }],
-    },
     pressed: { opacity: 0.6 },
 
     rail: { flexDirection: 'row', gap: 5, paddingHorizontal: spacing.gutter },
@@ -627,16 +592,6 @@ const makeStyles = (c: ThemeColors, type: TypeScale) =>
 
     nav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
     navButton: { width: NAV, height: NAV, justifyContent: 'center' },
-    /**
-     * Back is a drawn control, not a bare glyph: a hairline box on paper, the
-     * same idiom as the timer pill beside it. `borderWidth` is inside the box in
-     * RN, so the 44pt hit target is unchanged.
-     *
-     * Only the *back* arrow gets this. Forward is the step the cook is reaching
-     * for, and boxing both would make the pair read as two equal choices.
-     */
-    navBack: { borderWidth: 1.5, borderColor: c.border, borderRadius: radius.chip },
-    navDisabled: { opacity: 0.25 },
     // Same geometry as the planner's week arrows, and the same fix: a 10pt bar
     // at 45° reaches 10/2·sin45 ≈ 3.54 from its own centre, so each half sits
     // exactly that far from the button's middle and the two close at the point.
@@ -662,15 +617,6 @@ const makeStyles = (c: ThemeColors, type: TypeScale) =>
     },
     arrowForward: { transform: [{ rotate: '45deg' }] },
     arrowBackward: { transform: [{ rotate: '-45deg' }] },
-    /**
-     * Centres the chevron once there is a box around it.
-     *
-     * The bare arrows sit at `left: 12`, which puts their 10pt bars' shared
-     * centre at 17 in a 44pt button — fine when the edge is invisible, visibly
-     * off-centre once it isn't. Same arithmetic as `ARROW_REACH`: half the bar's
-     * length in from the middle.
-     */
-    arrowCentred: { left: (NAV - 10) / 2 },
     count: { ...type.metadataSmall, color: c.text, opacity: 0.5, textTransform: 'uppercase' },
     doneButton: {
       backgroundColor: c.primary,

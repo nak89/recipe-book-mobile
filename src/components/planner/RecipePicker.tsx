@@ -3,6 +3,7 @@ import Image from '@/components/RecipeImage'
 import { FlatList, Modal, Pressable, StyleSheet, View } from 'react-native'
 import { Text } from '@/components/ui/Text'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import NavigationButton from '@/components/ui/NavigationButton'
 import SearchBar from '@/components/ui/SearchBar'
 import { useT } from '@/i18n'
 import { useDebounce } from '@/hooks/useDebounce'
@@ -70,9 +71,10 @@ export default function RecipePicker({
           onPress={(e) => e.stopPropagation()}
         >
           <View style={styles.grabber} />
-          <Text style={styles.heading} numberOfLines={1}>
-            {title}
-          </Text>
+          <View style={styles.header}>
+            <Text style={styles.heading} numberOfLines={1}>{title}</Text>
+            <NavigationButton action="close" onPress={handleClose} />
+          </View>
 
           <View style={styles.search}>
             <SearchBar value={query} onChangeText={setQuery} placeholder={t('planner.pickSearch')} />
@@ -145,7 +147,8 @@ const makeStyles = (c: ThemeColors, type: TypeScale) =>
       backgroundColor: c.borderStrong,
       marginBottom: spacing.md,
     },
-    heading: { ...type.section, color: c.text, paddingHorizontal: spacing.xl },
+    header: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.xl },
+    heading: { ...type.section, color: c.text, flex: 1, minWidth: 0 },
     search: { paddingHorizontal: spacing.xl, paddingTop: spacing.md },
     list: { padding: spacing.md, gap: spacing.xs },
     row: {

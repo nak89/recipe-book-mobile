@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { StyleSheet, View } from 'react-native'
 import { Text } from '@/components/ui/Text'
@@ -32,6 +32,8 @@ export default function RecipeDetailScreen() {
   const [error, setError] = useState<StringKey | null>(null)
   const [confirming, setConfirming] = useState(false)
   const [sharing, setSharing] = useState(false)
+  const [favouritePending, setFavouritePending] = useState(false)
+  const favouriteRequest = useRef(false)
   useFocusEffect(
     useCallback(() => {
       if (!token || !id) return
@@ -57,14 +59,23 @@ export default function RecipeDetailScreen() {
   )
 
   async function handleToggleFavourite() {
-    if (!token || !recipe) return
+    if (!token || !recipe || favouriteRequest.current) return
+    const recipeId = recipe.id
     const next = !recipe.isFavourite
+    favouriteRequest.current = true
+    setFavouritePending(true)
+    setError(previous => previous === 'error.favourite' ? null : previous)
     favouriteFeedback()
-    setRecipe({ ...recipe, isFavourite: next })
+    setRecipe(current => current?.id === recipeId ? { ...current, isFavourite: next } : current)
     try {
-      await setFavourite(recipe.id, next, token)
+      const updated = await setFavourite(recipeId, next, token)
+      setRecipe(current => current?.id === recipeId ? { ...current, isFavourite: updated.isFavourite } : current)
     } catch {
-      setRecipe({ ...recipe, isFavourite: !next })
+      setRecipe(current => current?.id === recipeId ? { ...current, isFavourite: !next } : current)
+      setError('error.favourite')
+    } finally {
+      favouriteRequest.current = false
+      setFavouritePending(false)
     }
   }
 
@@ -102,16 +113,11 @@ export default function RecipeDetailScreen() {
         onCook={() => router.push(`/recipe/${recipe.id}/cook`)}
         actions={[
           ...((__DEV__ || process.env.EXPO_PUBLIC_RECIPE_SHARE_ENABLED === 'true') ? [
-            { label: t('recipeShare.action'), onPress: () => setSharing(true) },
+            { icon: 'share-outline' as const, label: t('recipeShare.action'), onPress: () => setSharing(true) },
           ] : []),
-          { label: t('detail.edit'), onPress: () => router.push(`/recipe/${recipe.id}/edit`) },
-          {
-            label: `${recipe.isFavourite ? '◆' : '◇'} ${t(recipe.isFavourite ? 'detail.saved' : 'detail.save')}`,
-            accessibilityLabel: t(recipe.isFavourite ? 'detail.removeFavourite' : 'detail.addFavourite'),
-            selected: recipe.isFavourite,
-            onPress: handleToggleFavourite,
-          },
+          { icon: 'create-outline', label: t('detail.editRecipe'), onPress: () => router.push(`/recipe/${recipe.id}/edit`) },
         ]}
+        favourite={{ selected: recipe.isFavourite, pending: favouritePending, onPress: handleToggleFavourite }}
         footer={<TextLink label={t('common.delete')} onPress={() => setConfirming(true)} />}
       />
       {sharing && token && <RecipeShareDialog id={recipe.id} token={token} onClose={() => setSharing(false)} />}

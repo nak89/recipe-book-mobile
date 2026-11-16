@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Ionicons } from '@expo/vector-icons'
 import { FlatList, Modal, Pressable, StyleSheet, View } from 'react-native'
+import NavigationButton from '@/components/ui/NavigationButton'
 import { Text } from '@/components/ui/Text'
 import type { StyleProp, ViewStyle } from 'react-native'
 import FieldTrigger from '@/components/ui/FieldTrigger'
@@ -36,6 +37,7 @@ export default function Select({
   allowCustom,
   clearable = true,
   invalid,
+  boxed,
   containerStyle,
   emojiFor,
   onChange,
@@ -49,6 +51,7 @@ export default function Select({
   allowCustom?: boolean
   clearable?: boolean
   invalid?: boolean
+  boxed?: boolean
   containerStyle?: StyleProp<ViewStyle>
   emojiFor?: (value: string) => string | undefined
   onChange: (value?: string) => void
@@ -105,6 +108,7 @@ export default function Select({
         placeholder={placeholderText}
         emoji={value ? emojiFor?.(value) : undefined}
         invalid={invalid}
+        boxed={boxed}
         onPress={() => setOpen(true)}
       />
 
@@ -113,15 +117,7 @@ export default function Select({
           <View style={styles.header}>
             <View style={styles.headerRow}>
               <Text style={styles.title}>{title ?? label ?? placeholderText}</Text>
-              <Pressable
-                onPress={close}
-                hitSlop={10}
-                style={styles.close}
-                accessibilityRole="button"
-                accessibilityLabel={t('common.close')}
-              >
-                <Ionicons name="close" size={20} color={c.text} />
-              </Pressable>
+              <NavigationButton action="close" onPress={close} />
             </View>
             <SearchBar
               value={query}
@@ -199,14 +195,6 @@ const makeStyles = (c: ThemeColors, type: TypeScale) => StyleSheet.create({
   header: { padding: spacing.lg, gap: spacing.lg },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   title: { ...type.title, color: c.text, flex: 1, minWidth: 0 },
-  close: {
-    width: 34,
-    height: 34,
-    borderRadius: radius.pill,
-    backgroundColor: c.surfaceAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   list: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl },
   row: {
     flexDirection: 'row',

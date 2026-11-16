@@ -156,6 +156,25 @@ export const minHeights = {
   row: 52,
 } as const
 
+export const recipeAuthoring = {
+  panelWidth: 518,
+  wideBreakpoint: 700,
+  chooserHeight: 700,
+  editorHeight: 860,
+  featureHeight: 198,
+  methodHeight: 83,
+  mediaTargetHeight: 76,
+  photoTargetHeight: 229,
+  photoPreviewHeight: 235,
+  reviewPhotoHeight: 197,
+  recipeTextHeight: 314,
+  captionHeight: 121,
+  descriptionHeight: 63,
+  ingredientQuantityWidth: 44,
+  ingredientUnitWidth: 68,
+  ingredientRemoveWidth: 22,
+} as const
+
 /**
  * Fixed sizes for things that aren't controls with text in them.
  *

@@ -1,10 +1,11 @@
 import { forwardRef, useState } from 'react'
+import type { ReactNode } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { Text, TextInput } from '@/components/ui/Text'
 // The RN class is still the *type* a ref resolves to — `@/components/ui/Text`
 // exports a function component wrapping it, which can't stand in here.
 import type { StyleProp, TextInput as RNTextInput, TextInputProps, ViewStyle } from 'react-native'
-import { contentType, inputType, sized, spacing, useTheme, useThemedStyles } from '@/theme'
+import { contentType, inputType, minHeights, radius, sized, spacing, useTheme, useThemedStyles } from '@/theme'
 import type { ThemeColors, TypeScale } from '@/theme'
 
 /**
@@ -38,6 +39,9 @@ const Field = forwardRef<
   TextInputProps & {
     label?: string
     hint?: string
+    boxed?: boolean
+    labelDetail?: string
+    labelAction?: ReactNode
     invalid?: boolean
     containerStyle?: StyleProp<ViewStyle>
     /**
@@ -51,13 +55,16 @@ const Field = forwardRef<
     suffix?: string
   }
 >(function Field(
-  { label, hint, invalid, style, containerStyle, multiline, value, suffix, onContentSizeChange, ...props },
+  { label, hint, boxed, labelDetail, labelAction, invalid, style, containerStyle, multiline, value, suffix, onContentSizeChange, onFocus, onBlur, ...props },
   ref
 ) {
   const { colors: c } = useTheme()
   const styles = useThemedStyles(makeStyles)
   const filled = typeof value === 'string' && value.length > 0
-  const face = sized(contentType('body', typeof value === 'string' ? value : ''), 18)
+  const face = boxed
+    ? sized(contentType('authoringBody', value || props.placeholder || label || ''), 16)
+    : sized(contentType('body', value ?? ''), 18)
+  const [focused, setFocused] = useState(false)
 
   /**
    * **A multiline field starts as one line and grows with what you write.**
@@ -89,10 +96,19 @@ const Field = forwardRef<
 
   return (
     <View style={[styles.wrapper, containerStyle]}>
-      {label && <Text style={styles.label}>{label}</Text>}
+      {label && (boxed ? (
+        <View style={styles.boxLabelRow}>
+          <View style={styles.boxLabelCopy}>
+            <Text style={styles.boxLabel}>{label}</Text>
+            {labelDetail && <Text style={styles.boxDetail}>{labelDetail}</Text>}
+          </View>
+          {labelAction}
+        </View>
+      ) : <Text style={styles.label}>{label}</Text>)}
       <TextInput
         ref={ref}
         value={value}
+        accessibilityLabel={boxed ? label : undefined}
         style={[
           styles.input,
           // A field's *value* is content — it is what the user is typing — so
@@ -109,14 +125,17 @@ const Field = forwardRef<
           // as the top of a box. Natural metrics contain the ink either way;
           // see `inputType`, which this note supersedes.
           inputType(face),
-          filled ? styles.ruleFilled : styles.ruleEmpty,
+          boxed ? styles.boxed : filled ? styles.ruleFilled : styles.ruleEmpty,
           multiline && styles.multiline,
           multiline && { minHeight: Math.max(contentHeight, face.lineHeight ?? 0) },
-          invalid && styles.invalid,
+          boxed && focused && styles.boxFocused,
+          invalid && (boxed ? styles.boxInvalid : styles.invalid),
           suffix ? styles.withSuffix : null,
           style,
         ]}
-        placeholderTextColor={c.textPlaceholder}
+        placeholderTextColor={boxed ? c.textSecondary : c.textPlaceholder}
+        onFocus={(event) => { if (boxed) setFocused(true); onFocus?.(event) }}
+        onBlur={(event) => { if (boxed) setFocused(false); onBlur?.(event) }}
         // One palette, and it is paper — see the note in `ThemeContext`. An
         // unset keyboard would follow the *phone* and arrive dark under a cream
         // page, which is the only reason this is stated at all.
@@ -131,11 +150,11 @@ const Field = forwardRef<
         {...props}
       />
       {suffix ? (
-        <Text style={styles.suffix} pointerEvents="none">
+        <Text style={[styles.suffix, boxed && styles.boxSuffix]} pointerEvents="none">
           {suffix}
         </Text>
       ) : null}
-      {hint && <Text style={styles.hint}>{hint}</Text>}
+      {hint && <Text style={[styles.hint, boxed && invalid && styles.boxError]}>{hint}</Text>}
     </View>
   )
 })
@@ -148,6 +167,23 @@ const makeStyles = (c: ThemeColors, type: TypeScale) =>
     // goes between fields rather than inside one.
     wrapper: { gap: spacing.xs },
     label: { ...type.sectionLabel, color: c.textMuted, textTransform: 'uppercase' },
+    boxLabelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
+    boxLabelCopy: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.sm },
+    boxLabel: { ...type.authoringLabel, color: c.text },
+    boxDetail: { ...type.metadataSmall, color: c.textSecondary },
+    boxed: {
+      minHeight: minHeights.field,
+      borderWidth: 1,
+      borderColor: c.borderFaint,
+      borderRadius: radius.thumb,
+      backgroundColor: c.fieldSurface,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
+    },
+    boxFocused: { borderColor: c.textSecondary },
+    boxInvalid: { borderColor: c.danger },
+    boxError: { color: c.danger },
+    boxSuffix: { right: spacing.md, bottom: spacing.md, color: c.textSecondary },
     input: {
       // Type comes from `contentType` at the call site above — see the note
       // there. `sized` rather than a bare fontSize override, because on the

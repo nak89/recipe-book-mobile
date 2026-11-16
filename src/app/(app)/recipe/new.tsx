@@ -1,16 +1,17 @@
-import { Stack, useLocalSearchParams, useNavigation, useRouter } from 'expo-router'
-import { useEffect, useRef, useState } from 'react'
-import { Pressable, StyleSheet } from 'react-native'
-import { Text } from '@/components/ui/Text'
+import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { BackHandler, Keyboard, Platform, StyleSheet, View, useWindowDimensions } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { RecipeAuthoringNav } from '@/components/RecipeAuthoring'
 import { useAuth } from '@/context/AuthContext'
-import { useT } from '@/i18n'
 import { createRecipe, generateRecipePhoto, uploadGeneratedRecipePhoto, uploadPhoto } from '@/lib/api'
 import { releaseRecipePhoto } from '@/lib/foodPhoto'
 import { readIncomingRecipeShare, recipeShareEnabled, type IncomingRecipeShare } from '@/lib/incomingRecipeShare'
 import RecipeForm from '@/components/RecipeForm'
 import RecipeImport from '@/components/RecipeImport'
 import BlankLoadingState from '@/components/ui/BlankLoadingState'
-import { sizes, useTypeScale } from '@/theme'
+import { radius, recipeAuthoring, spacing, useThemedStyles } from '@/theme'
+import type { ThemeColors } from '@/theme'
 import type { DraftPhoto, DraftPhotoSource, RecipeDraft, RecipeInput } from '@/types/recipe'
 
 const textImportEnabled = __DEV__ || process.env.EXPO_PUBLIC_RECIPE_IMPORT_ENABLED === 'true'
@@ -23,11 +24,16 @@ export default function NewRecipeScreen() {
 
 function NewRecipeEditor({ shareId }: { shareId?: string }) {
   const { token } = useAuth()
-  const t = useT()
-  const type = useTypeScale()
+  const styles = useThemedStyles(makeStyles)
   const navigation = useNavigation()
   const router = useRouter()
-  const [entry, setEntry] = useState<'choose' | 'manual' | RecipeDraft>(textImportEnabled || shareId ? 'choose' : 'manual')
+  const canChoose = textImportEnabled || !!shareId
+  const [entry, setEntry] = useState<'choose' | 'manual' | RecipeDraft>(canChoose ? 'choose' : 'manual')
+  const [choosing, setChoosing] = useState(!shareId)
+  const [showIncomingShare, setShowIncomingShare] = useState(!!shareId)
+  const { top } = useSafeAreaInsets()
+  const { width, height } = useWindowDimensions()
+  const wide = Platform.OS === 'web' && width >= recipeAuthoring.wideBreakpoint
   const [incoming, setIncoming] = useState<IncomingRecipeShare>()
   const [saving, setSaving] = useState(false)
   const [draftPhoto, setDraftPhoto] = useState<DraftPhoto>()
@@ -70,7 +76,7 @@ function NewRecipeEditor({ shareId }: { shareId?: string }) {
     const request = new AbortController()
     photoRequest.current?.abort()
     photoRequest.current = request
-    setDraftPhoto({ status: 'generating' })
+    setDraftPhoto({ status: 'generating', startedAt: performance.now() })
     void generateRecipePhoto(draft.title, draft.ingredients.map(item => item.name), token, request.signal)
       .then(({ jpeg }) => {
         if (!request.signal.aborted) setDraftPhoto({ status: 'ready', source: { kind: 'generated', jpeg } })
@@ -85,9 +91,31 @@ function NewRecipeEditor({ shareId }: { shareId?: string }) {
     else router.replace('/')
   }
 
+  const backToChooser = useCallback(() => {
+    Keyboard.dismiss()
+    photoRequest.current?.abort()
+    for (const uri of localPhotoUris.current) releaseRecipePhoto(uri)
+    localPhotoUris.current = []
+    uploadedDraftPhotos.current.clear()
+    setDraftPhoto(undefined)
+    setShowIncomingShare(false)
+    setChoosing(true)
+    setEntry('choose')
+  }, [])
+
+  useFocusEffect(useCallback(() => {
+    if (Platform.OS !== 'android' || (!saving && (entry === 'choose' || !canChoose))) return
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (!saving) backToChooser()
+      return true
+    })
+    return () => subscription.remove()
+  }, [entry, canChoose, saving, backToChooser]))
+
   async function handleSubmit(data: RecipeInput, photo?: DraftPhotoSource) {
     if (!token) return
     setSaving(true)
+    navigation.setOptions({ gestureEnabled: false })
     try {
       if (photo && !data.photoUrl) {
         const key = photo.kind === 'selected' ? photo.uri : photo.kind
@@ -101,45 +129,62 @@ function NewRecipeEditor({ shareId }: { shareId?: string }) {
       await createRecipe(data, token)
       if (navigation.isFocused()) dismiss()
     } finally {
+      if (navigation.isFocused()) navigation.setOptions({ gestureEnabled: true })
       setSaving(false)
     }
   }
 
+  const panelHeight = Math.min(
+    height - spacing.xxl * 2,
+    entry === 'choose' && choosing ? recipeAuthoring.chooserHeight : recipeAuthoring.editorHeight,
+  )
+
   return (
-    <>
-      <Stack.Screen options={{
-        headerBackVisible: false,
-        gestureEnabled: !saving,
-        headerLeft: ({ tintColor }) => (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={t('common.cancel')}
-            accessibilityState={{ disabled: saving }}
-            disabled={saving}
-            onPress={dismiss}
-            style={({ pressed }) => [styles.cancel, (pressed || saving) && styles.inactive]}
-          >
-            <Text style={[type.sectionLabel, { color: tintColor }]}>{t('common.cancel')}</Text>
-          </Pressable>
-        ),
-      }} />
-      {entry === 'choose' && token ? (
-        shareId && !incoming ? <BlankLoadingState /> : (
-          <RecipeImport token={token} initialShare={incoming} onDraft={openDraft} onManual={() => setEntry('manual')} />
-        )
-      ) : (
-        <RecipeForm
-          draft={typeof entry === 'object' ? entry : undefined}
-          draftPhoto={draftPhoto}
-          onSubmit={handleSubmit}
-          submitLabel="form.addRecipe"
-        />
-      )}
-    </>
+    <View style={[styles.screen, wide && styles.wideScreen]}>
+      <View style={[styles.content, wide ? [styles.panel, { height: panelHeight }] : [styles.fill, { paddingTop: top }]]}>
+        {entry === 'choose' && token ? (
+          showIncomingShare && !incoming ? (
+            <>
+              <RecipeAuthoringNav onPress={dismiss} />
+              <BlankLoadingState />
+            </>
+          ) : (
+            <RecipeImport
+              token={token}
+              initialShare={showIncomingShare ? incoming : undefined}
+              onDraft={openDraft}
+              onManual={() => setEntry('manual')}
+              onCancel={dismiss}
+              onModeChange={setChoosing}
+            />
+          )
+        ) : (
+          <>
+            <RecipeAuthoringNav back={canChoose} onPress={canChoose ? backToChooser : dismiss} disabled={saving} />
+            <RecipeForm
+              draft={typeof entry === 'object' ? entry : undefined}
+              draftPhoto={draftPhoto}
+              onSubmit={handleSubmit}
+              submitLabel="form.addRecipe"
+            />
+          </>
+        )}
+      </View>
+    </View>
   )
 }
 
-const styles = StyleSheet.create({
-  cancel: { minHeight: sizes.hitMin, justifyContent: 'center' },
-  inactive: { opacity: 0.5 },
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
+  screen: { flex: 1, backgroundColor: c.bg },
+  content: { width: '100%', backgroundColor: c.bg },
+  fill: { flex: 1 },
+  wideScreen: { backgroundColor: c.canvas, alignItems: 'center', justifyContent: 'center' },
+  panel: {
+    flexShrink: 0,
+    maxWidth: recipeAuthoring.panelWidth,
+    borderWidth: 1,
+    borderColor: c.border,
+    borderRadius: radius.button,
+    overflow: 'hidden',
+  },
 })

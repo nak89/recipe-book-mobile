@@ -1,18 +1,17 @@
 import { Redirect, Stack } from 'expo-router'
+import type { ReactNode } from 'react'
+import { StyleSheet, View } from 'react-native'
 import BlankLoadingState from '@/components/ui/BlankLoadingState'
+import NavigationButton from '@/components/ui/NavigationButton'
+import { Text } from '@/components/ui/Text'
 import { useAuth } from '@/context/AuthContext'
 import { useT } from '@/i18n'
-import { useTheme, useTypeScale } from '@/theme'
+import { sizes, spacing, useScreenTopPad, useTheme, useThemedStyles } from '@/theme'
+import type { ThemeColors, TypeScale } from '@/theme'
 
 export default function AppLayout() {
   const { colors: c } = useTheme()
   const t = useT()
-  // `headerTitleStyle` is a navigation option, not a stylesheet entry, so it
-  // never passes through a `makeStyles` factory and has to read the scale
-  // directly. What it takes from the Khmer scale is the *absence* of a pinned
-  // lineHeight — the header's title box is tight, and a fixed line box is what
-  // clips a Khmer cluster's stacked marks.
-  const type = useTypeScale()
   const { session, loading, onboarded } = useAuth()
 
   // Without this guard you get a redirect flash to /login on cold start,
@@ -38,10 +37,13 @@ export default function AppLayout() {
   return (
     <Stack
       screenOptions={{
-        headerShadowVisible: false,
-        headerStyle: { backgroundColor: c.bg },
-        headerTintColor: c.text,
-        headerTitleStyle: type.section,
+        header: ({ navigation, options, back }) => (
+          <ScreenHeader
+            title={options.title ?? ''}
+            onBack={back ? navigation.goBack : undefined}
+            actions={options.headerRight?.({ canGoBack: !!back, tintColor: c.text })}
+          />
+        ),
         contentStyle: { backgroundColor: c.bg },
       }}
     >
@@ -55,22 +57,9 @@ export default function AppLayout() {
           language changes, so the options follow it. */}
       <Stack.Screen
         name="recipe/new"
-        options={{ title: t('nav.newRecipe'), presentation: 'modal' }}
+        options={{ title: t('nav.newRecipe'), presentation: 'modal', headerShown: false }}
       />
-      {/* Profile is a pushed screen rather than a tab: somewhere you go and come
-          back from, where the dock's three entries are the places you swipe
-          between. Reached from the initials avatar in either header.
-
-          `headerBackTitle` for the same reason the edit screen below sets one:
-          iOS labels the back button with the *previous screen's* title, and the
-          screen behind this one is the tab group, which draws its own chrome
-          and so has no title to lend — leaving the button showing the raw route
-          name, "(tabs)". It can't name the tab you came from either, since all
-          three of them push this same screen, so "Back" is the honest label. */}
-      <Stack.Screen
-        name="profile"
-        options={{ title: t('nav.profile'), headerBackTitle: t('nav.back') }}
-      />
+      <Stack.Screen name="profile" options={{ title: t('nav.profile') }} />
       <Stack.Screen name="recipe/[id]/index" options={{ headerShown: false }} />
       {/* Cook mode draws its own chrome and inverts the page to ink, so a paper
           navigation bar over it would be the brightest thing on a screen built
@@ -89,17 +78,32 @@ export default function AppLayout() {
         name="library/[id]/cook"
         options={{ headerShown: false, presentation: 'fullScreenModal' }}
       />
-      {/* headerBackTitle is explicit because iOS labels the back button with the previous
-          screen's title, and the detail screen draws its own header (headerShown: false,
-          no title) — leaving it to fall back to the raw route name, "recipe/[id]/index". */}
-      <Stack.Screen
-        name="recipe/[id]/edit"
-        // No `headerBackTitle` any more: SCREENS.md § 14 draws a bare `‹` on
-        // all four pages of the wizard, and `RecipeForm` sets
-        // `headerBackButtonDisplayMode: 'minimal'` for both of its screens. A
-        // label here would be overridden on mount and read as a live setting.
-        options={{ title: t('nav.editRecipe') }}
-      />
+      <Stack.Screen name="recipe/[id]/edit" options={{ title: t('nav.editRecipe') }} />
     </Stack>
   )
 }
+
+function ScreenHeader({ title, onBack, actions }: { title: string; onBack?: () => void; actions?: ReactNode }) {
+  const topPad = useScreenTopPad()
+  const styles = useThemedStyles(makeStyles)
+
+  return (
+    <View style={[styles.header, { paddingTop: topPad }]}>
+      <View style={styles.headerSide}>
+        {onBack && <NavigationButton action="back" onPress={onBack} />}
+      </View>
+      <Text accessibilityRole="header" style={styles.headerTitle}>{title}</Text>
+      <View style={[styles.headerSide, styles.trailing]}>{actions}</View>
+    </View>
+  )
+}
+
+const makeStyles = (c: ThemeColors, type: TypeScale) => StyleSheet.create({
+  header: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+    paddingHorizontal: spacing.gutter, paddingBottom: spacing.sm, backgroundColor: c.bg,
+  },
+  headerSide: { width: sizes.hitMin + spacing.xl, alignItems: 'flex-start' },
+  trailing: { alignItems: 'flex-end' },
+  headerTitle: { ...type.section, flex: 1, minWidth: 0, color: c.text, textAlign: 'center' },
+})

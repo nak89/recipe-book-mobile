@@ -3,6 +3,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { Platform, StyleSheet, View } from 'react-native'
 import RecipeReadingPage from '@/components/RecipeReadingPage'
 import BlankLoadingState from '@/components/ui/BlankLoadingState'
+import NavigationButton from '@/components/ui/NavigationButton'
 import PrimaryButton from '@/components/ui/PrimaryButton'
 import { Text } from '@/components/ui/Text'
 import { useAuth } from '@/context/AuthContext'
@@ -87,7 +88,7 @@ function SharedRecipePreview({ code, onRetry }: { code?: string; onRetry: () => 
             {t(!code || readError === 'missing' ? 'recipeShare.unavailable' : 'recipeShare.failed')}
           </Text>
           {code && readError === 'failed' && <PrimaryButton label={t('common.retry')} onPress={onRetry} />}
-          <PrimaryButton label={t('common.close')} variant="outline" onPress={close} />
+          <NavigationButton action="close" onPress={close} />
         </View>
       ) : recipe ? (
         <RecipeReadingPage

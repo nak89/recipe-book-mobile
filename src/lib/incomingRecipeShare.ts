@@ -37,7 +37,7 @@ export async function readIncomingRecipeShare(id: string): Promise<IncomingRecip
 
   let localCopy: File | undefined
   try {
-    // Read raw payloads so external links are never resolved or downloaded automatically.
+    // Read raw payloads. The backend looks up a TikTok caption when the user creates a draft.
     const payloads = getSharedPayloads()
     for (const payload of payloads) {
       if (payload.shareType !== 'text' && payload.shareType !== 'url') continue

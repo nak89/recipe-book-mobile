@@ -1,10 +1,13 @@
-import { useState, type ReactNode } from 'react'
+import { useState, type ComponentProps, type ReactNode } from 'react'
+import { Ionicons } from '@expo/vector-icons'
 import Image from '@/components/RecipeImage'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import { Text } from '@/components/ui/Text'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import LedgerRow from '@/components/ui/LedgerRow'
+import { MastheadAction } from '@/components/ui/Masthead'
+import NavigationButton from '@/components/ui/NavigationButton'
 import PrimaryButton from '@/components/ui/PrimaryButton'
 import SectionHeader from '@/components/ui/SectionHeader'
 import { emojiForIngredient } from '@/data/ingredients'
@@ -12,24 +15,26 @@ import { useLanguage, useNum, useT } from '@/i18n'
 import type { StringKey } from '@/i18n'
 import { useDifficultyLabel, useMealtimeLabel } from '@/i18n/labels'
 import { hasKhmer } from '@/lib/text'
-import { contentType, moulType, radius, sizes, spacing, useTheme, useThemedStyles } from '@/theme'
+import { contentType, moulType, radius, spacing, useTheme, useThemedStyles } from '@/theme'
 import type { ThemeColors, TypeScale } from '@/theme'
 import type { Recipe } from '@/types/recipe'
 
 const HERO_HEIGHT = 300
 const TITLE_LIFT = 34
 
-interface HeroAction {
+type HeroAction = {
   label: string
-  onPress?: () => void
   disabled?: boolean
   accessibilityLabel?: string
-  selected?: boolean
-}
+} & (
+  | { icon: ComponentProps<typeof Ionicons>['name']; onPress: () => void }
+  | { icon?: never; onPress?: () => void }
+)
 
 interface RecipeReadingPageProps {
   recipe: Pick<Recipe, 'title' | 'photoUrl' | 'description' | 'totalMinutes' | 'servings' | 'difficulty' | 'calories' | 'cuisine' | 'mealtime' | 'tools' | 'ingredients' | 'steps'>
   actions: HeroAction[]
+  favourite?: { selected: boolean; pending: boolean; onPress: () => void }
   error: StringKey | null
   onBack: () => void
   onCook?: () => void
@@ -39,7 +44,7 @@ interface RecipeReadingPageProps {
   note?: { heading: string; text: string }
 }
 
-export default function RecipeReadingPage({ recipe, actions, error, onBack, onCook, onSaveCopy, savingCopy, footer, note }: RecipeReadingPageProps) {
+export default function RecipeReadingPage({ recipe, actions, favourite, error, onBack, onCook, onSaveCopy, savingCopy, footer, note }: RecipeReadingPageProps) {
   const { colors: c } = useTheme()
   const styles = useThemedStyles(makeStyles)
   const t = useT()
@@ -89,23 +94,21 @@ export default function RecipeReadingPage({ recipe, actions, error, onBack, onCo
           />
 
           <View style={[styles.heroActions, { top: insets.top + spacing.sm }]}>
-            <Pressable
-              onPress={onBack}
-              hitSlop={12}
-              accessibilityRole="button"
-              accessibilityLabel={t(onSaveCopy ? 'common.close' : 'detail.back')}
-              style={({ pressed }) => [styles.back, pressed && styles.pressed]}
-            >
-              {/* A chevron drawn from two rules, at the same 1.4px as every
-                  other icon. The glyph version carries a text face's stroke
-                  contrast and reads heavier than the hairlines around it. */}
-              <View style={styles.chevronTop} />
-              <View style={styles.chevronBottom} />
-            </Pressable>
+            <NavigationButton action={onSaveCopy ? 'close' : 'back'} onPress={onBack} />
 
             <View style={styles.heroRight}>
-              {actions.map(({ label, onPress, disabled, accessibilityLabel, selected }) =>
-                onPress ? (
+              {actions.map(({ label, icon, onPress, disabled, accessibilityLabel }) =>
+                icon ? (
+                  <MastheadAction
+                    key={icon}
+                    opaque
+                    onPress={onPress}
+                    disabled={disabled}
+                    accessibilityLabel={accessibilityLabel ?? label}
+                  >
+                    <Ionicons name={icon} size={22} color={c.text} />
+                  </MastheadAction>
+                ) : onPress ? (
                   <Pressable
                     key={label}
                     onPress={onPress}
@@ -113,12 +116,27 @@ export default function RecipeReadingPage({ recipe, actions, error, onBack, onCo
                     hitSlop={12}
                     accessibilityRole="button"
                     accessibilityLabel={accessibilityLabel ?? label}
-                    accessibilityState={{ disabled, selected }}
+                    accessibilityState={{ disabled }}
                     style={({ pressed }) => pressed && styles.pressed}
                   >
                     <Text style={styles.heroAction}>{label}</Text>
                   </Pressable>
                 ) : <Text key={label} style={styles.heroAction}>{label}</Text>
+              )}
+              {favourite && (
+                <MastheadAction
+                  opaque
+                  selected={favourite.selected}
+                  disabled={favourite.pending}
+                  accessibilityLabel={t(favourite.selected ? 'detail.removeFavourite' : 'detail.addFavourite')}
+                  onPress={favourite.onPress}
+                >
+                  <Ionicons
+                    name={favourite.selected ? 'heart' : 'heart-outline'}
+                    size={22}
+                    color={favourite.selected ? c.favourite : c.text}
+                  />
+                </MastheadAction>
               )}
             </View>
           </View>
@@ -265,26 +283,6 @@ const makeStyles = (c: ThemeColors, type: TypeScale) =>
     // neither `text` nor `primary` can be relied on to read against it.
     heroAction: { ...type.metadataSmall, color: c.textOnPhoto, textTransform: 'uppercase' },
     pressed: { opacity: 0.6 },
-
-    back: { width: sizes.hitMin, height: sizes.hitMin, justifyContent: 'center' },
-    chevronTop: {
-      position: 'absolute',
-      left: 2,
-      top: 16,
-      width: 11,
-      height: 1.4,
-      backgroundColor: c.textOnPhoto,
-      transform: [{ rotate: '-45deg' }],
-    },
-    chevronBottom: {
-      position: 'absolute',
-      left: 2,
-      bottom: 16,
-      width: 11,
-      height: 1.4,
-      backgroundColor: c.textOnPhoto,
-      transform: [{ rotate: '45deg' }],
-    },
 
     titleBlock: {
       marginTop: -TITLE_LIFT,

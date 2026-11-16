@@ -1,4 +1,5 @@
 import { Modal, Pressable, StyleSheet, View } from 'react-native'
+import NavigationButton from '@/components/ui/NavigationButton'
 import { Text } from '@/components/ui/Text'
 import { minHeights, radius, shadow, spacing, useThemedStyles } from '@/theme'
 import type { ThemeColors, TypeScale } from '@/theme'
@@ -35,12 +36,7 @@ export default function ConfirmDialog({
           <Text style={styles.title}>{title}</Text>
           {message && <Text style={styles.message}>{message}</Text>}
           <View style={styles.actions}>
-            <Pressable
-              onPress={onCancel}
-              style={({ pressed }) => [styles.button, styles.cancel, pressed && styles.pressed]}
-            >
-              <Text style={styles.cancelLabel}>{t('common.cancel')}</Text>
-            </Pressable>
+            <NavigationButton action="cancel" onPress={onCancel} />
             <Pressable
               onPress={onConfirm}
               style={({ pressed }) => [
@@ -81,7 +77,7 @@ const makeStyles = (c: ThemeColors, type: TypeScale) => StyleSheet.create({
   },
   title: { ...type.section, color: c.text },
   message: { ...type.bodyRead, color: c.textMuted },
-  actions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },
+  actions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.md },
   button: {
     flex: 1,
     minHeight: minHeights.dialogButton,
@@ -91,8 +87,6 @@ const makeStyles = (c: ThemeColors, type: TypeScale) => StyleSheet.create({
     justifyContent: 'center',
   },
   pressed: { opacity: 0.85 },
-  cancel: { backgroundColor: c.surfaceAlt },
-  cancelLabel: { ...type.bodyStrong, color: c.text },
   confirm: { backgroundColor: c.primary },
   confirmLabel: { ...type.bodyStrong, color: c.onPrimary },
   confirmDestructive: { backgroundColor: c.danger },

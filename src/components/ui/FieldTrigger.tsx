@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, View } from 'react-native'
 import type { StyleProp, ViewStyle } from 'react-native'
 import { Text } from '@/components/ui/Text'
-import { contentType, inputType, sized, spacing, useThemedStyles } from '@/theme'
+import { contentType, inputType, minHeights, radius, sized, spacing, useThemedStyles } from '@/theme'
 import type { ThemeColors, TypeScale } from '@/theme'
 
 /**
@@ -21,6 +21,7 @@ export default function FieldTrigger({
   placeholder,
   emoji,
   invalid,
+  boxed,
   onPress,
   containerStyle,
   accessibilityLabel,
@@ -31,6 +32,7 @@ export default function FieldTrigger({
   placeholder: string
   emoji?: string
   invalid?: boolean
+  boxed?: boolean
   onPress: () => void
   containerStyle?: StyleProp<ViewStyle>
   accessibilityLabel?: string
@@ -41,18 +43,20 @@ export default function FieldTrigger({
   // The same two pieces `Field` splits its face into, split the same way and put
   // in the same two places — see the note on `trigger` below. The floor goes on
   // the control, the face on the text.
-  const { minHeight, ...valueFace } = inputType(sized(contentType('body', value ?? ''), 18))
+  const { minHeight, ...valueFace } = inputType(boxed
+    ? sized(contentType('authoringBody', value || placeholder), 16)
+    : sized(contentType('body', value ?? ''), 18))
 
   return (
     <View style={[styles.wrapper, containerStyle]}>
-      {label && <Text style={styles.label}>{label}</Text>}
+      {label && <Text style={boxed ? styles.boxLabel : styles.label}>{label}</Text>}
       <Pressable
         onPress={onPress}
         style={({ pressed }) => [
           styles.trigger,
           { minHeight },
-          filled ? styles.ruleFilled : styles.ruleEmpty,
-          invalid && styles.invalid,
+          boxed ? styles.boxed : filled ? styles.ruleFilled : styles.ruleEmpty,
+          invalid && (boxed ? styles.boxError : styles.invalid),
           pressed && styles.pressed,
         ]}
         accessibilityRole="button"
@@ -66,7 +70,7 @@ export default function FieldTrigger({
             // user may have typed — so its face follows its script rather than
             // the interface language.
             valueFace,
-            !filled && styles.placeholder,
+            !filled && (boxed ? styles.boxPlaceholder : styles.placeholder),
           ]}
           numberOfLines={1}
         >
@@ -123,6 +127,18 @@ const makeStyles = (c: ThemeColors, type: TypeScale) =>
      * stacked Khmer marks included, which is the guarantee `inputType` rests on
      * and the reason `numberOfLines={1}` below is load-bearing.
      */
+    boxLabel: { ...type.authoringLabel, color: c.text },
+    boxed: {
+      minHeight: minHeights.field,
+      borderWidth: 1,
+      borderColor: c.borderFaint,
+      borderRadius: radius.thumb,
+      backgroundColor: c.fieldSurface,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.md,
+    },
+    boxError: { borderColor: c.danger },
+    boxPlaceholder: { color: c.textSecondary },
     trigger: {
       flexDirection: 'row',
       alignItems: 'center',

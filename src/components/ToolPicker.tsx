@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Ionicons } from '@expo/vector-icons'
 import { FlatList, Modal, Pressable, StyleSheet, View } from 'react-native'
+import NavigationButton from '@/components/ui/NavigationButton'
 import { Text } from '@/components/ui/Text'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import SearchBar from '@/components/ui/SearchBar'
@@ -98,15 +99,7 @@ export default function ToolPicker({
         <View style={styles.header}>
           <View style={styles.headerRow}>
             <Text style={styles.title}>{t('toolPicker.title')}</Text>
-            <Pressable
-              onPress={onClose}
-              hitSlop={10}
-              style={styles.close}
-              accessibilityRole="button"
-              accessibilityLabel={t('common.close')}
-            >
-              <Ionicons name="close" size={20} color={c.text} />
-            </Pressable>
+            <NavigationButton action="close" onPress={onClose} />
           </View>
           <SearchBar
             value={query}
@@ -193,14 +186,6 @@ const makeStyles = (c: ThemeColors, type: TypeScale) => StyleSheet.create({
   header: { padding: spacing.lg, gap: spacing.lg },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   title: { ...type.title, color: c.text, flex: 1, minWidth: 0 },
-  close: {
-    width: 34,
-    height: 34,
-    borderRadius: radius.pill,
-    backgroundColor: c.surfaceAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   list: { paddingHorizontal: spacing.lg, paddingBottom: spacing.lg },
   category: {
     ...type.label,

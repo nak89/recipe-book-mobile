@@ -2,6 +2,11 @@ const tiktokHosts = new Set(['tiktok.com', 'www.tiktok.com', 'm.tiktok.com', 'vm
 const instagramHosts = new Set(['instagram.com', 'www.instagram.com', 'm.instagram.com'])
 const facebookHosts = new Set(['facebook.com', 'www.facebook.com', 'm.facebook.com', 'web.facebook.com', 'fb.watch'])
 
+export function isTikTokVideoSource(source: string) {
+  return /^https:\/\/(?:www\.|m\.)?tiktok\.com\/(?:@[\w.-]+\/video\/\d+|t\/[\w-]+)\/?$/.test(source) ||
+    /^https:\/\/(?:vt|vm)\.tiktok\.com\/[\w-]+\/?$/.test(source)
+}
+
 export function socialRecipeSource(raw: string) {
   try {
     const url = new URL(raw.trim())

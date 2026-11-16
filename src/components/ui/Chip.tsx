@@ -1,7 +1,7 @@
-import { Pressable, StyleSheet } from 'react-native'
+import { Platform, Pressable, StyleSheet } from 'react-native'
 import { Text } from '@/components/ui/Text'
 import type { StyleProp, ViewStyle } from 'react-native'
-import { radius, useThemedStyles } from '@/theme'
+import { radius, sizes, spacing, useThemedStyles } from '@/theme'
 import type { ThemeColors, TypeScale } from '@/theme'
 
 /**
@@ -36,11 +36,15 @@ import type { ThemeColors, TypeScale } from '@/theme'
 export default function Chip({
   label,
   active,
+  authoring,
+  disabled = false,
   onPress,
   style,
 }: {
   label: string
   active: boolean
+  authoring?: boolean
+  disabled?: boolean
   onPress: () => void
   style?: StyleProp<ViewStyle>
 }) {
@@ -48,16 +52,19 @@ export default function Chip({
   return (
     <Pressable
       onPress={onPress}
+      disabled={disabled}
       accessibilityRole="button"
-      accessibilityState={{ selected: active }}
+      accessibilityState={{ selected: active, disabled }}
+      aria-pressed={Platform.OS === 'web' ? active : undefined}
       style={({ pressed }) => [
         styles.chip,
+        authoring && styles.authoringChip,
         active && styles.chipActive,
-        pressed && !active && styles.chipPressed,
+        pressed && !active && !disabled && styles.chipPressed,
         style,
       ]}
     >
-      <Text style={[styles.text, active && styles.textActive]}>{label}</Text>
+      <Text style={[authoring ? styles.authoringText : styles.text, active && styles.textActive]}>{label}</Text>
     </Pressable>
   )
 }
@@ -84,6 +91,8 @@ const makeStyles = (c: ThemeColors, type: TypeScale) => StyleSheet.create({
   // An unselected chip has no fill to darken, so a press tints it with the same
   // ghost the tab bar uses for its active pill rather than inventing a grey.
   chipPressed: { backgroundColor: c.accentPill },
+  authoringChip: { minHeight: sizes.hitMin, paddingVertical: spacing.xs, paddingHorizontal: spacing.sm },
+  authoringText: { ...type.authoringCaption, color: c.text },
   text: { ...type.metadata, color: c.textMuted },
   textActive: { color: c.onPrimary },
 })

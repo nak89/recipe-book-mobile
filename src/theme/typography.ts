@@ -158,6 +158,15 @@ const kmTrack = (size: number) => em(size, KM_TRACKING)
  * single source of weight — if you need a different one, name a different face.
  */
 export const type = {
+  authoringMasthead: { fontFamily: fonts.serifMedium, fontSize: 61, lineHeight: 62, letterSpacing: -2.4 },
+  authoringTitle: { fontFamily: fonts.serifMedium, fontSize: 47, lineHeight: 50, letterSpacing: -1.5 },
+  generationTitle: { fontFamily: fonts.serifMedium, fontSize: 32, lineHeight: lh(32, 1.2) },
+  authoringOption: { fontFamily: fonts.serifMedium, fontSize: 23, lineHeight: 26, letterSpacing: -0.3 },
+  authoringFeature: { fontFamily: fonts.serifMedium, fontSize: 28, lineHeight: 31, letterSpacing: -0.5 },
+  authoringAction: { fontFamily: fonts.serifMedium, fontSize: 20, lineHeight: 25 },
+  authoringLabel: { fontSize: 13, lineHeight: 18 },
+  authoringBody: { fontSize: 15, lineHeight: 22 },
+  authoringCaption: { fontSize: 13, lineHeight: 19 },
   // ── Chronicle roles ─────────────────────────────────────────────────────
   /** The wordmark on every masthead. */
   masthead: {
@@ -434,6 +443,15 @@ export const typeKm: TypeScale = {
   recipeSection: { fontFamily: fonts.khmerDisplay, fontSize: 15, lineHeight: lhMoul(15), letterSpacing: kmTrack(15) },
   recipeTitle: { fontFamily: fonts.khmerDisplay, fontSize: 14, lineHeight: lhMoul(14), letterSpacing: kmTrack(14) },
   recipeMetadata: { fontFamily: fonts.khmer, fontSize: 14, lineHeight: lhKm(14, 1.5), letterSpacing: kmTrack(14) },
+  authoringMasthead: { fontFamily: fonts.khmerDisplay, fontSize: 40, lineHeight: lhMoul(40) },
+  authoringTitle: { fontFamily: fonts.khmerDisplay, fontSize: 29, lineHeight: lhMoul(29) },
+  generationTitle: { fontFamily: fonts.khmerMedium, fontSize: 25, lineHeight: lhKm(25, 1.5) },
+  authoringOption: { fontFamily: fonts.khmerMedium, fontSize: 19, lineHeight: lhKm(19, 1.55) },
+  authoringFeature: { fontFamily: fonts.khmerMedium, fontSize: 20, lineHeight: lhKm(20, 1.55) },
+  authoringAction: { fontFamily: fonts.khmerMedium, fontSize: 16, lineHeight: lhKm(16, 1.55) },
+  authoringLabel: { fontFamily: fonts.khmerMedium, fontSize: 13, lineHeight: lhKm(13, 1.6) },
+  authoringBody: { fontFamily: fonts.khmer, fontSize: 14, lineHeight: lhKm(14, 1.65) },
+  authoringCaption: { fontFamily: fonts.khmer, fontSize: 13, lineHeight: lhKm(13, 1.6) },
   // ── Chronicle roles ─────────────────────────────────────────────────────
   masthead: {
     fontFamily: fonts.khmerDisplay,

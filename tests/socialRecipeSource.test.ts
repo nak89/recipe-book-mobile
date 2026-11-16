@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { socialRecipeSource, splitSharedRecipeText } from '@/lib/socialRecipeSource'
+import { isTikTokVideoSource, socialRecipeSource, splitSharedRecipeText } from '@/lib/socialRecipeSource'
 
 describe('social recipe sources', () => {
   it('recognises social video and short links and drops tracking parameters', () => {
@@ -36,5 +36,16 @@ describe('social recipe sources', () => {
     })
     assert.deepEqual(splitSharedRecipeText('https://example.org/recipe'), { source: '', caption: '' })
     assert.deepEqual(splitSharedRecipeText('Stir the sauce.'), { source: '', caption: 'Stir the sauce.' })
+  })
+
+  it('allows draft creation from TikTok video links and short links', () => {
+    for (const link of [
+      'https://vt.tiktok.com/ZSpg7kHad/',
+      'https://www.tiktok.com/@mooney7066/video/7551508670773759262',
+      'https://www.tiktok.com/t/ZSpg7kHad/',
+    ]) assert.equal(isTikTokVideoSource(socialRecipeSource(link) ?? ''), true)
+
+    assert.equal(isTikTokVideoSource('https://www.tiktok.com/@mooney7066'), false)
+    assert.equal(isTikTokVideoSource('https://www.instagram.com/reel/abc/'), false)
   })
 })

@@ -1,12 +1,13 @@
-import { Ionicons } from '@expo/vector-icons'
+import NavigationButton from '@/components/ui/NavigationButton'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useEffectEvent, useRef, useState } from 'react'
 import { BackHandler, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import RecipePicker from '@/components/planner/RecipePicker'
 import ActionSheet from '@/components/ui/ActionSheet'
 import AddRow from '@/components/ui/AddRow'
 import Chip from '@/components/ui/Chip'
+import { finishGeneration, GenerationLoading, GenerationRecovery, useGenerationDelay } from '@/components/ui/GenerationFeedback'
 import LedgerRow from '@/components/ui/LedgerRow'
 import PrimaryButton from '@/components/ui/PrimaryButton'
 import SearchBar from '@/components/ui/SearchBar'
@@ -25,12 +26,13 @@ import type { GeneratedMealtime } from '@/lib/dinnerDraft'
 import { addDays, fromDateKey, startOfWeek, toDateKey, weekDays } from '@/lib/week'
 import { foldIngredientName, fridgeMatches, ingredientNames, makeWeekDraft, moveWeekMeal, replacementRecipes, slotKey, WIZARD_MEALS } from '@/lib/weekWizard'
 import type { WizardSlot } from '@/lib/weekWizard'
-import { contentType, sizes, spacing, useTheme, useThemedStyles } from '@/theme'
+import { contentType, duration, sizes, spacing, useThemedStyles } from '@/theme'
 import type { ThemeColors, TypeScale } from '@/theme'
 import type { PlanSlot, Recipe } from '@/types/recipe'
 
 const titles = ['generate.whichMeals', 'generate.variety', 'generate.fridge', 'generate.review'] as const
 type Library = { recipes: Recipe[]; plan: PlanSlot[] }
+type PreviewRequest = { startedAt: number; controller: AbortController }
 
 export default function GenerateWeekRoute() {
   const { week } = useLocalSearchParams<{ week?: string }>()
@@ -48,7 +50,6 @@ function GenerateWeek({ from }: { from: string }) {
   const mealLabel = useMealtimeLabel()
   const monthLabel = useMonthLabel()
   const { language } = useLanguage()
-  const { colors: c } = useTheme()
   const styles = useThemedStyles(makeStyles)
   const scroll = useRef<React.ComponentRef<typeof ScrollView>>(null)
   const writing = useRef(false)
@@ -60,6 +61,9 @@ function GenerateWeek({ from }: { from: string }) {
   const [load, setLoad] = useState(0)
   const [library, setLibrary] = useState<Library | null>(null)
   const [loadError, setLoadError] = useState<StringKey | null>(null)
+  const [reviewWait, setReviewWait] = useState<{ startedAt: number; complete?: boolean } | null>(null)
+  const queuedPreview = useRef<PreviewRequest | null>(null)
+  const showLoading = useGenerationDelay(reviewWait?.startedAt ?? null)
   const [draft, setDraft] = useState<WizardSlot[] | null>(null)
   const [editing, setEditing] = useState<{ slot: WizardSlot; mode: 'menu' | 'move' | 'pick' } | null>(null)
   const [saving, setSaving] = useState(false)
@@ -67,32 +71,71 @@ function GenerateWeek({ from }: { from: string }) {
   const dates = weekDays(fromDateKey(from)).map(toDateKey)
   const to = toDateKey(addDays(fromDateKey(from), 6))
 
-  useEffect(() => {
-    if (!token) return
-    let active = true
-    Promise.all([getRecipes(token), getPlan(from, to, token)])
-      .then(([recipes, plan]) => { if (active) setLibrary({ recipes, plan }) })
-      .catch(error => { if (active) setLoadError(apiErrorKey(error)) })
-    return () => { active = false }
-  }, [token, from, to, load])
-
-  useEffect(() => {
-    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (writing.current) return true
-      if (step === 0) return false
-      setStep(step - 1)
-      scroll.current?.scrollTo({ y: 0, animated: false })
-      return true
-    })
-    return () => subscription.remove()
-  }, [step])
-
   function go(next: number) {
     Keyboard.dismiss()
     setEditing(null)
     setStep(next)
     scroll.current?.scrollTo({ y: 0, animated: false })
   }
+
+  function preview(loaded: Library) {
+    if (!draft) {
+      setDraft(makeWeekDraft(dates, WIZARD_MEALS.filter(meal => meals.includes(meal)),
+        loaded.recipes, loaded.plan, options, fridge))
+    }
+    go(3)
+  }
+
+  const completePreview = useEffectEvent(async (loaded: Library) => {
+    const request = queuedPreview.current
+    setLibrary(loaded)
+    if (!request) return
+    const { controller, startedAt } = request
+    if (performance.now() - startedAt >= duration.generationDelay) {
+      await finishGeneration(controller.signal, () => setReviewWait({ startedAt, complete: true }))
+    }
+    if (controller.signal.aborted) return
+    queuedPreview.current = null
+    setReviewWait(null)
+    preview(loaded)
+  })
+
+  useEffect(() => {
+    if (!token) return
+    let active = true
+    Promise.all([getRecipes(token), getPlan(from, to, token)])
+      .then(([recipes, plan]) => {
+        if (active) void completePreview({ recipes, plan })
+      })
+      .catch(error => {
+        if (!active) return
+        queuedPreview.current = null
+        const timedOut = error instanceof ApiError && (error.status === 504 || error.status === 408)
+        setLoadError(timedOut ? 'generation.timeout' : apiErrorKey(error))
+      })
+    return () => {
+      active = false
+    }
+  }, [token, from, to, load])
+
+  useEffect(() => () => { queuedPreview.current?.controller.abort() }, [])
+
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (writing.current) return true
+      if (reviewWait || queuedPreview.current) {
+        queuedPreview.current?.controller.abort()
+        queuedPreview.current = null
+        setReviewWait(null)
+        return true
+      }
+      if (step === 0) return false
+      setStep(step - 1)
+      scroll.current?.scrollTo({ y: 0, animated: false })
+      return true
+    })
+    return () => subscription.remove()
+  }, [reviewWait, step])
 
   function close() {
     if (writing.current) return
@@ -109,13 +152,32 @@ function GenerateWeek({ from }: { from: string }) {
     go(2)
   }
 
-  function preview() {
-    if (!library) return
-    if (!draft) {
-      setDraft(makeWeekDraft(dates, WIZARD_MEALS.filter(meal => meals.includes(meal)),
-        library.recipes, library.plan, options, fridge))
+  function cancelPreview() {
+    queuedPreview.current?.controller.abort()
+    queuedPreview.current = null
+    setReviewWait(null)
+  }
+
+  function requestPreview() {
+    if (queuedPreview.current) return
+    if (library) {
+      preview(library)
+      return
     }
-    go(3)
+    Keyboard.dismiss()
+    const startedAt = performance.now()
+    if (!loadError) queuedPreview.current = { startedAt, controller: new AbortController() }
+    setReviewWait({ startedAt })
+  }
+
+  function retryPreview() {
+    if (queuedPreview.current) return
+    // The previous fetch has settled. Keep the wizard choices while retrying.
+    const startedAt = performance.now()
+    queuedPreview.current = { startedAt, controller: new AbortController() }
+    setReviewWait({ startedAt })
+    setLoadError(null)
+    setLoad(value => value + 1)
   }
 
   const changes = draft?.filter(slot => slot.recipeId !== slot.expectedRecipeId) ?? []
@@ -166,19 +228,32 @@ function GenerateWeek({ from }: { from: string }) {
   const emptyCount = draft?.filter(slot => !slot.recipeId).length ?? 0
   const weekLabel = `${n(fromDateKey(from).getDate())} – ${n(fromDateKey(to).getDate())} ${monthLabel(fromDateKey(to))}`
 
+  if (reviewWait && loadError) return (
+    <SafeAreaView style={styles.screen}>
+      <GenerationRecovery
+        title={loadError === 'generation.timeout' ? loadError : 'generation.weekFailed'}
+        detail={t(loadError === 'generation.timeout' ? 'generation.weekRetry' : loadError)}
+        primary={{ label: 'common.retry', onPress: retryPreview }}
+        secondary={{ label: 'generation.backToInput', onPress: cancelPreview }}
+      />
+    </SafeAreaView>
+  )
+
+  if (reviewWait && showLoading) return (
+    <SafeAreaView style={styles.screen}>
+      <GenerationLoading scene="week" complete={reviewWait.complete} onCancel={cancelPreview} />
+    </SafeAreaView>
+  )
+
   return (
     <SafeAreaView style={styles.screen}>
       <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={styles.header}>
           {step > 0
-            ? <Pressable style={styles.icon} accessibilityRole="button" accessibilityLabel={t('common.back')} disabled={saving} onPress={() => go(step - 1)}>
-                <Ionicons name="chevron-back" size={sizes.hitMin / 2} color={c.text} />
-              </Pressable>
-            : <View style={styles.icon} />}
+            ? <NavigationButton action="back" disabled={saving} onPress={() => { cancelPreview(); go(step - 1) }} />
+            : <View style={styles.headerSpacer} />}
           <Text style={styles.headerTitle}>{t('generate.open')}</Text>
-          <Pressable style={styles.icon} accessibilityRole="button" accessibilityLabel={t('common.close')} disabled={saving} onPress={close}>
-            <Ionicons name="close" size={sizes.hitMin / 2} color={c.text} />
-          </Pressable>
+          <NavigationButton action="close" disabled={saving} onPress={close} />
         </View>
         <ScrollView ref={scroll} contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
           <View style={styles.progress} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
@@ -215,7 +290,7 @@ function GenerateWeek({ from }: { from: string }) {
             </View>}
             {canAdd ? <AddRow label={t('generate.addIngredient').replace('{name}', query.trim())} onPress={() => addIngredient(query.trim())} /> : null}
             {suggestions.map(name => <LedgerRow key={name} title={name} ingredient onPress={() => addIngredient(name)} />)}
-            {!library && <Text style={styles.copy} accessibilityLiveRegion="polite">{t(loadError ?? 'generate.loading')}</Text>}
+            {!library && <Text style={styles.copy} accessibilityLiveRegion="polite">{t(loadError === 'generation.timeout' ? 'generation.weekRetry' : loadError ?? 'generate.loading')}</Text>}
             {loadError && <PrimaryButton label={t('common.retry')} variant="outline" onPress={refresh} />}
           </>}
 
@@ -263,9 +338,9 @@ function GenerateWeek({ from }: { from: string }) {
         <View style={styles.footer}>
           <PrimaryButton
             label={t(step === 3 ? 'generate.apply' : step === 2 ? 'generate.preview' : 'common.next')}
-            loading={saving}
-            disabled={step === 0 ? !meals.length : step === 2 ? !library : step === 3 && (!changes.length || saveError === 'generate.changed')}
-            onPress={() => { if (step === 3) void apply(); else if (step === 2) preview(); else go(step + 1) }}
+            loading={saving || !!reviewWait}
+            disabled={step === 0 ? !meals.length : step === 2 ? !token : step === 3 && (!changes.length || saveError === 'generate.changed')}
+            onPress={() => { if (step === 3) void apply(); else if (step === 2) requestPreview(); else go(step + 1) }}
           />
         </View>
       </KeyboardAvoidingView>
@@ -288,7 +363,6 @@ const makeStyles = (c: ThemeColors, type: TypeScale) => StyleSheet.create({
   screen: { flex: 1, backgroundColor: c.bg },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: c.border },
   headerTitle: { ...type.section, color: c.text, flexShrink: 1, textAlign: 'center' },
-  icon: { minWidth: sizes.hitMin, minHeight: sizes.hitMin, alignItems: 'center', justifyContent: 'center' },
   body: { padding: spacing.gutter, gap: spacing.md },
   progress: { flexDirection: 'row', gap: spacing.xs },
   bar: { flex: 1, borderBottomWidth: 2, borderColor: c.borderStrong },
@@ -297,6 +371,7 @@ const makeStyles = (c: ThemeColors, type: TypeScale) => StyleSheet.create({
   meta: { ...type.caption, color: c.textMuted },
   copy: { ...type.bodyRead, color: c.text },
   match: { color: c.primary },
+  headerSpacer: { width: sizes.hitMin },
   action: { minHeight: sizes.hitMin, justifyContent: 'center', paddingHorizontal: spacing.sm },
   actionText: { ...type.bodyStrong, color: c.primary, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: c.primary },
   error: { ...type.bodyRead, color: c.danger },

@@ -7,6 +7,7 @@ import * as ImagePicker from 'expo-image-picker'
 import Image from '@/components/RecipeImage'
 import { ActivityIndicator, Dimensions, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import { Text, TextInput } from '@/components/ui/Text'
+import { GenerationLoading, useGenerationDelay } from '@/components/ui/GenerationFeedback'
 import type {
   LayoutChangeEvent,
   NativeScrollEvent,
@@ -36,6 +37,7 @@ import { parseNumeric, parseWholeNumber, useNum, useT } from '@/i18n'
 import type { StringKey } from '@/i18n'
 import { apiErrorKey } from '@/i18n/errors'
 import { useDifficultyLabel, useMealtimeLabel } from '@/i18n/labels'
+import { RecipeAuthoringHeading } from '@/components/RecipeAuthoring'
 import Chip from '@/components/ui/Chip'
 import Field from '@/components/ui/Field'
 import FieldTrigger from '@/components/ui/FieldTrigger'
@@ -53,13 +55,13 @@ import { useCuisines } from '@/data/usePantry'
 import { move } from '@/lib/reorder'
 import {
   inputType,
+  recipeAuthoring,
   minHeights,
   radius,
   sizes,
   spacing,
   useTheme,
   useThemedStyles,
-  useTypeScale,
 } from '@/theme'
 import type { ThemeColors, TypeScale } from '@/theme'
 import { DIFFICULTIES, MEALTIMES } from '@/types/recipe'
@@ -222,9 +224,6 @@ export default function RecipeForm({
   const insets = useSafeAreaInsets()
   const headerHeight = useHeaderHeight()
   const navigation = useNavigation()
-  // The one place a factory can't be used: react-navigation takes a plain
-  // style object for the header title, so the scale is read rather than passed.
-  const typeScale = useTypeScale()
   const isEditing = initial !== undefined
 
   // The horizontal pager, plus one vertical scroller per page. A field's offset
@@ -258,6 +257,7 @@ export default function RecipeForm({
   const [tools, setTools] = useState((initial?.tools ?? draft?.tools)?.join(', ') ?? '')
   const [photoUrl, setPhotoUrl] = useState<string | undefined>(initial?.photoUrl)
   const [selectedFrame, setSelectedFrame] = useState<number | null>(null)
+  const showPhotoLoader = useGenerationDelay(draftPhoto?.status === 'generating' ? draftPhoto.startedAt : null)
   const videoPhoto = draftPhoto?.status === 'video' ? draftPhoto : undefined
   const currentFrameIndex = selectedFrame ?? videoPhoto?.recommendedFrame
   const currentFrame = currentFrameIndex == null ? undefined : videoPhoto?.frames[currentFrameIndex]
@@ -341,36 +341,14 @@ export default function RecipeForm({
     }
   }, [token, initial?.id])
 
-  /**
-   * The header, per SCREENS.md § 14: a bare `‹`, the title centred in mono, and
-   * a tamarind SAVE — on every page, not just the last one.
-   *
-   * SAVE is always live. It runs the same `handleSubmit` the footer button
-   * does, which re-validates all four steps and pages to the first one that
-   * fails, so pressing it on a half-filled recipe is answered with the problem
-   * rather than with a disabled control. That is also why it isn't greyed out:
-   * a dead button on page 1 can't tell you what page 3 is missing.
-   *
-   * `handleSubmit` is read through a ref rather than named as a dependency.
-   * It closes over every piece of form state and so is a new function on every
-   * keystroke; in the dependency array it would re-run `setOptions` — and
-   * therefore re-render the screen — on each one.
-   */
+  // The edit header can save from any step. Read the current submit handler
+  // through a ref so typing does not update the navigator's options.
   const submitRef = useRef(handleSubmit)
   submitRef.current = handleSubmit
 
   useEffect(() => {
+    if (!isEditing) return
     navigation.setOptions({
-      // The title itself stays with the Stack, which owns it and re-renders on
-      // a language change — this only says how it is set.
-      headerTitleAlign: 'center',
-      // The strip of tabs sits directly under the title in the mockup, with
-      // nothing drawn between them.
-      headerShadowVisible: false,
-      headerTitleStyle: { ...typeScale.sectionLabel, color: c.text, textTransform: 'uppercase' },
-      // iOS labels the back button with the previous screen's title; § 14 draws
-      // a chevron alone.
-      headerBackButtonDisplayMode: 'minimal',
       headerRight: () => (
         <Pressable
           onPress={() => submitRef.current()}
@@ -386,7 +364,7 @@ export default function RecipeForm({
         </Pressable>
       ),
     })
-  }, [navigation, t, typeScale, c.text, styles, submitting, uploading])
+  }, [isEditing, navigation, t, styles, submitting, uploading])
 
   /**
    * iOS's swipe-from-the-left-edge would pop the whole screen when the user is
@@ -825,6 +803,11 @@ export default function RecipeForm({
   }
 
   const onLastStep = step === STEP_KEYS.length - 1
+  const authoringTitle = step === 0 ? (draft ? 'import.review' : 'import.manual') : STEP_KEYS[step]
+  const authoringDescription = [undefined, 'form.ingredientsIntro', 'form.stepsIntro', 'form.nutritionIntro'] as const
+  const stepDescription = authoringDescription[step]
+  const nextLabel = t('common.next')
+  const nextStep = STEP_KEYS[step + 1]
   const visibleErrors = usingDraftPhoto && errors.photoUrl === ''
     ? Object.fromEntries(Object.entries(errors).filter(([field]) => field !== 'photoUrl'))
     : errors
@@ -863,21 +846,43 @@ export default function RecipeForm({
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={headerHeight}
+      keyboardVerticalOffset={isEditing ? headerHeight : insets.top}
     >
-      <View style={styles.indicator}>
+      {!isEditing && (
+        <View style={styles.authoringHeader}>
+          <RecipeAuthoringHeading title={t(authoringTitle)} description={stepDescription && t(stepDescription)} />
+          {draft && step === 0 && (
+            <View style={styles.reviewNotice}>
+              <Ionicons name="information-circle-outline" size={18} color={c.primary} />
+              <View style={styles.reviewCopy}>
+                <Text style={styles.reviewText}>{t(isFoodPhotoDraft ? 'import.foodPhotoReviewBody' : videoPhoto ? 'import.videoReviewBody' : 'import.reviewBody')}</Text>
+                {draftMissing.length > 0 && <Text style={styles.reviewText}>{t('import.missing').replace('{fields}', draftMissing.join(', '))}</Text>}
+              </View>
+            </View>
+          )}
+        </View>
+      )}
+      <View accessibilityRole="tablist" style={[styles.indicator, !isEditing && styles.authoringIndicator]}>
         {STEP_KEYS.map((stepKeyName, index) => {
           return (
             <Pressable
               key={stepKeyName}
               // Every step is reachable from every other one, in both modes.
               onPress={() => goTo(index)}
-              style={styles.indicatorItem}
+              accessibilityRole="tab"
+              accessibilityLabel={t(stepKeyName)}
+              accessibilityState={{ selected: index === step }}
+              style={[
+                styles.indicatorItem,
+                !isEditing && styles.authoringIndicatorItem,
+                !isEditing && index === STEP_KEYS.length - 1 && styles.authoringIndicatorLast,
+              ]}
             >
               <View
                 style={[
                   styles.indicatorBar,
-                  completeSteps.has(index) && styles.indicatorBarComplete,
+                  isEditing && completeSteps.has(index) && styles.indicatorBarComplete,
+                  !isEditing && index < step && styles.authoringIndicatorComplete,
                   // Where you are outranks whether it validates.
                   index === step && styles.indicatorBarCurrent,
                   // A step you're not looking at can still be the broken one,
@@ -890,7 +895,7 @@ export default function RecipeForm({
                   // Four slots share the width now, so "Ingredients" no longer
                   // fits on a small phone. One clean ellipsis beats a label
                   // wrapping to a second line and shunting the row taller.
-                  numberOfLines={1}
+                  numberOfLines={isEditing ? 1 : 2}
                   // That ellipsis is a *designed* budget, so it must not absorb
                   // OS font scaling on top of the width squeeze — at the
                   // app-wide default an 11pt label takes the full 1.35× and
@@ -898,8 +903,8 @@ export default function RecipeForm({
                   // the dock, for the same reason: fixed columns, no room.
                   maxFontSizeMultiplier={1.15}
                   style={[
-                    styles.indicatorLabel,
-                    index === step && styles.indicatorLabelActive,
+                    isEditing ? styles.indicatorLabel : styles.authoringIndicatorLabel,
+                    index === step && (isEditing ? styles.indicatorLabelActive : styles.authoringIndicatorActive),
                     stepsWithErrors.has(index) && styles.indicatorLabelError,
                   ]}
                 >
@@ -931,23 +936,18 @@ export default function RecipeForm({
             onMomentumScrollEnd={onPagerSettled}
             scrollEventThrottle={16}
           >
-            <Page ref={pageRefs[0]} width={pageWidth} contentStyle={styles.content}>
-              {draft && (
-                <View style={styles.draftNotice}>
-                  <Text style={styles.draftTitle}>{t(isFoodPhotoDraft ? 'import.foodPhotoReview' : 'import.review')}</Text>
-                  <Text style={styles.draftText}>{t(isFoodPhotoDraft ? 'import.foodPhotoReviewBody' : videoPhoto ? 'import.videoReviewBody' : 'import.reviewBody')}</Text>
-                  {draftMissing.length > 0 && (
-                    <Text style={styles.draftText}>{t('import.missing').replace('{fields}', draftMissing.join(', '))}</Text>
-                  )}
-                </View>
-              )}
+            <Page ref={pageRefs[0]} width={pageWidth} contentStyle={[styles.content, !isEditing && styles.authoringPage]}>
               <View onLayout={registerField('photoUrl')}>
                 <Pressable
-                  style={[styles.photoPicker, invalid('photoUrl') && styles.photoPickerInvalid]}
+                  style={[
+                    styles.photoPicker,
+                    isEditing ? styles.editPhotoPicker : photoPreview ? styles.authoringPhotoPreview : styles.authoringPhotoTarget,
+                    invalid('photoUrl') && styles.photoPickerInvalid,
+                  ]}
                   onPress={handlePickPhoto}
                   disabled={uploading || submitting}
                   accessibilityRole="button"
-                  accessibilityLabel={photoPreview ? t('form.changePhoto') : t('form.addPhoto')}
+                  accessibilityLabel={photoPreview ? t('form.changePhoto') : t(isEditing ? 'form.addPhoto' : 'form.addRecipePhoto')}
                 >
                   {uploading ? (
                     <ActivityIndicator color={c.primary} />
@@ -959,15 +959,26 @@ export default function RecipeForm({
                         contentFit="cover"
                         cachePolicy={usingDraftPhoto ? 'memory' : undefined}
                       />
-                      <View style={styles.photoChange}>
-                        <Ionicons name="camera" size={14} color={c.onPrimary} />
-                        <Text style={styles.photoChangeText}>{t('form.change')}</Text>
+                      <View style={[styles.photoChange, !isEditing && styles.authoringPhotoChange]}>
+                        <Ionicons name="images-outline" size={17} color={isEditing ? c.textOnPhoto : c.text} />
+                        <Text style={isEditing ? styles.photoChangeText : styles.authoringLabel}>{t(isEditing ? 'form.change' : 'form.changePhoto')}</Text>
                       </View>
                     </>
                   ) : draftPhoto?.status === 'generating' ? (
-                    <View style={styles.photoPickerRow} accessibilityLiveRegion="polite">
-                      <ActivityIndicator color={c.primary} />
-                      <Text style={styles.photoPickerText}>{t('import.creatingPhoto')}</Text>
+                    showPhotoLoader ? <GenerationLoading scene="photo" compact /> : (
+                      <View style={styles.photoPickerRow} accessibilityLiveRegion="polite">
+                        <ActivityIndicator color={c.primary} />
+                        <Text style={styles.photoPickerText}>{t('import.creatingPhoto')}</Text>
+                      </View>
+                    )
+                  ) : !isEditing ? (
+                    <View style={styles.authoringPhotoPrompt}>
+                      <Ionicons name="camera-outline" size={25} color={c.primary} />
+                      <View style={styles.authoringPhotoCopy}>
+                        <Text style={styles.authoringOption}>{t('form.addRecipePhoto')}</Text>
+                        <Text style={styles.reviewText}>{t('form.recipePhotoRequired')}</Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={20} color={c.textSecondary} />
                     </View>
                   ) : (
                     /* One line: a circled + and the label, per § 15. The
@@ -997,7 +1008,7 @@ export default function RecipeForm({
                     <View style={styles.videoFrames}>
                       <Text style={styles.draftTitle}>{t('import.videoFrameHeading')}</Text>
                       {videoPhoto.recommendedFrame === null && (
-                        <Text style={styles.draftText}>{t('import.videoFrameNoSuggestion')}</Text>
+                        <Text style={styles.reviewText}>{t('import.videoFrameNoSuggestion')}</Text>
                       )}
                       <View style={styles.videoFrameRow} accessibilityRole="group" accessibilityLabel={t('import.videoFrameHeading')}>
                         {videoPhoto.frames.map((frame, index) => {
@@ -1035,38 +1046,43 @@ export default function RecipeForm({
 
               <View onLayout={registerField('title')}>
                 <Field
-                  label={t('form.title')}
+                  boxed={!isEditing}
+                  label={t(isEditing ? 'form.title' : 'form.recipeTitle')}
                   value={title}
                   onChangeText={(v) => {
                     setTitle(v)
                     clearError('title')
                   }}
-                  placeholder={t('form.titlePlaceholder')}
+                  placeholder={t(isEditing ? 'form.titlePlaceholder' : 'form.recipeTitleHint')}
                   invalid={invalid('title')}
                 />
               </View>
               <View onLayout={registerField('description')}>
                 <Field
+                  boxed={!isEditing}
                   label={t('form.description')}
                   value={description}
                   onChangeText={(v) => {
                     setDescription(v)
                     clearError('description')
                   }}
-                  placeholder={t('form.descriptionPlaceholder')}
+                  placeholder={t(isEditing ? 'form.descriptionPlaceholder' : 'form.recipeDescriptionHint')}
+                  labelDetail={isEditing ? undefined : t('form.optional')}
+                  style={isEditing ? undefined : styles.authoringDescription}
                   multiline
                   invalid={invalid('description')}
                 />
               </View>
 
               <View style={styles.group}>
-                <Text style={styles.label}>{t('form.mealtime')}</Text>
+                <Text style={isEditing ? styles.label : styles.authoringLabel}>{t('form.mealtime')}</Text>
                 <View style={styles.chipRow}>
                   {MEALTIMES.map((option) => (
                     <Chip
                       key={option}
                       label={mealtimeLabel(option)}
                       active={mealtime === option}
+                      authoring={!isEditing}
                       // Tapping the active chip clears it — mealtime is optional.
                       onPress={() => setMealtime(mealtime === option ? undefined : option)}
                     />
@@ -1080,13 +1096,14 @@ export default function RecipeForm({
                   way, and it stops "Intermediate" being visibly the widest
                   option on a row where width means nothing. */}
               <View onLayout={registerField('difficulty')} style={styles.group}>
-                <Text style={styles.label}>{t('form.difficulty')}</Text>
+                <Text style={isEditing ? styles.label : styles.authoringLabel}>{t('form.difficulty')}</Text>
                 <View style={styles.segmented}>
                   {DIFFICULTIES.map((option) => (
                     <Chip
                       key={option}
                       label={difficultyLabel(option)}
                       active={difficulty === option}
+                      authoring={!isEditing}
                       onPress={() => {
                         setDifficulty(option)
                         clearError('difficulty')
@@ -1105,6 +1122,7 @@ export default function RecipeForm({
                     shows — "30 min" would land in the column and fail to parse.
                     The unit is carried by the field label above the trigger. */}
                 <Select
+                  boxed={!isEditing}
                   label={t('form.totalMinutes')}
                   value={totalMinutes || undefined}
                   onChange={(value) => {
@@ -1124,6 +1142,7 @@ export default function RecipeForm({
                   invalid={invalid('totalMinutes')}
                 />
                 <Field
+                  boxed={!isEditing}
                   label={t('form.servings')}
                   value={servings}
                   onChangeText={(v) => {
@@ -1149,6 +1168,7 @@ export default function RecipeForm({
                   would record a `y` relative to the row rather than the page. */}
               <View onLayout={registerField('cuisine', 'tools')} style={styles.row}>
                 <Select
+                  boxed={!isEditing}
                   label={t('form.cuisine')}
                   value={cuisine || undefined}
                   onChange={(value) => {
@@ -1169,6 +1189,7 @@ export default function RecipeForm({
                     first name plus how many more is the most of it that fits
                     without lying about what is stored. */}
                 <FieldTrigger
+                  boxed={!isEditing}
                   label={t('form.tools')}
                   value={toolSummary}
                   placeholder={t('form.toolsPlaceholder')}
@@ -1184,10 +1205,10 @@ export default function RecipeForm({
             <Page
               ref={pageRefs[1]}
               width={pageWidth}
-              contentStyle={styles.content}
+              contentStyle={[styles.content, !isEditing && styles.authoringPage]}
               scrollEnabled={!dragging}
             >
-              <Text style={styles.stepHeading}>{t('form.ingredientsHeading')}</Text>
+              {isEditing && <Text style={styles.stepHeading}>{t('form.ingredientsHeading')}</Text>}
 
               {/* § 16's pantry row: a bordered row with a swatch, a title and
                   its examples in mono caps. The examples are hand-written per
@@ -1196,15 +1217,17 @@ export default function RecipeForm({
                   `data/usePantry.ts`. */}
               <Pressable
                 onPress={() => setPickerOpen(true)}
-                style={({ pressed }) => [styles.browse, pressed && styles.browsePressed]}
+                style={({ pressed }) => [styles.browse, !isEditing && styles.authoringBrowse, pressed && styles.browsePressed]}
                 accessibilityRole="button"
               >
                 <View style={styles.swatch}>
-                  <Text style={styles.browseEmoji}>🧄</Text>
+                  {isEditing
+                    ? <Text style={styles.browseEmoji}>🧄</Text>
+                    : <Ionicons name="search-outline" size={22} color={c.primary} />}
                 </View>
                 <View style={styles.browseText}>
-                  <Text style={styles.browseTitle}>{t('form.pickCommon')}</Text>
-                  <Text style={styles.browseHint}>{t('form.pickCommonHint')}</Text>
+                  <Text style={isEditing ? styles.browseTitle : styles.authoringOption}>{t('form.pickCommon')}</Text>
+                  <Text style={isEditing ? styles.browseHint : styles.reviewText}>{t('form.pickCommonHint')}</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={18} color={c.textMuted} />
               </Pressable>
@@ -1212,14 +1235,20 @@ export default function RecipeForm({
               {/* `ADDED · 7`, with the count in the interface's own numerals.
                   Hidden at zero: a heading counting nothing, directly above the
                   line that says the list is empty, says it twice. */}
-              {ingredients.length > 0 && (
+              {ingredients.length > 0 && (isEditing ? (
                 <View style={styles.listHeading}>
                   <Text style={styles.listHeadingText}>
                     {`${t('form.added')} · ${n(ingredients.length)}`}
                   </Text>
                   <View style={styles.listHeadingRule} />
                 </View>
-              )}
+              ) : (
+                <View style={styles.ingredientLegend}>
+                  <Text style={[styles.legendText, styles.legendName]}>{t('form.ingredientPlaceholder')}</Text>
+                  <Text style={[styles.legendText, styles.legendQuantity]}>{t('form.ingredientQuantity')}</Text>
+                  <Text style={[styles.legendText, styles.legendUnit]}>{t('form.ingredientUnit')}</Text>
+                </View>
+              ))}
 
               <View
                 onLayout={(event) => {
@@ -1242,9 +1271,7 @@ export default function RecipeForm({
                         ]}
                       >
                         {handle}
-                        <Text style={styles.ingredientEmoji}>
-                          {emojiForIngredient(ingredient.name)}
-                        </Text>
+                        {isEditing && <Text style={styles.ingredientEmoji}>{emojiForIngredient(ingredient.name)}</Text>}
                         <TextInput
                           style={styles.ingredientName}
                           value={ingredient.name}
@@ -1265,7 +1292,7 @@ export default function RecipeForm({
                             column and every unit in the next. */}
                         <View style={styles.amount}>
                           <TextInput
-                            style={styles.ingredientQuantity}
+                            style={[styles.ingredientQuantity, !isEditing && styles.authoringQuantity]}
                             value={ingredient.quantity}
                             onChangeText={(v) => updateIngredient(ingredient.id, 'quantity', v)}
                             placeholder="0"
@@ -1277,6 +1304,7 @@ export default function RecipeForm({
                             onPress={() => setUnitPickerFor(ingredient.id)}
                             style={({ pressed }) => [
                               styles.ingredientUnit,
+                              !isEditing && styles.authoringUnit,
                               pressed && styles.pressedSoft,
                             ]}
                             accessibilityRole="button"
@@ -1319,22 +1347,24 @@ export default function RecipeForm({
               )}
               <Pressable
                 onPress={addIngredient}
-                style={({ pressed }) => [styles.addRow, pressed && styles.pressedSoft]}
+                accessibilityRole="button"
+                accessibilityLabel={t(isEditing ? 'form.addYourOwn' : 'form.addIngredient')}
+                style={({ pressed }) => [styles.addRow, !isEditing && styles.authoringAddRow, pressed && styles.pressedSoft]}
               >
                 <View style={styles.plus}>
                   <Ionicons name="add" size={15} color={c.primary} />
                 </View>
-                <Text style={styles.addRowText}>{t('form.addYourOwn')}</Text>
+                <Text style={isEditing ? styles.addRowText : styles.authoringOption}>{t(isEditing ? 'form.addYourOwn' : 'form.addIngredient')}</Text>
               </Pressable>
             </Page>
 
             <Page
               ref={pageRefs[2]}
               width={pageWidth}
-              contentStyle={styles.content}
+              contentStyle={[styles.content, !isEditing && styles.authoringPage]}
               scrollEnabled={!dragging}
             >
-              <Text style={styles.stepHeading}>{t('form.stepsHeading')}</Text>
+              {isEditing && <Text style={styles.stepHeading}>{t('form.stepsHeading')}</Text>}
 
               <View
                 onLayout={(event) => {
@@ -1423,16 +1453,18 @@ export default function RecipeForm({
               )}
               <Pressable
                 onPress={addStep}
-                style={({ pressed }) => [styles.addRow, pressed && styles.pressedSoft]}
+                accessibilityRole="button"
+                accessibilityLabel={t('form.addStep')}
+                style={({ pressed }) => [styles.addRow, !isEditing && styles.authoringAddRow, pressed && styles.pressedSoft]}
               >
                 <View style={styles.plus}>
                   <Ionicons name="add" size={15} color={c.primary} />
                 </View>
-                <Text style={styles.addRowText}>{t('form.addStep')}</Text>
+                <Text style={isEditing ? styles.addRowText : styles.authoringOption}>{t('form.addStep')}</Text>
               </Pressable>
             </Page>
 
-            <Page ref={pageRefs[3]} width={pageWidth} contentStyle={styles.content}>
+            <Page ref={pageRefs[3]} width={pageWidth} contentStyle={[styles.content, !isEditing && styles.authoringPage]}>
               {/* Every field here is optional, so this step never blocks Save.
                   The numbers are per serving, and the heading is the only place
                   that now says so — the line that used to sit under it is gone,
@@ -1440,10 +1472,11 @@ export default function RecipeForm({
                   saying "nutrition information". The columns are bare floats
                   and a reader has no way to tell whether 520 kcal is one plate
                   or the whole tray. */}
-              <Text style={styles.stepHeading}>{t('form.nutritionHeading')}</Text>
+              {isEditing && <Text style={styles.stepHeading}>{t('form.nutritionHeading')}</Text>}
 
               <View onLayout={registerField('calories', 'protein')} style={styles.row}>
                 <Field
+                  boxed={!isEditing}
                   label={t('form.calories')}
                   value={calories}
                   onChangeText={(v) => {
@@ -1457,6 +1490,7 @@ export default function RecipeForm({
                   invalid={invalid('calories')}
                 />
                 <Field
+                  boxed={!isEditing}
                   label={t('form.protein')}
                   value={protein}
                   onChangeText={(v) => {
@@ -1473,6 +1507,7 @@ export default function RecipeForm({
 
               <View onLayout={registerField('carbs', 'fat')} style={styles.row}>
                 <Field
+                  boxed={!isEditing}
                   label={t('form.carbs')}
                   value={carbs}
                   onChangeText={(v) => {
@@ -1486,6 +1521,7 @@ export default function RecipeForm({
                   invalid={invalid('carbs')}
                 />
                 <Field
+                  boxed={!isEditing}
                   label={t('form.fat')}
                   value={fat}
                   onChangeText={(v) => {
@@ -1506,7 +1542,7 @@ export default function RecipeForm({
 
       {/* A pointer, not the message itself: the wording that says what to change
           lives under the field. This only says how many, and that they're above. */}
-      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, spacing.lg) }]}>
+      <View style={[styles.footer, !isEditing && styles.authoringFooter, { paddingBottom: Math.max(insets.bottom, spacing.lg) }]}>
         {footerMessage && (
           <View style={styles.footerError}>
             <Ionicons name="alert-circle" size={15} color={c.danger} />
@@ -1523,6 +1559,7 @@ export default function RecipeForm({
         <View style={styles.footerButtons}>
           {onLastStep ? (
             <PrimaryButton
+              authoring={!isEditing}
               label={t(submitLabel)}
               onPress={handleSubmit}
               loading={submitting}
@@ -1540,7 +1577,8 @@ export default function RecipeForm({
                page 1; the header's SAVE covers that from anywhere in both
                modes, which leaves the footer free to do one job. */
             <PrimaryButton
-              label={`${t('common.next')} · ${t(STEP_KEYS[step + 1])}`}
+              authoring={!isEditing}
+              label={`${nextLabel} · ${t(nextStep)}`}
               onPress={handleNext}
               style={styles.footerButton}
             />
@@ -1598,6 +1636,46 @@ const makeStyles = (c: ThemeColors, type: TypeScale) => StyleSheet.create({
     textTransform: 'uppercase',
     paddingHorizontal: spacing.xs,
   },
+  authoringHeader: { paddingHorizontal: spacing.gutter, paddingTop: spacing.xl, gap: spacing.md },
+  reviewNotice: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, padding: spacing.md,
+    borderRadius: radius.thumb, backgroundColor: c.accentSoft,
+  },
+  reviewCopy: { flex: 1, gap: spacing.xs },
+  reviewText: { ...type.authoringCaption, color: c.textSecondary },
+  authoringIndicator: { paddingTop: spacing.lg },
+  authoringIndicatorItem: { minHeight: sizes.hitMin, gap: spacing.xs, minWidth: 0 },
+  authoringIndicatorLast: { flex: 1.15 },
+  authoringIndicatorLabel: { ...type.authoringCaption, flexShrink: 1, color: c.textSecondary, textTransform: 'none' },
+  authoringIndicatorActive: { color: c.primary },
+  authoringIndicatorComplete: { backgroundColor: c.recipeImportRule },
+  authoringPage: { gap: spacing.lg },
+  authoringPhotoTarget: { minHeight: recipeAuthoring.mediaTargetHeight, backgroundColor: c.mediaPickerSurface },
+  authoringPhotoPreview: { height: recipeAuthoring.reviewPhotoHeight, borderWidth: 0 },
+  authoringPhotoPrompt: {
+    width: '100%', flexDirection: 'row', alignItems: 'center', padding: spacing.lg, gap: spacing.md,
+  },
+  authoringPhotoCopy: { flex: 1, minWidth: 0, gap: spacing.xs },
+  authoringPhotoChange: { minHeight: sizes.hitMin, borderRadius: radius.thumb, backgroundColor: c.bg },
+  authoringLabel: { ...type.authoringLabel, color: c.text },
+  authoringOption: { ...type.authoringOption, color: c.text },
+  authoringDescription: { minHeight: recipeAuthoring.descriptionHeight },
+  ingredientLegend: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingRight: recipeAuthoring.ingredientRemoveWidth + spacing.xs,
+    marginBottom: -spacing.sm, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border, paddingBottom: spacing.sm,
+  },
+  legendText: { ...type.metadataSmall, color: c.textSecondary },
+  legendName: { flex: 1, paddingLeft: spacing.xs },
+  legendQuantity: { width: recipeAuthoring.ingredientQuantityWidth, textAlign: 'center' },
+  legendUnit: { width: recipeAuthoring.ingredientUnitWidth, textAlign: 'center' },
+  authoringQuantity: { width: recipeAuthoring.ingredientQuantityWidth, borderBottomWidth: 0 },
+  authoringUnit: { width: recipeAuthoring.ingredientUnitWidth, borderBottomWidth: 0, minHeight: sizes.hitMin },
+  authoringBrowse: { backgroundColor: c.mediaPickerSurface, borderColor: c.borderFaint, borderWidth: 1, borderStyle: 'dashed' },
+  authoringAddRow: {
+    justifyContent: 'flex-start', paddingHorizontal: spacing.lg, backgroundColor: c.mediaPickerSurface,
+    minHeight: recipeAuthoring.mediaTargetHeight,
+  },
+  authoringFooter: { paddingHorizontal: spacing.gutter },
   indicator: {
     flexDirection: 'row',
     gap: spacing.sm,
@@ -1637,9 +1715,7 @@ const makeStyles = (c: ThemeColors, type: TypeScale) => StyleSheet.create({
     paddingBottom: spacing.xxl,
   },
   stepHeading: { ...type.screenTitle, color: c.text, marginBottom: spacing.xs },
-  draftNotice: { gap: spacing.xs, padding: spacing.md, borderRadius: radius.notice, backgroundColor: c.accentSoft },
   draftTitle: { ...type.bodyStrong, color: c.text },
-  draftText: { ...type.body, color: c.text },
   draftPhotoHint: { ...type.caption, color: c.text, marginTop: spacing.xs },
   videoFrames: { gap: spacing.sm, marginTop: spacing.md },
   videoFrameRow: { flexDirection: 'row', gap: spacing.sm },
@@ -1661,8 +1737,8 @@ const makeStyles = (c: ThemeColors, type: TypeScale) => StyleSheet.create({
    * which is a photograph rather than a strip, and still less than half of what
    * the panel it replaced was costing.
    */
+  editPhotoPicker: { height: 160 },
   photoPicker: {
-    height: 160,
     borderRadius: radius.notice,
     borderWidth: 1,
     borderColor: c.borderFaint,
@@ -1833,7 +1909,7 @@ const makeStyles = (c: ThemeColors, type: TypeScale) => StyleSheet.create({
   // § 16 sets the pair in one face.
   ingredientUnitText: { ...type.metadata, color: c.textMuted, textAlign: 'center' },
   ingredientUnitPlaceholder: { color: c.textPlaceholder },
-  ingredientRemove: { width: 22, alignItems: 'center', justifyContent: 'center' },
+  ingredientRemove: { width: recipeAuthoring.ingredientRemoveWidth, alignItems: 'center', justifyContent: 'center' },
   /**
    * § 17's step card: a .8px border at radius 18, holding the numeral, the
    * instruction, the timer chip and the two controls.

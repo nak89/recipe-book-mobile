@@ -1,4 +1,5 @@
 import { ActivityIndicator, Pressable, StyleSheet } from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
 import { Text } from '@/components/ui/Text'
 import type { StyleProp, ViewStyle } from 'react-native'
 import { minHeights, radius, shadow, spacing, useTheme, useThemedStyles } from '@/theme'
@@ -33,12 +34,14 @@ export default function PrimaryButton({
   loading = false,
   disabled = false,
   variant = 'solid',
+  authoring = false,
   style,
 }: {
   label: string
   onPress: () => void
   loading?: boolean
   disabled?: boolean
+  authoring?: boolean
   /**
    * `danger` is retained but no longer a different colour: Chronicle names four
    * colours and no alert red, so a destructive button is an outline one whose
@@ -66,13 +69,18 @@ export default function PrimaryButton({
         variant !== 'solid' && styles.outline,
         pressed && !inactive && (variant === 'solid' ? styles.pressedSolid : styles.pressed),
         inactive && styles.inactive,
+        authoring && styles.authoring,
+        authoring && inactive && styles.authoringInactive,
         style,
       ]}
     >
       {loading ? (
-        <ActivityIndicator color={variant === 'solid' ? c.onPrimary : c.text} />
+        <ActivityIndicator color={variant === 'solid' && !authoring ? c.onPrimary : c.text} />
       ) : (
-        <Text style={[styles.label, variant === 'solid' && styles.labelSolid]}>{label}</Text>
+        <>
+          <Text style={[styles.label, variant === 'solid' && styles.labelSolid, authoring && styles.authoringLabel, authoring && inactive && styles.authoringInactiveLabel]}>{label}</Text>
+          {authoring && <Ionicons name="arrow-forward" size={21} color={inactive ? c.textSecondary : c.onPrimary} style={styles.arrow} />}
+        </>
       )}
     </Pressable>
   )
@@ -101,4 +109,9 @@ const makeStyles = (c: ThemeColors, type: TypeScale) =>
     inactive: { opacity: 0.5 },
     label: { ...type.button, color: c.text, textTransform: 'uppercase' },
     labelSolid: { color: c.onPrimary },
+    authoring: { paddingVertical: spacing.sm, paddingHorizontal: spacing.xxl + spacing.md, borderRadius: radius.thumb },
+    authoringLabel: { ...type.authoringAction, textTransform: 'none', textAlign: 'center', letterSpacing: 0 },
+    authoringInactive: { backgroundColor: c.surfaceAlt, opacity: 1, boxShadow: 'none', elevation: 0, shadowOpacity: 0 },
+    authoringInactiveLabel: { color: c.textSecondary },
+    arrow: { position: 'absolute', right: spacing.lg },
   })

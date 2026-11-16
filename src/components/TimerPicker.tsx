@@ -1,4 +1,5 @@
 import { FlatList, Modal, Pressable, StyleSheet, View } from 'react-native'
+import NavigationButton from '@/components/ui/NavigationButton'
 import { Text } from '@/components/ui/Text'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { formatDuration, durationParts, TIMER_PRESETS } from '@/lib/timer'
@@ -61,7 +62,10 @@ export default function TimerPicker({
           onPress={(e) => e.stopPropagation()}
         >
           <View style={styles.grabber} />
-          <Text style={styles.title}>{t('form.stepTimer')}</Text>
+          <View style={styles.header}>
+            <Text style={styles.title}>{t('form.stepTimer')}</Text>
+            <NavigationButton action="close" onPress={onClose} />
+          </View>
           <Text style={styles.hint}>{t('form.stepTimerHint')}</Text>
 
           <FlatList
@@ -123,7 +127,8 @@ const makeStyles = (c: ThemeColors, type: TypeScale) =>
       alignSelf: 'center',
       marginBottom: spacing.md,
     },
-    title: { ...type.section, color: c.text },
+    header: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+    title: { ...type.section, color: c.text, flex: 1, minWidth: 0 },
     hint: { ...type.body, color: c.textMuted, marginTop: spacing.xs },
     list: { marginTop: spacing.md },
     row: {

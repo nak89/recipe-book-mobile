@@ -9,15 +9,14 @@ import { MAX_NAME_LENGTH, useAuth } from '@/context/AuthContext'
 import { getRecipes } from '@/lib/api'
 import { resetSeenIntro } from '@/lib/onboarding'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
-import GoogleAuthButton from '@/components/GoogleAuthButton'
 import LedgerRow from '@/components/ui/LedgerRow'
+import NavigationButton from '@/components/ui/NavigationButton'
 import PrimaryButton from '@/components/ui/PrimaryButton'
 import SectionHeader from '@/components/ui/SectionHeader'
 import SettingRow from '@/components/ui/SettingRow'
 import StatTile from '@/components/ui/StatTile'
 import { initials } from '@/components/ui/ProfileButton'
 import { useLanguage, useNum, useT } from '@/i18n'
-import { googleAuthEnabled } from '@/lib/googleAuth'
 import { contentType, inputType, minHeights, radius, sized, sizes, spacing, useTheme, useThemedStyles } from '@/theme'
 import type { ThemeColors, TypeScale } from '@/theme'
 import type { Recipe } from '@/types/recipe'
@@ -28,7 +27,7 @@ export default function ProfileScreen() {
   const t = useT()
   const n = useNum()
   const { language, setLanguage } = useLanguage()
-  const { session, token, displayName, email, memberSince, logout, updateDisplayName, resetOnboarding } =
+  const { token, displayName, email, memberSince, logout, updateDisplayName, resetOnboarding } =
     useAuth()
   const insets = useSafeAreaInsets()
   const mark = initials(displayName)
@@ -156,10 +155,8 @@ export default function ProfileScreen() {
                 maxLength={MAX_NAME_LENGTH}
               />
               <View style={styles.nameActions}>
-                <PrimaryButton
-                  label={t('common.cancel')}
-                  variant="outline"
-                  style={styles.nameButton}
+                <NavigationButton
+                  action="cancel"
                   onPress={() => {
                     setDraftName(displayName)
                     setEditing(false)
@@ -240,17 +237,6 @@ export default function ProfileScreen() {
             last
           />
         </View>
-
-        {googleAuthEnabled && session && (
-          <View style={styles.section}>
-            <SectionHeader label={t('auth.google.methods')} />
-            {session.user.identities?.some(identity => identity.provider === 'google') ? (
-              <LedgerRow title="Google" value={t('auth.google.connected')} last />
-            ) : (
-              <GoogleAuthButton intent={{ destination: '/profile', userId: session.user.id }} />
-            )}
-          </View>
-        )}
 
         {memberSince && (
           <View style={styles.section}>
@@ -437,7 +423,7 @@ const makeStyles = (c: ThemeColors, type: TypeScale) => StyleSheet.create({
     color: c.text,
     textAlign: 'center',
   },
-  nameActions: { flexDirection: 'row', gap: spacing.sm },
+  nameActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   nameButton: { flex: 1 },
   // Ruled top and bottom, so the three read as one band of the page rather
   // than as three floating panels.

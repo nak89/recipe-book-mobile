@@ -137,7 +137,8 @@ export interface VideoFrame {
 }
 
 export type DraftPhoto =
-  | { status: 'generating' | 'unavailable' }
+  | { status: 'generating'; startedAt: number }
+  | { status: 'unavailable' }
   | { status: 'ready'; source: DraftPhotoSource }
   | { status: 'video'; frames: VideoFrame[]; recommendedFrame: number | null }
 

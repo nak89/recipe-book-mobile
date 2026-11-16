@@ -7,11 +7,10 @@
  * and tamarind — a change to two files rather than thirty. No screen asks for
  * "tamarind"; it asks for `primary`.
  *
- * **There are exactly four base colours**, and everything else in this file is
- * one of them at an alpha:
+ * The palette starts with four base colours:
  *
  *   `paper`    #f8f2e6   every background — screens, tab bar, sheets
- *   `ink`      #241e18   every piece of text, every rule, every icon stroke
+ *   `ink`      #241e18   text, rules and default icons
  *   `tamarind` #b4522a   the primary action, the active state, accent numerals
  *   `oat`      #e7dccb   image placeholders and thumbnails
  *
@@ -103,6 +102,13 @@ const paper = {
   //   inactive       2.54:1   ⚠ under the 3:1 floor for a UI control
   //
   text: '#241e18',
+  /** Secondary copy on paper and oat in the recipe editor. */
+  textSecondary: `rgba(${INK_RGB},0.72)`,
+  fieldSurface: 'rgba(255,255,255,0.22)',
+  mediaPickerSurface: 'rgba(231,220,203,0.36)',
+  recipeImportFeature: '#f2e5d3',
+  recipeImportArt: '#ebd2bc',
+  recipeImportRule: `rgba(${TAMARIND_RGB},0.44)`,
   /**
    * ⚠ Ink at .5, exactly as the design system specifies ("Muted text:
    * `opacity: .5` on ink, never a separate grey") — and it measures **3.15:1**,
@@ -169,24 +175,10 @@ const paper = {
   /** Ink at .42 — an inactive tab label, the one "disabled" strength there is. */
   inactive: `rgba(${INK_RGB},0.42)`,
 
-  /**
-   * Saving a recipe. Chronicle has one accent, so the heart's red is gone with
-   * the rest of the old palette — the detail screen's control is a `◇ SAVE` /
-   * `◆ SAVED` diamond in tamarind, not a filled heart. These stay as aliases
-   * until that screen is restyled.
-   */
-  favourite: '#b4522a',
-  favouriteSoft: `rgba(${TAMARIND_RGB},0.1)`,
+  /** The filled heart on a favourited recipe. */
+  favourite: '#bd2e3e',
 
-  /**
-   * ⚠ Destructive actions have no colour of their own in this design, and this
-   * is a real gap rather than an omission I can fill safely. Chronicle names
-   * four colours and no alert red; introducing one would put a second
-   * saturated hue next to tamarind, which is the thing the palette is built to
-   * avoid. Delete confirmations therefore read as tamarind and lean on their
-   * *copy* to carry the warning. Worth a design decision rather than leaving
-   * it to this comment.
-   */
+  /** Destructive confirmations use tamarind and explicit action labels. */
   danger: '#b4522a',
   dangerSoft: `rgba(${TAMARIND_RGB},0.1)`,
 

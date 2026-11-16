@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Ionicons } from '@expo/vector-icons'
 import { useFocusEffect } from 'expo-router'
-import { Pressable, ScrollView, Share, StyleSheet, View } from 'react-native'
+import { AppState, Pressable, ScrollView, Share, StyleSheet, View } from 'react-native'
 import type { TextInput as RNTextInput } from 'react-native'
 import Animated, { LinearTransition } from 'react-native-reanimated'
 import { Text, TextInput } from '@/components/ui/Text'
@@ -27,15 +27,18 @@ import {
 import type { Lens } from '@/lib/grocery'
 import { favouriteFeedback, selectionFeedback } from '@/lib/haptics'
 import { setGroceryOutstanding } from '@/lib/groceryBadge'
-import { isSameDay, toDateKey, weekDays } from '@/lib/week'
+import { manualGroceryVisible } from '@/lib/groceryImport'
+import { toDateKey, weekDays } from '@/lib/week'
 import { aisleForIngredient, AISLES } from '@/data/aisles'
 import type { Aisle } from '@/data/aisles'
 import { emojiForIngredient } from '@/data/ingredients'
 import DishFilter from '@/components/grocery/DishFilter'
+import GroceryImport from '@/components/grocery/GroceryImport'
 import LedgerRow from '@/components/ui/LedgerRow'
 import Masthead, { MastheadAction, mastheadGlyphScale } from '@/components/ui/Masthead'
 import ProfileButton from '@/components/ui/ProfileButton'
 import SectionHeader from '@/components/ui/SectionHeader'
+import PrimaryButton from '@/components/ui/PrimaryButton'
 import BlankLoadingState from '@/components/ui/BlankLoadingState'
 import { ShareIcon } from '@/components/ui/icons'
 import { parseNumeric, useLanguage, useNum, useT } from '@/i18n'
@@ -162,6 +165,8 @@ export default function GroceryScreen() {
   // freezes in the language that raised it and `t` becomes a fetch dependency.
   const [error, setError] = useState<StringKey | null>(null)
   const [scope, setScope] = useState<Scope>('week')
+  const [todayKey, setTodayKey] = useState(() => toDateKey(new Date()))
+  const listRevision = useRef(0)
   /**
    * The dish the list is narrowed to, or `null` for "All dishes" — a real
    * state rather than "nothing chosen yet". It is cleared when the week moves,
@@ -177,6 +182,7 @@ export default function GroceryScreen() {
   }
 
   const [composerOpen, setComposerOpen] = useState(false)
+  const [importDate, setImportDate] = useState<string | null>(null)
   const [draftName, setDraftName] = useState('')
   const [draftAmount, setDraftAmount] = useState('')
   const [draftUnit, setDraftUnit] = useState('')
@@ -186,10 +192,16 @@ export default function GroceryScreen() {
     useCallback(() => {
       if (!token) return
       let cancelled = false
+      const revision = listRevision.current
+      const updateToday = () => setTodayKey(toDateKey(new Date()))
+      updateToday()
+      const appState = AppState.addEventListener('change', (state) => {
+        if (state === 'active') updateToday()
+      })
       setError(null)
       getGroceryList(weekStartKey, weekEndKey, token)
         .then((data) => {
-          if (cancelled) return
+          if (cancelled || listRevision.current !== revision) return
           // The same bail-out every refocus refetch in this app uses: a screen
           // regains focus while its transition is still running, and an
           // unconditional setState rebuilds the list on the frames the
@@ -205,6 +217,7 @@ export default function GroceryScreen() {
         })
       return () => {
         cancelled = true
+        appState.remove()
       }
     }, [token, weekStartKey, weekEndKey])
   )
@@ -236,15 +249,16 @@ export default function GroceryScreen() {
    */
   const days = useMemo(() => weekDays(weekStart), [weekStart])
   const focusDay = useMemo(
-    () => days.find((d) => isSameDay(d, new Date())) ?? days[0],
-    [days]
+    () => days.find((d) => toDateKey(d) === todayKey) ?? days[0],
+    [days, todayKey]
   )
+  const focusKey = toDateKey(focusDay)
   const dayLabel = useMemo(
     () =>
-      isSameDay(focusDay, new Date())
+      focusKey === todayKey
         ? t('grocery.scopeDay')
         : n(`${focusDay.getDate()}/${focusDay.getMonth() + 1}`),
-    [focusDay, t, n]
+    [focusDay, focusKey, todayKey, t, n]
   )
   /**
    * The same fallback for the week tab. The planner can be showing any week and
@@ -254,18 +268,13 @@ export default function GroceryScreen() {
    */
   const weekTabLabel = useMemo(
     () =>
-      days.some((d) => isSameDay(d, new Date()))
+      todayKey >= weekStartKey && todayKey <= weekEndKey
         ? t('grocery.scopeWeek')
         : n(
             `${days[0].getDate()}/${days[0].getMonth() + 1} – ${days[6].getDate()}/${days[6].getMonth() + 1}`
           ),
-    [days, t, n]
+    [days, todayKey, weekStartKey, weekEndKey, t, n]
   )
-  // The date a `LinePart` files a day's share under. Built by `toDateKey`, which
-  // works in local time — `toISOString().slice(0, 10)` would convert to UTC
-  // first and hand back tomorrow's key after 5pm in Phnom Penh, quietly
-  // narrowing the list to a day that isn't on screen.
-  const focusKey = useMemo(() => toDateKey(focusDay), [focusDay])
 
   /**
    * The two lenses over the list as one value, because they compose: "what do I
@@ -303,8 +312,7 @@ export default function GroceryScreen() {
    */
   const scored = useMemo(() => {
     const relevant = dish ? lines.filter((l) => contributes(l.parts, { recipeId: dish })) : lines
-    // Manual items are in every lens for the same reason they survive both
-    // filters: they belong to the week's shop rather than to any dish.
+    // The progress bar still counts the whole shop, including dated additions.
     const all = relevant.length + items.length
     const done =
       relevant.filter((l) => l.ticked).length + items.filter((i) => i.ticked).length
@@ -331,15 +339,9 @@ export default function GroceryScreen() {
     [lines, scope, lens]
   )
 
-  /**
-   * Neither lens touches these. A manual item carries no date and no dish —
-   * it's something you thought of for the week's shop, not for a meal — so
-   * there is nothing to match it against, and hiding the only rows you typed
-   * yourself would make the + look like it had failed.
-   */
   const visibleItems = useMemo(
-    () => (scope === 'missing' ? items.filter((i) => !i.ticked) : items),
-    [items, scope]
+    () => items.filter((item) => manualGroceryVisible(item, scope, focusKey)),
+    [items, scope, focusKey]
   )
 
   /**
@@ -517,6 +519,14 @@ export default function GroceryScreen() {
     // half-done list is dividing it up, not handing over what is left, and a
     // GATHERED heading in a message is the sender's business rather than the
     // reader's.
+    if (visibleItems.length > 0) {
+      lines.push(t('grocery.addedByYou').toUpperCase())
+      for (const item of visibleItems) {
+        lines.push(
+          `  ${item.ticked ? '✓' : '·'} ${item.name} — ${n(formatAmount(item.amount, item.unit, language))}`
+        )
+      }
+    }
     for (const group of byAisle(visibleLines)) {
       lines.push(aisleLabel(group.aisle).toUpperCase())
       for (const line of group.lines) {
@@ -612,6 +622,18 @@ export default function GroceryScreen() {
               <ProfileButton />
             </>
           }
+        />
+
+        <PrimaryButton
+          label={t('grocery.importTitle')}
+          variant="outline"
+          style={styles.importButton}
+          disabled={!token || list?.from !== weekStartKey}
+          onPress={() => {
+            const now = toDateKey(new Date())
+            setTodayKey(now)
+            setImportDate(now >= weekStartKey && now <= weekEndKey ? now : weekStartKey)
+          }}
         />
 
         {/* SCREENS.md § 14's filter tabs, not chips: three tracked labels in a
@@ -853,6 +875,26 @@ export default function GroceryScreen() {
           </View>
         )}
       </ScrollView>
+      {importDate && token && list?.from === weekStartKey && (
+        <GroceryImport
+          key={weekStartKey}
+          list={list}
+          focusDate={importDate}
+          initialDestination={scope === 'day' ? 'day' : 'week'}
+          token={token}
+          onClose={() => setImportDate(null)}
+          onSaved={(from, saved, destination) => {
+            listRevision.current += 1
+            setList((current) => {
+              if (current?.from !== from) return current
+              const byId = new Map([...current.items, ...saved].map((item) => [item.id, item]))
+              return { ...current, items: [...byId.values()] }
+            })
+            setScope(destination === 'day' && importDate !== focusKey ? 'week' : destination)
+            setImportDate(null)
+          }}
+        />
+      )}
 
       {/* After the scroller, so it floats over it. */}
     </View>
@@ -1008,6 +1050,7 @@ function Stepper({
 
 const makeStyles = (c: ThemeColors, type: TypeScale) => StyleSheet.create({
   container: { flex: 1, backgroundColor: c.bg },
+  importButton: { alignSelf: 'flex-start', marginHorizontal: spacing.gutter, marginBottom: spacing.md },
   /**
    * **No `paddingHorizontal` here**, and that is the fix rather than an
    * omission. `Masthead` applies `spacing.gutter` itself, so padding the scroll

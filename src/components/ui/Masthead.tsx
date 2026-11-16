@@ -97,11 +97,8 @@ export default function Masthead({
 /**
  * One masthead action — a 44px bordered circle on the page's own ground.
  *
- * **No fill.** The ring and its contents are the whole control, which is what
- * lets the share, the +, and the profile avatar read as one set: three
- * identical circles distinguished by their marks. A filled one among them stops
- * being a peer and becomes the button, which is a claim none of these three has
- * any business making from a masthead.
+ * The default is an outline on the page. Navigation controls opt into paper
+ * behind the same outline so their icon stays readable over photographs.
  *
  * Used for the profile avatar too — see `ui/ProfileButton.tsx`, which wraps this
  * rather than redrawing a circle of its own.
@@ -110,18 +107,26 @@ export function MastheadAction({
   children,
   onPress,
   accessibilityLabel,
+  disabled = false,
+  opaque = false,
+  selected,
 }: {
   children: ReactNode
   onPress: () => void
   accessibilityLabel: string
+  disabled?: boolean
+  opaque?: boolean
+  selected?: boolean
 }) {
   const styles = useThemedStyles(makeStyles)
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
+      accessibilityState={{ disabled, selected }}
+      disabled={disabled}
       onPress={onPress}
-      style={({ pressed }) => [styles.action, pressed && styles.actionPressed]}
+      style={({ pressed }) => [styles.action, opaque && styles.actionOpaque, (pressed || (disabled && selected === undefined)) && styles.actionPressed]}
     >
       {children}
     </Pressable>
@@ -151,6 +156,7 @@ const makeStyles = (c: ThemeColors, type: TypeScale) =>
       alignItems: 'center',
       justifyContent: 'center',
     },
+    actionOpaque: { backgroundColor: c.bg },
     actionPressed: { opacity: 0.6 },
     // The one heavy rule. 1.5px is a real value, not a hairline — the platform
     // constant is 1/3px on a 3× screen and would vanish against paper.

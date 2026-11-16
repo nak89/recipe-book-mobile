@@ -94,6 +94,15 @@ export const duration = {
   pulse: 700,
   /** Wooden mortar grinding during an initial data load. Decorative; skip when reduced. */
   mortarGrind: 2000,
+  generationDelay: 500,
+  generationFinish: 180,
+  generationFill: 24000,
+  generationCaption: 7000,
+  generationSimmer: 3800,
+  generationFilm: 4900,
+  generationWave: 1200,
+  generationPlates: 6800,
+  generationPlateDelay: 520,
 } as const
 
 export type DurationKey = keyof typeof duration

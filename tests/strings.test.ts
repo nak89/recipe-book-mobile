@@ -69,7 +69,6 @@ const KHMER_IN_ENGLISH = new Set(['language.km'])
  */
 export const KHMER_NEEDS_REVIEW = [
   'index.nothingToday',
-  'detail.saved',
   'detail.toolsPrefix',
   'detail.servingsMultiplier',
   'week.emptyTitle',

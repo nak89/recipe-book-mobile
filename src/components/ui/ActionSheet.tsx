@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons'
 import { Modal, Pressable, StyleSheet, View } from 'react-native'
+import NavigationButton from '@/components/ui/NavigationButton'
 import { Text } from '@/components/ui/Text'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useT } from '@/i18n'
@@ -43,16 +44,10 @@ export default function ActionSheet({
           onPress={(e) => e.stopPropagation()}
         >
           <View style={styles.grabber} />
-          {title && (
-            /* The sheet's title is whatever it was opened on — a recipe name,
-               i.e. content. It matters in this direction too: the Latin
-               `caption` is IBM Plex Mono, which has **no Khmer glyphs at all**,
-               so a Khmer title under an English UI fell through to whatever the
-               OS substituted. */
-            <Text style={[styles.title, contentType('caption', title)]} numberOfLines={1}>
-              {title}
-            </Text>
-          )}
+          <View style={styles.header}>
+            {title && <Text style={[styles.title, contentType('caption', title)]} numberOfLines={1}>{title}</Text>}
+            <NavigationButton action="cancel" onPress={onClose} />
+          </View>
           {actions.map((action) => (
             <Pressable
               key={action.label}
@@ -72,12 +67,6 @@ export default function ActionSheet({
               </Text>
             </Pressable>
           ))}
-          <Pressable
-            onPress={onClose}
-            style={({ pressed }) => [styles.cancel, pressed && styles.actionPressed]}
-          >
-            <Text style={styles.cancelLabel}>{t('common.cancel')}</Text>
-          </Pressable>
         </Pressable>
       </Pressable>
     </Modal>
@@ -103,11 +92,8 @@ const makeStyles = (c: ThemeColors, type: TypeScale) => StyleSheet.create({
     alignSelf: 'center',
     marginBottom: spacing.sm,
   },
-  title: {
-    color: c.textMuted,
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.sm,
-  },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: spacing.md, paddingHorizontal: spacing.sm },
+  title: { flex: 1, minWidth: 0, color: c.textMuted },
   action: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -119,12 +105,4 @@ const makeStyles = (c: ThemeColors, type: TypeScale) => StyleSheet.create({
   actionPressed: { backgroundColor: c.surfaceAlt },
   actionLabel: { ...type.bodyLarge, color: c.text },
   destructive: { color: c.danger },
-  cancel: {
-    marginTop: spacing.xs,
-    paddingVertical: spacing.lg,
-    alignItems: 'center',
-    borderRadius: radius.md,
-    backgroundColor: c.surfaceAlt,
-  },
-  cancelLabel: { ...type.bodyLargeStrong, color: c.text },
 })
